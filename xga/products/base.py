@@ -2076,6 +2076,104 @@ class BaseProfile1D:
                 tabulate(tab_dat, ["MODEL NAME", "EXPECTED PARAMETERS", "DEFAULT START VALUES"], tablefmt=table_format)
             )
 
+    def _check_model_method(self, model: str | None = None, method: str | None = None) -> tuple[str, str]:
+        """
+        Internal helper method that validates and resolves the requested model name and fitting method against the
+        model fits currently stored in this profile. When ``model`` and/or ``method`` are omitted (None), this method
+        auto-resolves them if there is a single unambiguous fit stored on the profile, and raises descriptive errors
+        otherwise.
+
+        :param str model: The name of the fitted model to retrieve, or None to auto-resolve if only a single model has
+            been fitted (either overall or for the specified method).
+        :param str method: The name of the fitting method used, or None to auto-resolve if only a single method has
+            been used (either overall or for the specified model).
+        :return: A tuple of the resolved ``(model, method)`` strings.
+        :rtype: Tuple[str, str]
+        """
+        # Convert any explicitly provided fitting method name to lowercase and validate it against allowed methods
+        if method is not None:
+            method = method.lower()
+            if method not in self._fit_methods:
+                allowed = ", ".join(self._fit_methods)
+                raise XGAFitError(f"{method} is not a valid fitting method, please use one of these; {allowed}")
+
+        # Verify that an explicitly requested model is supported for this type of 1D profile
+        if model is not None and model not in PROF_TYPE_MODELS[self._prof_type]:
+            allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
+            prof_name = self._y_axis_name.lower()
+            raise XGAInvalidModelError(
+                f"{model} is not a valid model for a {prof_name} profile, please choose from one of these; "
+                f"{', '.join(allowed)}"
+            )
+
+        # When neither model nor method is specified, auto-resolve if there is exactly one successful (or, failing
+        #  that, one failed) fit stored across all methods, and raise an error if multiple fits exist
+        if model is None and method is None:
+            good_fits = [
+                (m_meth, m_name) for m_meth in self._good_model_fits for m_name in self._good_model_fits[m_meth]
+            ]
+            bad_fits = [(m_meth, m_name) for m_meth in self._bad_model_fits for m_name in self._bad_model_fits[m_meth]]
+            if len(good_fits) == 1:
+                method, model = good_fits[0]
+            elif len(good_fits) > 1:
+                raise ValueError(
+                    "Multiple model fits are associated with this profile; please explicitly specify the 'model' "
+                    "and/or 'method' arguments rather than leaving both as None."
+                )
+            elif len(bad_fits) == 1:
+                method, model = bad_fits[0]
+            elif len(bad_fits) > 1:
+                raise ValueError(
+                    "Multiple failed model fits are associated with this profile; please explicitly specify the "
+                    "'model' and/or 'method' arguments rather than leaving both as None."
+                )
+            else:
+                raise ModelNotAssociatedError("There are no model fits associated with this profile.")
+        # When method is given but model is None, auto-resolve if only one model was fitted with that method
+        elif model is None and method is not None:
+            good_models = list(self._good_model_fits[method].keys())
+            bad_models = list(self._bad_model_fits[method].keys())
+            if len(good_models) == 1:
+                model = good_models[0]
+            elif len(good_models) > 1:
+                raise ValueError(
+                    f"Multiple models ({', '.join(good_models)}) have been fit to this profile with {method}; "
+                    f"please explicitly specify the 'model' argument rather than leaving it as None."
+                )
+            elif len(bad_models) == 1:
+                model = bad_models[0]
+            elif len(bad_models) > 1:
+                raise ValueError(
+                    f"Multiple models ({', '.join(bad_models)}) have failed fits with {method}; please explicitly "
+                    f"specify the 'model' argument rather than leaving it as None."
+                )
+            else:
+                raise ModelNotAssociatedError(
+                    f"There are no models associated with this profile that have been fit with {method}."
+                )
+        # When model is given but method is None, auto-resolve if that model was fitted with only one method
+        elif model is not None and method is None:
+            good_methods = [m_meth for m_meth in self._good_model_fits if model in self._good_model_fits[m_meth]]
+            bad_methods = [m_meth for m_meth in self._bad_model_fits if model in self._bad_model_fits[m_meth]]
+            if len(good_methods) == 1:
+                method = good_methods[0]
+            elif len(good_methods) > 1:
+                raise ValueError(
+                    f"{model} has been fit to this profile with multiple methods ({', '.join(good_methods)}); "
+                    f"please explicitly specify the 'method' argument rather than leaving it as None."
+                )
+            elif len(bad_methods) == 1:
+                method = bad_methods[0]
+            elif len(bad_methods) > 1:
+                raise ValueError(
+                    f"{model} has failed fits with multiple methods ({', '.join(bad_methods)}); please explicitly "
+                    f"specify the 'method' argument rather than leaving it as None."
+                )
+            else:
+                raise ModelNotAssociatedError(f"{model} is valid for this profile, but hasn't been fit yet.")
+
+        return model, method
+
     def get_model_fit(self, model: str | None = None, method: str | None = None) -> BaseModel1D:
         """
         A get method for fitted model objects associated with this profile. Models for which the fit failed will
@@ -2090,82 +2188,11 @@ class BaseProfile1D:
             parameter values.
         :rtype: BaseModel1D
         """
-        if method is not None:
-            method = method.lower()
-            if method not in self._fit_methods:
-                allowed = ", ".join(self._fit_methods)
-                raise XGAFitError(f"{method} is not a valid fitting method, please use one of these; {allowed}")
+        # Validate and resolve the requested (or single unambiguous) model name and fitting method
+        model, method = self._check_model_method(model, method)
 
-        if model is not None and model not in PROF_TYPE_MODELS[self._prof_type]:
-            allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
-            prof_name = self._y_axis_name.lower()
-            raise XGAInvalidModelError(
-                "{m} is not a valid model for a {p} profile, please choose from one of these; {a}".format(
-                    m=model, a=", ".join(allowed), p=prof_name
-                )
-            )
-
-        if model is None and method is None:
-            good_fits = [
-                (m_meth, m_name) for m_meth in self._good_model_fits for m_name in self._good_model_fits[m_meth]
-            ]
-            bad_fits = [(m_meth, m_name) for m_meth in self._bad_model_fits for m_name in self._bad_model_fits[m_meth]]
-            if len(good_fits) == 1:
-                method, model = good_fits[0]
-            elif len(good_fits) > 1:
-                raise ValueError(
-                    "Multiple model fits are associated with this profile, so model=None and method=None is not valid."
-                )
-            elif len(bad_fits) == 1:
-                method, model = bad_fits[0]
-            elif len(bad_fits) > 1:
-                raise ValueError(
-                    "Multiple failed model fits are associated with this profile, so model=None and method=None is "
-                    "not valid."
-                )
-            else:
-                raise ModelNotAssociatedError("There are no model fits associated with this profile.")
-        elif model is None and method is not None:
-            good_models = list(self._good_model_fits[method].keys())
-            bad_models = list(self._bad_model_fits[method].keys())
-            if len(good_models) == 1:
-                model = good_models[0]
-            elif len(good_models) > 1:
-                raise ValueError(
-                    f"Multiple models ({', '.join(good_models)}) have been fit to this profile with {method}, "
-                    f"so model=None is not valid."
-                )
-            elif len(bad_models) == 1:
-                model = bad_models[0]
-            elif len(bad_models) > 1:
-                raise ValueError(
-                    f"Multiple models ({', '.join(bad_models)}) have failed fits with {method}, so model=None "
-                    f"is not valid."
-                )
-            else:
-                raise ModelNotAssociatedError(
-                    f"There are no models associated with this profile that have been fit with {method}."
-                )
-        elif model is not None and method is None:
-            good_methods = [m_meth for m_meth in self._good_model_fits if model in self._good_model_fits[m_meth]]
-            bad_methods = [m_meth for m_meth in self._bad_model_fits if model in self._bad_model_fits[m_meth]]
-            if len(good_methods) == 1:
-                method = good_methods[0]
-            elif len(good_methods) > 1:
-                raise ValueError(
-                    f"{model} has been fit to this profile with multiple methods ({', '.join(good_methods)}), "
-                    f"so method=None is not valid."
-                )
-            elif len(bad_methods) == 1:
-                method = bad_methods[0]
-            elif len(bad_methods) > 1:
-                raise ValueError(
-                    f"{model} has failed fits with multiple methods ({', '.join(bad_methods)}), so method=None "
-                    f"is not valid."
-                )
-            else:
-                raise ModelNotAssociatedError(f"{model} is valid for this profile, but hasn't been fit yet.")
-
+        # Retrieve the fitted model instance from the successful fits dictionary, or fall back to failed fits with a
+        #  warning
         if model in self._good_model_fits[method]:
             ret_model = self._good_model_fits[method][model]
         elif model in self._bad_model_fits[method]:
@@ -2273,8 +2300,12 @@ class BaseProfile1D:
         :return: The requested chains.
         :rtype: np.ndarray
         """
+        # Retrieve the validated MCMC model fit instance (auto-resolving the model name if left as None and only a
+        #  single model was fit with MCMC)
         model_obj = self.get_model_fit(model, "mcmc")
 
+        # Extract the sampler chains, discarding either the auto-correlation burn-in cut-off (discard=True), a
+        #  user-specified number of steps (discard is an int), or no steps (discard=False)
         if isinstance(discard, bool) and discard:
             chains = model_obj.emcee_sampler.get_chain(discard=model_obj.cut_off, flat=flatten, thin=thin)
         elif isinstance(discard, int):
@@ -2325,9 +2356,7 @@ class BaseProfile1D:
         plt.tight_layout()
         plt.show()
 
-    def view_corner(
-        self, model: str | None = None, settings: dict | None = None, figsize: tuple = (10, 10)
-    ) -> None:
+    def view_corner(self, model: str | None = None, settings: dict | None = None, figsize: tuple = (10, 10)) -> None:
         """
         A view method to show a corner plot generated with the getdist module, using flattened chains with
         burn-in removed (whatever the getdist message might say).
@@ -3908,6 +3937,9 @@ class BaseAggregateProfile1D:
         if len(draw_vals) != 0 and len(set(y_norms)) != 1:
             draw_vals = {}
 
+        # If the user asked to plot only the fitted model (just_model=True) without specifying which model name to
+        #  plot, find the intersection of successfully fitted models across all component profiles; auto-select the
+        #  model if there is a single common model, or warn and fall back to plotting data points otherwise
         if just_model and model is None:
             common_models = list(
                 set(self._profiles[0].good_model_fits).intersection(*[p.good_model_fits for p in self._profiles[1:]])

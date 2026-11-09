@@ -1152,7 +1152,8 @@ def blackbody(
         you are fitting for multiple sources then you can also pass a Quantity with one entry per source.
     :param bool redshifted: Whether the powerlaw that includes redshift (zpowerlw) should be used.
     :param Quantity lum_en: Energy bands in which to measure luminosity.
-    :param Quantity start_temp: The starting value for the temperature of the blackbody.
+    :param Quantity start_temp: The starting value for the temperature of the blackbody. This value can also be
+        a non-scalar Quantity, with an entry for every source in a sample.
     :param Quantity lo_en: The lower energy limit for the data to be fitted.
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
     :param bool freeze_nh: Whether the hydrogen column density should be frozen.

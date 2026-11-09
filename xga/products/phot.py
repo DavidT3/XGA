@@ -3,38 +3,54 @@
 
 import os
 from copy import deepcopy
-from typing import Tuple, List, Union, Dict, Optional
 from warnings import warn
 
 import numpy as np
 import pandas as pd
 from astropy import wcs
-from astropy.convolution import Kernel, Gaussian2DKernel, convolve_fft
+from astropy.convolution import Gaussian2DKernel, Kernel, convolve_fft
 from astropy.io import fits
-from astropy.units import Quantity, UnitBase, deg, pix, UnitConversionError, Unit
-from astropy.visualization import MinMaxInterval, ImageNormalize, BaseStretch, ManualInterval
-from astropy.visualization.stretch import LogStretch, SinhStretch, AsinhStretch, SqrtStretch, SquaredStretch, \
-    LinearStretch
-from fitsio import read, FITSHDR
+from astropy.units import Quantity, Unit, UnitBase, UnitConversionError, deg, pix
+from astropy.visualization import BaseStretch, ImageNormalize, ManualInterval, MinMaxInterval
+from astropy.visualization.stretch import (
+    AsinhStretch,
+    LinearStretch,
+    LogStretch,
+    SinhStretch,
+    SqrtStretch,
+    SquaredStretch,
+)
+from fitsio import FITSHDR, read
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.patches import Circle, Ellipse
 from matplotlib.widgets import Button, RangeSlider, Slider
-from regions import PixelRegion, SkyRegion, EllipsePixelRegion, CirclePixelRegion, PixCoord, Regions
+from regions import CirclePixelRegion, EllipsePixelRegion, PixCoord, PixelRegion, Regions, SkyRegion
 from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
 
-from . import BaseProduct, BaseAggregateProduct
-from ..exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError, IncompatibleProductError, \
-    ProductNotUsableError
+from ..exceptions import (
+    FailedProductError,
+    IncompatibleProductError,
+    NotPSFCorrectedError,
+    ProductNotUsableError,
+    RateMapPairError,
+)
 from ..sourcetools import ang_to_rad
 from ..utils import ALLOWED_INST, PRETTY_TELESCOPE_NAMES
+from . import BaseAggregateProduct, BaseProduct
 
 EMOSAIC_INST = {"EPN": "pn", "EMOS1": "mos1", "EMOS2": "mos2"}
-plt.rcParams['keymap.save'] = ''
-plt.rcParams['keymap.quit'] = ''
-stretch_dict = {'LOG': LogStretch(), 'SINH': SinhStretch(), 'ASINH': AsinhStretch(), 'SQRT': SqrtStretch(),
-                'SQRD': SquaredStretch(), 'LIN': LinearStretch()}
+plt.rcParams["keymap.save"] = ""
+plt.rcParams["keymap.quit"] = ""
+stretch_dict = {
+    "LOG": LogStretch(),
+    "SINH": SinhStretch(),
+    "ASINH": AsinhStretch(),
+    "SQRT": SqrtStretch(),
+    "SQRD": SquaredStretch(),
+    "LIN": LinearStretch(),
+}
 
 
 class Image(BaseProduct):
@@ -76,12 +92,26 @@ class Image(BaseProduct):
         many products from the same directory/directory structure, it can be more performant to run listdir
         or scandir and confirm files exist externally, than one by one in each product declaration.
     """
-    def __init__(self, path: Union[str, dict, list], obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity,
-                 regs: Union[str, List[Union[SkyRegion, PixelRegion]], np.ndarray, dict] = '',
-                 matched_regs: Union[SkyRegion, PixelRegion, dict] = None, smoothed: bool = False,
-                 smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None, telescope: str = None,
-                 allow_negative_vals: bool = False, check_exists: bool = True):
+
+    def __init__(
+        self,
+        path: str | dict | list,
+        obs_id: str,
+        instrument: str,
+        stdout_str: str,
+        stderr_str: str,
+        gen_cmd: str,
+        lo_en: Quantity,
+        hi_en: Quantity,
+        regs: str | list[SkyRegion | PixelRegion] | np.ndarray | dict = "",
+        matched_regs: SkyRegion | PixelRegion | dict = None,
+        smoothed: bool = False,
+        smoothed_info: dict | Kernel = None,
+        obs_inst_combs: list[list] = None,
+        telescope: str = None,
+        allow_negative_vals: bool = False,
+        check_exists: bool = True,
+    ):
         """
         The initialisation method for the Image class. This class stores image data from X-ray observations. It also
         allows easy, direct, access to that data, and implements many helpful methods with extra
@@ -119,8 +149,9 @@ class Image(BaseProduct):
             or scandir and confirm files exist externally, than one by one in each product declaration.
         """
         # Calls the init of the BaseProduct class, which does some base level setup
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope,
-                         check_exists=check_exists)
+        super().__init__(
+            path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope, check_exists=check_exists
+        )
 
         # TODO I hope that this will play well with the significant changes made in multi-mission XGA, which
         #  introduced better memory management, but will have to check carefully when merged.
@@ -136,26 +167,32 @@ class Image(BaseProduct):
 
             # We accept a couple of different non-string inputs, dict and list, and we perform some helpful
             #  checks on them and their contents
-            if (isinstance(path, dict) and
-                    not all(['data' in path.keys(), 'wcs' in path.keys(), 'header' in path.keys()])):
-                raise ValueError("If the 'path' argument is a dictionary, it must contain 'data', 'wcs', and "
-                                 "'header' keys.")
+            if isinstance(path, dict) and not all(
+                ["data" in path.keys(), "wcs" in path.keys(), "header" in path.keys()]
+            ):
+                raise ValueError(
+                    "If the 'path' argument is a dictionary, it must contain 'data', 'wcs', and 'header' keys."
+                )
             elif isinstance(path, dict):
-                self._data = path['data']
-                self._wcs_radec = path['wcs']
-                self._header = path['header']
+                self._data = path["data"]
+                self._wcs_radec = path["wcs"]
+                self._header = path["header"]
             elif isinstance(path, list) and len(path) != 3:
-                raise ValueError("If the 'path' argument is a list, it must contain exactly three elements, "
-                                 "the first being a numpy array containing image data, the second being an "
-                                 "Astropy WCS object, and the third being a header dictionary/object.")
+                raise ValueError(
+                    "If the 'path' argument is a list, it must contain exactly three elements, "
+                    "the first being a numpy array containing image data, the second being an "
+                    "Astropy WCS object, and the third being a header dictionary/object."
+                )
             elif isinstance(path, list):
                 self._data = path[0]
                 self._wcs_radec = path[1]
                 self._header = path[2]
             else:
-                raise TypeError("The 'path' argument must be a string path, a dictionary with 'data', 'wcs', and "
-                                "'header' keys, or a list containing a numpy array, an Astropy WCS object, and a "
-                                "header dictionary/object.")
+                raise TypeError(
+                    "The 'path' argument must be a string path, a dictionary with 'data', 'wcs', and "
+                    "'header' keys, or a list containing a numpy array, an Astropy WCS object, and a "
+                    "header dictionary/object."
+                )
 
             # Some checks that need to be applied to the data regardless of whether it was passed in as a
             #  dictionary or a list
@@ -174,7 +211,6 @@ class Image(BaseProduct):
             self._wcs_radec = None
             self._header = None
             self._shape = None
-
 
         # Set up many image-specific attributes
         self._wcs_skyXY = None
@@ -203,8 +239,9 @@ class Image(BaseProduct):
                 raise ValueError("Entries in the obs_inst_combs list must be lists structured as [ObsID, Inst]")
             # And if it passes that we check that the instrument values are one of the allowed list
             elif any([e[1] not in ALLOWED_INST[telescope].values() for e in obs_inst_combs]):
-                raise ValueError(f"The allowed instruments for {telescope} are: "
-                                 f"{', '.join(ALLOWED_INST[telescope].values())}")
+                raise ValueError(
+                    f"The allowed instruments for {telescope} are: {', '.join(ALLOWED_INST[telescope].values())}"
+                )
 
         # This attribute stores the combinations of ObsID and instrument that make up combined images, if the
         #  current image is combined. This used to be instantiated in the init, but it is now lazy-loaded by
@@ -216,19 +253,19 @@ class Image(BaseProduct):
 
         # This checks whether a region file has been passed, and if it has then processes it. If a list or dictionary
         #  of regions has been passed instead (as is allowed) then the behaviour is modified slightly.
-        if isinstance(regs, str) and regs != '' and os.path.exists(regs):
+        if isinstance(regs, str) and regs != "" and os.path.exists(regs):
             self._regions = self._process_regions(regs)
             self._reg_file_path = regs
-        elif isinstance(regs, str) and regs != '' and not os.path.exists(regs):
+        elif isinstance(regs, str) and regs != "" and not os.path.exists(regs):
             warn("The region file path does not exist", stacklevel=2)
             self._regions = {}
             self._reg_file_path = regs
         elif isinstance(regs, (list, np.ndarray, dict)):
             self._regions = self._process_regions(reg_objs=regs)
-            self._reg_file_path = ''
+            self._reg_file_path = ""
         else:
             self._regions = {}
-            self._reg_file_path = ''
+            self._reg_file_path = ""
 
         # This uses an internal function to process and return matched regions in a standard form, which is what
         #  I really should have done for the chunk above but oh well!
@@ -254,14 +291,19 @@ class Image(BaseProduct):
                 # asked for.
                 self._data = read(self.path).astype("float64")
             except OSError:
-                raise FileNotFoundError("FITSIO read cannot open {f}, possibly because there is a problem with "
-                                        "the file, it doesn't exist, or maybe an SFTP problem? This product is "
-                                        "associated with {s}.".format(f=self.path, s=self.src_name))
+                raise FileNotFoundError(
+                    f"FITSIO read cannot open {self.path}, possibly because there is a problem with "
+                    "the file, it doesn't exist, or maybe an SFTP problem? This product is "
+                    f"associated with {self.src_name}."
+                )
             if not self._allow_negative and self._data.min() < 0:
                 # This throws a non-fatal warning to let the user know there are negative pixel values,
                 #  and that they're being 'corrected'
-                warn("Negative values in {} data have been set to zero - this behaviour can be controlled using "
-                     "the 'allow_negative_vals' argument at initilisation.".format(self._prod_type), stacklevel=2)
+                warn(
+                    f"Negative values in {self._prod_type} data have been set to zero - this behaviour can be controlled using "
+                    "the 'allow_negative_vals' argument at initilisation.",
+                    stacklevel=2,
+                )
                 self._data[self._data < 0] = 0
 
             # The shape can be set by the _read_header_on_demand method, but if it hasn't been set then we'll
@@ -274,8 +316,10 @@ class Image(BaseProduct):
                 raise ValueError("Image shape from the FITS header does not match the data shape.")
         else:
             reasons = ", ".join(self.not_usable_reasons)
-            raise FailedProductError(f"This product has been marked as unusable, so you cannot access data from it. "
-                                     f"The reason(s) given are: {reasons}.")
+            raise FailedProductError(
+                f"This product has been marked as unusable, so you cannot access data from it. "
+                f"The reason(s) given are: {reasons}."
+            )
 
     def _read_header_on_demand(self):
         """
@@ -292,9 +336,11 @@ class Image(BaseProduct):
             #  a lot of overheads
             self._shape = (int(self._header["NAXIS2"]), int(self._header["NAXIS1"]))
         elif not self._usable:
-            raise ProductNotUsableError(f"{self.telescope}-{self.obs_id}-{self.instrument} "
-                                        f"{self._prod_type} is not usable ({self.not_usable_reasons}) "
-                                        f"and the header cannot be read.")
+            raise ProductNotUsableError(
+                f"{self.telescope}-{self.obs_id}-{self.instrument} "
+                f"{self._prod_type} is not usable ({self.not_usable_reasons}) "
+                f"and the header cannot be read."
+            )
 
     def _read_wcs_on_demand(self):
         """
@@ -310,16 +356,17 @@ class Image(BaseProduct):
         try:
             self._read_header_on_demand()
         except OSError as err:
-
             # This is really more specific than I would like, but in cases where eROSITA IKE-MPE border tile images
             #  fail to generate properly, header opening fails with this error, which stops a more predictable XGA
             #  formatted error being shown
-            if 'FITSIO status = 224: missing NAXISn keywords' in str(err):
+            if "FITSIO status = 224: missing NAXISn keywords" in str(err):
                 errored = True
             else:
-                raise FileNotFoundError("FITSIO read_header cannot open {f}, possibly because there is a problem with "
-                                        "the file, it doesn't exist, or maybe an SFTP problem? This product is "
-                                        "associated with {s}.".format(f=self.path, s=self.src_name))
+                raise FileNotFoundError(
+                    f"FITSIO read_header cannot open {self.path}, possibly because there is a problem with "
+                    "the file, it doesn't exist, or maybe an SFTP problem? This product is "
+                    f"associated with {self.src_name}."
+                )
 
         if not errored:
             # XMM images typically have two, both useful, so we'll find all available and store them
@@ -342,8 +389,9 @@ class Image(BaseProduct):
 
             # I'll only strongly require that the pixel-RADEC WCS is found
             if self._wcs_radec is None:
-                raise FailedProductError("SAS has generated this image without a WCS capable of "
-                                         "going from pixels to RA-DEC.")
+                raise FailedProductError(
+                    "SAS has generated this image without a WCS capable of going from pixels to RA-DEC."
+                )
 
     def _oi_inst_pairs_on_demand(self):
         """
@@ -364,37 +412,42 @@ class Image(BaseProduct):
         #  be caught and an error will be thrown once the generation processes are complete, and none of this will
         #  matter
         if not self._loaded_comb_oi_pairs:
-            if (self.obs_id == 'combined' or self.instrument == 'combined') and self.header is not None:
+            if (self.obs_id == "combined" or self.instrument == "combined") and self.header is not None:
                 # If the user has supplied the obs_inst_combs information, then we'll use that and won't go looking
                 #  in any file headers
                 if self._comb_oi_pairs is not None:
                     pass
 
                 # In the case that the telescope is XMM, we can probably read the information we need from the header
-                elif self.telescope == 'xmm' and "CREATOR" in self.header and "emosaic" in self.header['CREATOR']:
+                elif self.telescope == "xmm" and "CREATOR" in self.header and "emosaic" in self.header["CREATOR"]:
                     # We search for the instrument names of the various components
-                    ind_inst_hdrs = [h for h in self.header if 'EMSCI' in h]
+                    ind_inst_hdrs = [h for h in self.header if "EMSCI" in h]
                     # Then use the length of the list to find out how many components there are
                     num_ims = len(ind_inst_hdrs)
                     # If this image is the combined product of only one ObsID's instruments, then there will be no EMSCA
                     #  headers detailing the different ObsIDs, so we just use the ObsID header
-                    if len([h for h in self.header if 'EMSCA' in h]) == 0:
-                        oi_pairs = [[self.header["OBS_ID"], EMOSAIC_INST[self.header["EMSCI" + str(ind).zfill(3)]]] for
-                                    ind in range(1, num_ims + 1)]
+                    if len([h for h in self.header if "EMSCA" in h]) == 0:
+                        oi_pairs = [
+                            [self.header["OBS_ID"], EMOSAIC_INST[self.header["EMSCI" + str(ind).zfill(3)]]]
+                            for ind in range(1, num_ims + 1)
+                        ]
                     else:
-                        oi_pairs = [[self.header["EMSCA" + str(ind).zfill(3)],
-                                     EMOSAIC_INST[self.header["EMSCI" + str(ind).zfill(3)]]]
-                                    for ind in range(1, num_ims + 1)]
+                        oi_pairs = [
+                            [
+                                self.header["EMSCA" + str(ind).zfill(3)],
+                                EMOSAIC_INST[self.header["EMSCI" + str(ind).zfill(3)]],
+                            ]
+                            for ind in range(1, num_ims + 1)
+                        ]
 
                     # So now we have a list of lists of ObsID-Instrument combinations, we shall store them
                     self._comb_oi_pairs = oi_pairs
 
                 # TODO I am confused, and am not sure whether the eROSITA software toolset can actually merge images
                 #  at the moment - thinking about it, it would make sense if they hadn't bothered with that capability
-                elif (self.telescope == 'erosita' or self.telescope == 'erass') and self.header['INSTRUME'] == 'merged':
-
+                elif (self.telescope == "erosita" or self.telescope == "erass") and self.header["INSTRUME"] == "merged":
                     # We search for the instrument names of the various components
-                    ind_inst_hdrs = [h for h in self.header if 'INSTRUM' in h and h != 'INSTRUME']
+                    ind_inst_hdrs = [h for h in self.header if "INSTRUM" in h and h != "INSTRUME"]
 
                     # Build the list of lists of ObsID instrument combos
                     oi_pairs = [[self.header["OBS_ID"], self.header[hdr_en].lower()] for hdr_en in ind_inst_hdrs]
@@ -405,12 +458,16 @@ class Image(BaseProduct):
                 # TODO MAY NEED SOME CHANDRA SPECIFIC INTERVENTION HERE, BUT HAVEN'T MADE COMBINED PHOTOMETRIC PRODUCTS
                 #  YET SO UNSURE RIGHT NOW
                 # And if the user hasn't passed the obs_inst_combs AND we can't pull it from the header than we kick off
-                elif self.telescope == 'xmm':
-                    raise ValueError("If an XMM combined image has not been made with emosaic, you have to "
-                                     " pass ObsID and Instrument combinations using obs_inst_combs")
+                elif self.telescope == "xmm":
+                    raise ValueError(
+                        "If an XMM combined image has not been made with emosaic, you have to "
+                        " pass ObsID and Instrument combinations using obs_inst_combs"
+                    )
                 else:
-                    raise ValueError("For combined images, obs_inst_combs must be set to a list of lists "
-                                     "of ['ObsID', 'Inst'] combinations.")
+                    raise ValueError(
+                        "For combined images, obs_inst_combs must be set to a list of lists "
+                        "of ['ObsID', 'Inst'] combinations."
+                    )
 
         # If we get here, we made the attempt to load the information.
         self._loaded_comb_oi_pairs = True
@@ -418,7 +475,7 @@ class Image(BaseProduct):
     def _process_regions(
         self,
         path: str = None,
-        reg_objs: Union[List[Union[PixelRegion, SkyRegion]], np.ndarray, dict] = None,
+        reg_objs: list[PixelRegion | SkyRegion] | np.ndarray | dict = None,
     ) -> dict:
         """
         This internal function just takes the path to a region file and processes it into a form that
@@ -440,7 +497,7 @@ class Image(BaseProduct):
 
         # The behaviour here depends on whether regions or a path have been passed
         if path is not None:
-            ds9_regs = Regions.read(path, format='ds9').regions
+            ds9_regs = Regions.read(path, format="ds9").regions
         else:
             ds9_regs = deepcopy(reg_objs)
 
@@ -448,20 +505,20 @@ class Image(BaseProduct):
         if isinstance(ds9_regs, (list, np.ndarray)):
             ds9_regs = {self._obs_id: list(ds9_regs)}
         elif isinstance(ds9_regs, dict):
-            if (
-                self.telescope is not None
-                and self.telescope in ds9_regs
-                and isinstance(ds9_regs[self.telescope], dict)
-            ):
+            # If the top-level keys of the dictionary are telescope names (e.g., from BaseSource._regions), unwrap
+            #  the sub-dictionary corresponding to this Image's telescope
+            if self.telescope is not None and self.telescope in ds9_regs and isinstance(ds9_regs[self.telescope], dict):
                 ds9_regs = ds9_regs[self.telescope]
             obs_keys = ds9_regs.keys()
             # Checks whether all the ObsIDs present in the XGA product are represented in the region dictionary
             check = [o in obs_keys for o in self.obs_ids]
             if not all(check):
                 missing = np.array(self.obs_ids)[~np.array(check)]
-                raise KeyError("The passed region dictionary does not have an ObsID entry for every ObsID "
-                               "associated with this object, the following are "
-                               "missing; {a}.".format(a=','.join(missing)))
+                raise KeyError(
+                    "The passed region dictionary does not have an ObsID entry for every ObsID "
+                    "associated with this object, the following are "
+                    "missing; {a}.".format(a=",".join(missing))
+                )
 
         # Checking what kind of regions there are, as that changes whether they need to be converted or not
         final_regs = {}
@@ -469,6 +526,8 @@ class Image(BaseProduct):
         for o in ds9_regs:
             # Setting up an entry in the output dictionary for that ObsID
             final_regs[o] = []
+            # Skip ObsIDs whose region entry is None, wrap single regions in a list, and filter out any None entries
+            #  from region iterables
             if ds9_regs[o] is None:
                 continue
             elif isinstance(ds9_regs[o], (PixelRegion, SkyRegion)):
@@ -485,7 +544,7 @@ class Image(BaseProduct):
 
         return final_regs
 
-    def _process_matched_regions(self, matched_reg_input: Union[SkyRegion, PixelRegion, dict]):
+    def _process_matched_regions(self, matched_reg_input: SkyRegion | PixelRegion | dict):
         """
         This processes input matched region information, making sure that it is in an acceptable format, and then
         returning a dictionary in the form expected by this class. Also makes sure that all matched regions are
@@ -501,6 +560,8 @@ class Image(BaseProduct):
         """
         # It is possible to set this to None, in which case no information is recorded.
         matched_reg_input = deepcopy(matched_reg_input)
+        # If the top-level keys of the dictionary are telescope names, unwrap the sub-dictionary corresponding to this
+        #  Image's telescope
         if (
             isinstance(matched_reg_input, dict)
             and self.telescope is not None
@@ -512,26 +573,32 @@ class Image(BaseProduct):
         if matched_reg_input is None:
             matched_reg_input = {}
         # This is triggered when a dictionary is passed, and all of its values are regions or None (indicating no match)
-        elif isinstance(matched_reg_input, dict) and all([r is None or isinstance(r, (SkyRegion, PixelRegion))
-                                                          for o, r in matched_reg_input.items()]):
+        elif isinstance(matched_reg_input, dict) and all(
+            [r is None or isinstance(r, (SkyRegion, PixelRegion)) for o, r in matched_reg_input.items()]
+        ):
             obs_keys = matched_reg_input.keys()
             # Checks whether all the ObsIDs present in the XGA product are represented in the region dictionary
             check = [o in obs_keys for o in self.obs_ids]
             if not all(check):
                 missing = np.array(self.obs_ids)[~np.array(check)]
-                raise KeyError("The passed matched region dictionary does not have an ObsID entry for every ObsID "
-                               "associated with this object, the following are "
-                               "missing; {a}.".format(a=','.join(missing)))
+                raise KeyError(
+                    "The passed matched region dictionary does not have an ObsID entry for every ObsID "
+                    "associated with this object, the following are "
+                    "missing; {a}.".format(a=",".join(missing))
+                )
         # This is triggered when a dictionary is passed but not all of its values are regions
-        elif isinstance(matched_reg_input, dict) and not all([r is None or isinstance(r, (SkyRegion, PixelRegion))
-                                                              for o, r in matched_reg_input.items()]):
-            raise TypeError('The input matched region dictionary has entries that are not a SkyRegion or PixelRegion.')
+        elif isinstance(matched_reg_input, dict) and not all(
+            [r is None or isinstance(r, (SkyRegion, PixelRegion)) for o, r in matched_reg_input.items()]
+        ):
+            raise TypeError("The input matched region dictionary has entries that are not a SkyRegion or PixelRegion.")
         # If one single region is passed, it's put in a dictionary with the current ObsID of the object as the key
         elif isinstance(matched_reg_input, (PixelRegion, SkyRegion)):
             matched_reg_input = {self._obs_id: matched_reg_input}
         else:
-            raise TypeError("The input matched region is not a dictionary of regions, nor is it a single "
-                            "PixelRegion or SkyRegion instance.")
+            raise TypeError(
+                "The input matched region is not a dictionary of regions, nor is it a single "
+                "PixelRegion or SkyRegion instance."
+            )
 
         # Finally we run through any matched regions that made it this far, and make sure that they
         #  are all in pixel coordinates (it makes it easier for plotting etc. later)
@@ -542,7 +609,7 @@ class Image(BaseProduct):
         return matched_reg_input
 
     @staticmethod
-    def parse_smoothing(info: Union[dict, Kernel]) -> Tuple[str, dict]:
+    def parse_smoothing(info: dict | Kernel) -> tuple[str, dict]:
         """
         Parses smoothing information that has been passed into the Image object, either on init or afterwards. If an
         Astropy kernel is provided then the name, and kernel parameter, will be extracted. If a dictionary is provided
@@ -555,14 +622,14 @@ class Image(BaseProduct):
         :return: The name of the kernel/method and parameter information
         :rtype: Tuple[str, dict]
         """
-
         if not isinstance(info, (Kernel, dict)):
-            raise TypeError("You may only pass smoothing information in the form of an Astropy Kernel or "
-                            "a dictionary")
+            raise TypeError("You may only pass smoothing information in the form of an Astropy Kernel or a dictionary")
         elif isinstance(info, dict) and ("method" not in info.keys() or "pars" not in info.keys()):
-            raise KeyError("If an info dictionary is passed, it must contain a 'method' key (whose value is the name"
-                           " of the smoothing method), and a 'pars' key (a dictionary of the parameters involved in "
-                           "the smoothing).")
+            raise KeyError(
+                "If an info dictionary is passed, it must contain a 'method' key (whose value is the name"
+                " of the smoothing method), and a 'pars' key (a dictionary of the parameters involved in "
+                "the smoothing)."
+            )
 
         if isinstance(info, Kernel):
             # Not super happy with this, but the Astropy kernel.model.name attribute I would have preferred to
@@ -570,8 +637,8 @@ class Image(BaseProduct):
             method_name = str(info).split(".")[-1].split(" object")[0]
             method_pars = dict(zip(info.model.param_names, info.model.parameters.copy()))
         else:
-            method_name = info['method']
-            method_pars = info['pars']
+            method_name = info["method"]
+            method_pars = info["pars"]
 
         return method_name, method_pars
 
@@ -587,7 +654,7 @@ class Image(BaseProduct):
         return self._smoothed_info
 
     @smoothing_info.setter
-    def smoothing_info(self, new_info: Union[dict, Kernel]):
+    def smoothing_info(self, new_info: dict | Kernel):
         """
         If the Image was not declared smoothed on initialisation, smoothing information can be added with this
         property setter. It will be parsed and the smoothed property will be set to True.
@@ -633,19 +700,18 @@ class Image(BaseProduct):
             raise ValueError("The product storage key cannot be generated if the energy bounds are None.")
 
         # Start with the simple stuff - these products are energy bound, so that info will be in ALL keys
-        key = "bound_{l}-{u}".format(l=float(self._energy_bounds[0].value), u=float(self._energy_bounds[1].value))
+        key = f"bound_{float(self._energy_bounds[0].value)}-{float(self._energy_bounds[1].value)}"
 
         # Then add PSF correction information
         if self._psf_corrected:
-            key += "_" + self.psf_model + "_" + str(self.psf_bins) + "_" + self.psf_algorithm + \
-                         str(self.psf_iterations)
+            key += "_" + self.psf_model + "_" + str(self.psf_bins) + "_" + self.psf_algorithm + str(self.psf_iterations)
 
         # And now smoothing information
         if self.smoothed:
             # Grab the smoothing parameter's names and values, then smoosh them into a string
-            sp = "_".join([str(k)+str(v) for k, v in self._smoothed_info.items()])
+            sp = "_".join([str(k) + str(v) for k, v in self._smoothed_info.items()])
             # Then add the parameters and method name to the storage key
-            key += "_sm{sm}_sp{sp}".format(sm=self._smoothed_method, sp=sp)
+            key += f"_sm{self._smoothed_method}_sp{sp}"
 
         return key
 
@@ -722,21 +788,27 @@ class Image(BaseProduct):
         :rtype: pd.Series
         """
         # The filename, devoid of the rest of the path
-        f_name = self.path.split('/')[-1]
+        f_name = self.path.split("/")[-1]
 
         if self.obs_inst_combos is None:
-            new_line = pd.Series([f_name, self.obs_id, self.instrument, self.storage_key, "", self.type],
-                                 ['file_name', 'obs_id', 'inst', 'info_key', 'src_name', 'type'], dtype=str)
+            new_line = pd.Series(
+                [f_name, self.obs_id, self.instrument, self.storage_key, "", self.type],
+                ["file_name", "obs_id", "inst", "info_key", "src_name", "type"],
+                dtype=str,
+            )
         else:
             o_str = "/".join(e[0] for e in self.obs_inst_combos)
             i_str = "/".join(e[1] for e in self.obs_inst_combos)
-            new_line = pd.Series([f_name, o_str, i_str, self.storage_key, "", self.type],
-                                 ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
+            new_line = pd.Series(
+                [f_name, o_str, i_str, self.storage_key, "", self.type],
+                ["file_name", "obs_ids", "insts", "info_key", "src_name", "type"],
+                dtype=str,
+            )
 
         return new_line
 
     @property
-    def regions(self) -> Dict:
+    def regions(self) -> dict:
         """
         Property getter for regions associated with this image.
 
@@ -746,7 +818,7 @@ class Image(BaseProduct):
         return self._regions
 
     @regions.setter
-    def regions(self, new_reg: Optional[Union[str, List[Union[SkyRegion, PixelRegion]], np.ndarray, dict]]):
+    def regions(self, new_reg: str | list[SkyRegion | PixelRegion] | np.ndarray | dict | None):
         """
         A setter for regions associated with this object, a region file path or a list/array/dict of regions is passed,
         then that file/set of regions is processed into the required format. If a list or array of regions is passed, it
@@ -757,10 +829,13 @@ class Image(BaseProduct):
             of region objects, or a dictionary of region lists/arrays with ObsIDs as dictionary keys.
         """
         if new_reg is not None and not isinstance(new_reg, (str, list, np.ndarray, dict)):
-            raise TypeError("Please pass either a path to a region file, a list or numpy array of "
-                            "SkyRegion/PixelRegion objects, or a dictionary of lists/arrays of SkyRegion/PixelRegion "
-                            "objects with ObsIDs as keys.")
+            raise TypeError(
+                "Please pass either a path to a region file, a list or numpy array of "
+                "SkyRegion/PixelRegion objects, or a dictionary of lists/arrays of SkyRegion/PixelRegion "
+                "objects with ObsIDs as keys."
+            )
 
+        # If a telescope-keyed dictionary is passed, extract the sub-dictionary for this Image's telescope
         if (
             isinstance(new_reg, dict)
             and self.telescope is not None
@@ -769,15 +844,16 @@ class Image(BaseProduct):
         ):
             new_reg = new_reg[self.telescope]
 
+        # Allow regions to be cleared by passing None
         if new_reg is None:
             self._reg_file_path = ""
             self._regions = {}
         # Checks to make sure that a region file path exists, if passed, then processes the file
-        elif isinstance(new_reg, str) and new_reg != '' and os.path.exists(new_reg):
+        elif isinstance(new_reg, str) and new_reg != "" and os.path.exists(new_reg):
             self._reg_file_path = new_reg
             self._regions = self._process_regions(new_reg)
         # Possible for an empty string to be passed in which case nothing happens
-        elif isinstance(new_reg, str) and new_reg == '':
+        elif isinstance(new_reg, str) and new_reg == "":
             pass
         elif isinstance(new_reg, str):
             warn("The region file path does not exist", stacklevel=2)
@@ -787,6 +863,7 @@ class Image(BaseProduct):
         ):
             self._reg_file_path = ""
             self._regions = self._process_regions(reg_objs=new_reg)
+        # If an ObsID-keyed dictionary of regions (or region lists/arrays) is passed, validate all entries and process
         elif isinstance(new_reg, dict) and all(
             [
                 rl is None
@@ -801,11 +878,13 @@ class Image(BaseProduct):
             self._reg_file_path = ""
             self._regions = self._process_regions(reg_objs=new_reg)
         else:
-            raise ValueError("That value of new_reg is not valid, please pass either a path to a region file or "
-                             "a list/array/dictionary of SkyRegion/PixelRegion objects")
+            raise ValueError(
+                "That value of new_reg is not valid, please pass either a path to a region file or "
+                "a list/array/dictionary of SkyRegion/PixelRegion objects"
+            )
 
     @property
-    def matched_regions(self) -> Dict:
+    def matched_regions(self) -> dict:
         """
         Property getter for any regions which have been designated a 'match' in the current analysis, if
         they have been set.
@@ -816,7 +895,7 @@ class Image(BaseProduct):
         return self._matched_regions
 
     @matched_regions.setter
-    def matched_regions(self, new_reg: Union[str, List[Union[SkyRegion, PixelRegion]], dict]):
+    def matched_regions(self, new_reg: SkyRegion | PixelRegion | dict[str, SkyRegion | PixelRegion | None] | None):
         """
         A setter for matched regions associated with this object, with a new single matched region or dictionary of
         matched regions (with keys being ObsIDs and one entry for each ObsID associated with this object) being passed.
@@ -828,13 +907,15 @@ class Image(BaseProduct):
             dictionary of region objects with ObsIDs as keys.
         """
         if new_reg is not None and not isinstance(new_reg, (PixelRegion, SkyRegion, dict)):
-            raise TypeError("Please pass either a dictionary of SkyRegion/PixelRegion objects with ObsIDs as "
-                            "keys, or a single SkyRegion/PixelRegion object. Alternatively pass None for no match.")
+            raise TypeError(
+                "Please pass either a dictionary of SkyRegion/PixelRegion objects with ObsIDs as "
+                "keys, or a single SkyRegion/PixelRegion object. Alternatively pass None for no match."
+            )
 
         self._matched_regions = self._process_matched_regions(new_reg)
 
     @property
-    def shape(self) -> Tuple[int, int]:
+    def shape(self) -> tuple[int, int]:
         """
         Property getter for the shape of the image data array.
 
@@ -875,8 +956,9 @@ class Image(BaseProduct):
         if not isinstance(new_im_arr, np.ndarray):
             raise TypeError("You may only assign a numpy array to the data attribute.")
         elif new_im_arr.shape != self.shape:
-            raise ValueError("You may only assign a numpy array to the data attribute if it "
-                             "is the same shape as the original.")
+            raise ValueError(
+                "You may only assign a numpy array to the data attribute if it is the same shape as the original."
+            )
         else:
             self._data = new_im_arr
 
@@ -1013,8 +1095,7 @@ class Image(BaseProduct):
         del self._header
         self._header = None
 
-    def coord_conv(self, coords: Quantity, output_unit: Union[Unit, str],
-                   ignore_bad_pix_coord: bool = False) -> Quantity:
+    def coord_conv(self, coords: Quantity, output_unit: Unit | str, ignore_bad_pix_coord: bool = False) -> Quantity:
         """
         This will use the loaded WCSes, and astropy coordinates (including custom ones defined for this module),
         to perform common coordinate conversions for this product object.
@@ -1034,9 +1115,12 @@ class Image(BaseProduct):
             output_unit = Unit(output_unit)
 
         # Check that the specified output unit is allowed.
-        if (output_unit != Unit('deg') and output_unit != Unit('pix')
-                and not output_unit.is_equivalent('skyxy')
-                and not output_unit.is_equivalent('detxy')):
+        if (
+            output_unit != Unit("deg")
+            and output_unit != Unit("pix")
+            and not output_unit.is_equivalent("skyxy")
+            and not output_unit.is_equivalent("detxy")
+        ):
             raise UnitConversionError("The output unit must be either deg, pix, skyxy, or detxy.")
 
         if not isinstance(coords, Quantity):
@@ -1051,15 +1135,15 @@ class Image(BaseProduct):
         if not input_unit.is_equivalent(output_unit):
             # The coordinate pair must have two elements per row, no more no less
             if len(coords.shape) == 1 and coords.shape != (2,):
-                raise ValueError(f"You have supplied an array with {coords.shape[0]} values, coordinate "
-                                 f"pairs should have two.")
+                raise ValueError(
+                    f"You have supplied an array with {coords.shape[0]} values, coordinate pairs should have two."
+                )
             # This changes individual coordinate pairs into the form that this function expects
             elif len(coords.shape) == 1:
                 coords = coords[:, None].T
             # Checks that multiple pairs of coordinates are in the right format
             elif len(coords.shape) != 1 and coords.shape[1] != 2:
-                raise ValueError(f"You have supplied an array with {coords.shape[1]} columns, there "
-                                 f"can only be two.")
+                raise ValueError(f"You have supplied an array with {coords.shape[1]} columns, there can only be two.")
 
             # Check for presence of the right WCS
             if (input_unit.is_equivalent("skyxy") or output_unit.is_equivalent("skyxy")) and self.skyxy_wcs is None:
@@ -1069,27 +1153,27 @@ class Image(BaseProduct):
 
             # Now to do the actual conversion, which will include checking that the correct WCS is loaded
             # These go between degrees and pixels
-            if input_unit == Unit('deg') and output_unit == Unit('pix'):
+            if input_unit == Unit("deg") and output_unit == Unit("pix"):
                 # The second argument all_world2pix defines the origin, for numpy coords it should be 0
                 # We define an interim variable, in case the result is NaN - this now causes a warning that we
                 #  wish to avoid, so we replace NaN with a negative number that will cause a failure further down
                 inter_coord = Quantity(self.radec_wcs.all_world2pix(coords, 0), output_unit).round(0)
-                out_coord = np.nan_to_num(inter_coord, nan=Quantity(-100, 'pix')).astype(int)
+                out_coord = np.nan_to_num(inter_coord, nan=Quantity(-100, "pix")).astype(int)
             elif input_unit == Unit("pix") and output_unit == Unit("deg"):
                 out_coord = Quantity(self.radec_wcs.all_pix2world(coords, 0), output_unit)
 
             # These go between degrees and sky XY coordinates
-            elif input_unit == Unit("deg") and output_unit.is_equivalent('skyxy'):
+            elif input_unit == Unit("deg") and output_unit.is_equivalent("skyxy"):
                 interim = self.radec_wcs.all_world2pix(coords, 0)
                 out_coord = Quantity(self.skyxy_wcs.all_pix2world(interim, 0), output_unit)
-            elif input_unit.is_equivalent('skyxy') and output_unit == Unit("deg"):
+            elif input_unit.is_equivalent("skyxy") and output_unit == Unit("deg"):
                 interim = self.skyxy_wcs.all_world2pix(coords, 0)
                 out_coord = Quantity(self.radec_wcs.all_pix2world(interim, 0), deg)
 
             # These go between sky XY and pixel coordinates
-            elif input_unit.is_equivalent('skyxy') and output_unit == Unit("pix"):
+            elif input_unit.is_equivalent("skyxy") and output_unit == Unit("pix"):
                 out_coord = Quantity(self.skyxy_wcs.all_world2pix(coords, 0), output_unit).round(0).astype(int)
-            elif input_unit == Unit("pix") and output_unit.is_equivalent('skyxy'):
+            elif input_unit == Unit("pix") and output_unit.is_equivalent("skyxy"):
                 out_coord = Quantity(self.skyxy_wcs.all_pix2world(coords, 0), output_unit)
 
             # These go between degrees and Det XY coordinates
@@ -1108,27 +1192,42 @@ class Image(BaseProduct):
 
             # It is possible to convert between XMM coordinates and pixel and supply coordinates
             # outside the range covered by an image, but we can at least catch the error
-            if output_unit == Unit("pix") and np.any(out_coord < 0) and self._prod_type != "psf" and not ignore_bad_pix_coord:
+            if (
+                output_unit == Unit("pix")
+                and np.any(out_coord < 0)
+                and self._prod_type != "psf"
+                and not ignore_bad_pix_coord
+            ):
                 raise ValueError("You've converted to pixel coordinates, and some elements are less than zero.")
             # Have to compare to the [1] element of shape because numpy arrays are flipped, and we want
             #  to compare x to x
-            elif (output_unit == Unit("pix") and np.any(out_coord[:, 0].value >= self.shape[1]) and self._prod_type != "psf"
-                  and not ignore_bad_pix_coord):
-                raise ValueError("You've converted to pixel coordinates, and some x coordinates are larger than the "
-                                 "image x-shape.")
+            elif (
+                output_unit == Unit("pix")
+                and np.any(out_coord[:, 0].value >= self.shape[1])
+                and self._prod_type != "psf"
+                and not ignore_bad_pix_coord
+            ):
+                raise ValueError(
+                    "You've converted to pixel coordinates, and some x coordinates are larger than the image x-shape."
+                )
             # Have to compare to the [0] element of shape because numpy arrays are flipped, and we want
             #  to compare y to y
-            elif (output_unit == Unit("pix") and np.any(out_coord[:, 1].value >= self.shape[0]) and self._prod_type != "psf"
-                  and not ignore_bad_pix_coord):
-                raise ValueError("You've converted to pixel coordinates, and some y coordinates are larger than the "
-                                 "image y-shape.")
+            elif (
+                output_unit == Unit("pix")
+                and np.any(out_coord[:, 1].value >= self.shape[0])
+                and self._prod_type != "psf"
+                and not ignore_bad_pix_coord
+            ):
+                raise ValueError(
+                    "You've converted to pixel coordinates, and some y coordinates are larger than the image y-shape."
+                )
 
             # If there was only pair passed in, we'll return a flat numpy array
             if out_coord.shape == (1, 2):
                 out_coord = out_coord[0, :]
 
-        elif input_unit.is_equivalent(output_unit) and output_unit == Unit('pix'):
-            out_coord = coords.to('pix').round(0).astype(int)
+        elif input_unit.is_equivalent(output_unit) and output_unit == Unit("pix"):
+            out_coord = coords.to("pix").round(0).astype(int)
         else:
             out_coord = coords
 
@@ -1152,7 +1251,7 @@ class Image(BaseProduct):
         self._psf_corrected = new_val
 
     @property
-    def psf_algorithm(self) -> Union[str, None]:
+    def psf_algorithm(self) -> str | None:
         """
         If this object has been PSF corrected, this property gives the name of the algorithm used.
 
@@ -1171,11 +1270,12 @@ class Image(BaseProduct):
         if self._psf_corrected:
             self._psf_correction_algorithm = new_val
         else:
-            raise NotPSFCorrectedError("You are trying to set the PSF Correction algorithm for an Image"
-                                       " that hasn't been PSF corrected.")
+            raise NotPSFCorrectedError(
+                "You are trying to set the PSF Correction algorithm for an Image that hasn't been PSF corrected."
+            )
 
     @property
-    def psf_bins(self) -> Union[int, None]:
+    def psf_bins(self) -> int | None:
         """
         If this object has been PSF corrected, this property gives the number of bins that the X and Y axes
         were divided into to generate the PSFGrid.
@@ -1196,11 +1296,12 @@ class Image(BaseProduct):
         if self._psf_corrected:
             self._psf_num_bins = new_val
         else:
-            raise NotPSFCorrectedError("You are trying to set the number of PSF bins for an Image"
-                                       " that hasn't been PSF corrected.")
+            raise NotPSFCorrectedError(
+                "You are trying to set the number of PSF bins for an Image that hasn't been PSF corrected."
+            )
 
     @property
-    def psf_iterations(self) -> Union[int, None]:
+    def psf_iterations(self) -> int | None:
         """
         If this object has been PSF corrected, this property gives the number of iterations that the
         algorithm went through to create this image.
@@ -1221,11 +1322,12 @@ class Image(BaseProduct):
         if self._psf_corrected:
             self._psf_num_iterations = new_val
         else:
-            raise NotPSFCorrectedError("You are trying to set the number of algorithm iterations for an Image"
-                                       " that hasn't been PSF corrected.")
+            raise NotPSFCorrectedError(
+                "You are trying to set the number of algorithm iterations for an Image that hasn't been PSF corrected."
+            )
 
     @property
-    def psf_model(self) -> Union[str, None]:
+    def psf_model(self) -> str | None:
         """
         If this object has been PSF corrected, this property gives the name of the PSF model used.
 
@@ -1244,10 +1346,11 @@ class Image(BaseProduct):
         if self._psf_corrected:
             self._psf_model = new_val
         else:
-            raise NotPSFCorrectedError("You are trying to set the PSF model for an Image that hasn't "
-                                       "been PSF corrected.")
+            raise NotPSFCorrectedError(
+                "You are trying to set the PSF model for an Image that hasn't been PSF corrected."
+            )
 
-    def unload(self, unload_data: bool = True, unload_header: bool = False):
+    def unload(self, unload_data: bool = True, unload_header: bool = False) -> None:
         """
         This method allows you to safely remove the data and/or header information contained in this
         Image/ExpMap/RateMap from memory, while guaranteeing that it will be read back in if required. We use
@@ -1259,7 +1362,6 @@ class Image(BaseProduct):
             be removed.
         :param bool unload_header: Specifies whether the header should be unloaded from memory. Default is False.
         """
-
         # Doesn't make sense in this case, as the method wouldn't do anything - as it was probably a mistake to call
         #  the method like this I throw an error so the user knows
         if not unload_data and not unload_header:
@@ -1292,7 +1394,7 @@ class Image(BaseProduct):
             cts = self.data[pix_coord[:, 1], pix_coord[:, 0]]
         return Quantity(cts, "ct")
 
-    def simple_peak(self, mask: np.ndarray, out_unit: Union[UnitBase, str] = deg) -> Tuple[Quantity, bool]:
+    def simple_peak(self, mask: np.ndarray, out_unit: UnitBase | str = deg) -> tuple[Quantity, bool]:
         """
         Simplest possible way to find the position of the peak of X-ray emission in an Image. This method
         takes a mask in the form of a numpy array, which allows the user to mask out parts of the ratemap
@@ -1312,8 +1414,10 @@ class Image(BaseProduct):
         # The code is essentially identical to that in simple_peak in RateMap, but I'm tired and can't be bothered
         #  to do this properly so I'll just copy it over
         if mask.shape != self.data.shape:
-            raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
-                             "({1}).".format(mask.shape, self.data.shape))
+            raise ValueError(
+                f"The shape of the mask array ({mask.shape}) must be the same as that of the data array "
+                f"({self.data.shape})."
+            )
 
         # Creates the data array that we'll be searching. Takes into account the passed mask
         masked_data = self.data * mask
@@ -1332,16 +1436,27 @@ class Image(BaseProduct):
 
         return peak_conv, None
 
-    def get_view(self, ax: Axes, cross_hair: Optional[Quantity] = None, mask: Optional[np.ndarray] = None,
-                 chosen_points: Optional[np.ndarray] = None, other_points: Optional[List[np.ndarray]] = None,
-                 zoom_in: bool = False, manual_zoom_xlims: Optional[Tuple[float, float]] = None,
-                 manual_zoom_ylims: Optional[Tuple[float, float]] = None,
-                 radial_bins_pix: Union[Quantity, np.ndarray] = Quantity(np.array([]), 'pix'),
-                 back_bin_pix: Optional[Union[Quantity, np.ndarray]] = None,
-                 stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
-                 ch_thickness: Union[float, int] = 0.8, low_val_lim: Optional[Union[float, int]] = None,
-                 upp_val_lim: Optional[Union[float, int]] = None, custom_title: Optional[str] = None,
-                 color_map: str = 'gnuplot2') -> Axes:
+    def get_view(
+        self,
+        ax: Axes,
+        cross_hair: Quantity | None = None,
+        mask: np.ndarray | None = None,
+        chosen_points: np.ndarray | None = None,
+        other_points: list[np.ndarray] | None = None,
+        zoom_in: bool = False,
+        manual_zoom_xlims: tuple[float, float] | None = None,
+        manual_zoom_ylims: tuple[float, float] | None = None,
+        radial_bins_pix: Quantity | np.ndarray = Quantity(np.array([]), "pix"),
+        back_bin_pix: Quantity | np.ndarray | None = None,
+        stretch: BaseStretch = LogStretch(),
+        mask_edges: bool = True,
+        view_regions: bool = False,
+        ch_thickness: float | int = 0.8,
+        low_val_lim: float | int | None = None,
+        upp_val_lim: float | int | None = None,
+        custom_title: str | None = None,
+        color_map: str = "gnuplot2",
+    ) -> Axes:
         """
         This method creates and populates the standard axes for the view() and save_view() methods.
 
@@ -1397,18 +1512,21 @@ class Image(BaseProduct):
         :return: A populated figure displaying the view of the data.
         :rtype: Axes
         """
-
         if mask is not None and mask.shape != self.data.shape:
-            raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
-                             "({1}).".format(mask.shape, self.data.shape))
+            raise ValueError(
+                f"The shape of the mask array ({mask.shape}) must be the same as that of the data array "
+                f"({self.data.shape})."
+            )
         elif mask is not None and mask.shape == self.data.shape:
             plot_data = self.data * mask
         else:
             plot_data = self.data.copy()
 
         if (low_val_lim is not None and upp_val_lim is not None) and low_val_lim >= upp_val_lim:
-            raise ValueError("If 'low_val_lim' and 'upp_val_lim' are passed, the 'low_val_lim' argument "
-                             "must be smaller than 'upp_val_lim'.")
+            raise ValueError(
+                "If 'low_val_lim' and 'upp_val_lim' are passed, the 'low_val_lim' argument "
+                "must be smaller than 'upp_val_lim'."
+            )
 
         # Define the internal - this essentially defaults to the MinMaxInterval if both low_val_lim
         #  and upp_val_lim are set to None.
@@ -1419,16 +1537,16 @@ class Image(BaseProduct):
         if type(self) == RateMap and mask_edges:
             plot_data *= self.edge_mask
 
-        ax.tick_params(axis='both', direction='in', which='both', top=False, right=False)
+        ax.tick_params(axis="both", direction="in", which="both", top=False, right=False)
         ax.xaxis.set_ticklabels([])
         ax.yaxis.set_ticklabels([])
 
         # Check if this is a combined product, because if it is then ObsID and instrument are both 'combined'
         #  and it makes the title ugly
         if self.obs_id == "combined":
-            ident = 'Combined'
+            ident = "Combined"
         else:
-            ident = "{o} {i}".format(o=self.obs_id, i=self.instrument.upper())
+            ident = f"{self.obs_id} {self.instrument.upper()}"
 
         if self.telescope is not None and self.telescope in PRETTY_TELESCOPE_NAMES:
             ident = f"{PRETTY_TELESCOPE_NAMES[self.telescope]} {ident}"
@@ -1444,23 +1562,24 @@ class Image(BaseProduct):
             hi_en_str = str(self._energy_bounds[1].to("keV").value) if self._energy_bounds[1] is not None else "??"
 
             if self.src_name is not None:
-                title = "{n} - {i} {l}-{u}keV {t}".format(n=self.src_name, i=ident, l=lo_en_str, u=hi_en_str,
-                                                          t=self.type)
+                title = f"{self.src_name} - {ident} {lo_en_str}-{hi_en_str}keV {self.type}"
             else:
-                title = "{i} {l}-{u}keV {t}".format(i=ident, l=lo_en_str, u=hi_en_str, t=self.type)
+                title = f"{ident} {lo_en_str}-{hi_en_str}keV {self.type}"
 
             # It's helpful to be able to distinguish PSF corrected image/ratemaps from the title
             if self.psf_corrected:
-                title += ' - PSF Corrected'
+                title += " - PSF Corrected"
 
             # And smoothed as well
             if self.smoothed:
-                title += ' - Smoothed'
+                title += " - Smoothed"
         else:
             title = custom_title
 
         ax.set_title(title)
 
+        # Determine the x and y pixel limits when zooming in (either automatically from non-zero image pixels or from
+        #  user-supplied manual zoom limits)
         x_lims = None
         y_lims = None
         if zoom_in:
@@ -1472,6 +1591,9 @@ class Image(BaseProduct):
                 x_lims = manual_zoom_xlims
                 y_lims = manual_zoom_ylims
 
+        # Select the subset of image pixels used to compute the colourbar normalisation. When zooming in, restrict the
+        #  normalisation sample to the zoomed bounding box (clamped to valid array bounds) and, if a mask is active,
+        #  further restrict to unmasked pixels so that masked or out-of-frame regions do not skew the stretch
         if zoom_in:
             x_slice = (
                 slice(max(0, int(x_lims[0])), min(plot_data.shape[1], int(x_lims[1])))
@@ -1489,6 +1611,7 @@ class Image(BaseProduct):
                 if np.any(sub_mask):
                     norm_data = norm_data[sub_mask]
         elif mask is not None:
+            # When not zooming in, still exclude masked (zero) pixels from the normalisation calculation
             sub_mask = mask.astype(bool)
             norm_data = plot_data[sub_mask] if np.any(sub_mask) else plot_data
         else:
@@ -1501,19 +1624,19 @@ class Image(BaseProduct):
         # If we want to plot point clusters on the image
         if chosen_points is not None:
             # Add the point cluster points
-            ax.plot(chosen_points[:, 0], chosen_points[:, 1], '+', color='black', label="Chosen Point Cluster")
+            ax.plot(chosen_points[:, 0], chosen_points[:, 1], "+", color="black", label="Chosen Point Cluster")
             ax.legend(loc="best")
 
         if other_points is not None:
             for cl in other_points:
-                ax.plot(cl[:, 0], cl[:, 1], 'D')
+                ax.plot(cl[:, 0], cl[:, 1], "D")
 
         # If we want a cross-hair, then we put one on here
         if cross_hair is not None:
             # For the case of a single coordinate
             if cross_hair.shape == (2,):
                 # Converts from whatever input coordinate to pixels
-                pix_coord = self.coord_conv(cross_hair, 'pix').value
+                pix_coord = self.coord_conv(cross_hair, "pix").value
                 # Drawing the horizontal and vertical lines
                 ax.axvline(pix_coord[0], color="white", linewidth=ch_thickness)
                 ax.axhline(pix_coord[1], color="white", linewidth=ch_thickness)
@@ -1521,15 +1644,15 @@ class Image(BaseProduct):
             # For the case of two coordinate pairs
             elif cross_hair.shape == (2, 2):
                 # Converts from whatever input coordinate to pixels
-                pix_coord = self.coord_conv(cross_hair, 'pix').value
+                pix_coord = self.coord_conv(cross_hair, "pix").value
 
                 # This draws the first crosshair
                 ax.axvline(pix_coord[0, 0], color="white", linewidth=ch_thickness)
                 ax.axhline(pix_coord[0, 1], color="white", linewidth=ch_thickness)
 
                 # And this the second
-                ax.axvline(pix_coord[1, 0], color="white", linewidth=ch_thickness, linestyle='dashed')
-                ax.axhline(pix_coord[1, 1], color="white", linewidth=ch_thickness, linestyle='dashed')
+                ax.axvline(pix_coord[1, 0], color="white", linewidth=ch_thickness, linestyle="dashed")
+                ax.axhline(pix_coord[1, 1], color="white", linewidth=ch_thickness, linestyle="dashed")
 
                 # Here I reset the pix_coord variable, so it ONLY contains the first entry. This is for the benefit
                 #  of the annulus-drawing part of the code that comes after
@@ -1538,8 +1661,11 @@ class Image(BaseProduct):
             else:
                 # I don't want to bring someone's code grinding to a halt just because they passed crosshair wrong,
                 #  it isn't essential, so I'll just display a warning
-                warn("The 'cross_hair' quantity has more than two coordinate pairs in it, or is otherwise "
-                     "the wrong shape.", stacklevel=2)
+                warn(
+                    "The 'cross_hair' quantity has more than two coordinate pairs in it, or is otherwise "
+                    "the wrong shape.",
+                    stacklevel=2,
+                )
                 # Just in case annuli were also passed, I set the coordinate to None so that it knows something is wrong
                 pix_coord = None
 
@@ -1547,12 +1673,13 @@ class Image(BaseProduct):
                 from ..imagetools.misc import physical_rad_to_pix
 
                 if not isinstance(radial_bins_pix, Quantity):
-                    radial_bins_pix = Quantity(radial_bins_pix, 'pix')
-                elif radial_bins_pix.unit.is_equivalent('deg'):
-                    radial_bins_pix = physical_rad_to_pix(self, radial_bins_pix, Quantity(pix_coord, 'pix'))
+                    radial_bins_pix = Quantity(radial_bins_pix, "pix")
+                elif radial_bins_pix.unit.is_equivalent("deg"):
+                    radial_bins_pix = physical_rad_to_pix(self, radial_bins_pix, Quantity(pix_coord, "pix"))
                 elif radial_bins_pix.unit != pix:
                     raise UnitConversionError(
-                        "radial_bins_pix must have units of pixels or angular units convertible to degrees."
+                        "The 'radial_bins_pix' argument must have units of pixels or angular units convertible to "
+                        "degrees."
                     )
 
                 if radial_bins_pix.isscalar:
@@ -1561,24 +1688,27 @@ class Image(BaseProduct):
                 # Drawing annular radii on the image, if they are enabled and passed. If multiple coordinates have been
                 #  passed then I assume that they want to centre on the first entry
                 for ann_rad in radial_bins_pix:
-                    artist = Circle(pix_coord, ann_rad.value, fill=False, ec='white', linewidth=1.5)
+                    artist = Circle(pix_coord, ann_rad.value, fill=False, ec="white", linewidth=1.5)
                     ax.add_artist(artist)
 
                 # This draws the background region on as well, if present
                 if back_bin_pix is not None:
                     if not isinstance(back_bin_pix, Quantity):
-                        back_bin_pix = Quantity(back_bin_pix, 'pix')
-                    elif back_bin_pix.unit.is_equivalent('deg'):
-                        back_bin_pix = physical_rad_to_pix(self, back_bin_pix, Quantity(pix_coord, 'pix'))
+                        back_bin_pix = Quantity(back_bin_pix, "pix")
+                    elif back_bin_pix.unit.is_equivalent("deg"):
+                        back_bin_pix = physical_rad_to_pix(self, back_bin_pix, Quantity(pix_coord, "pix"))
                     elif back_bin_pix.unit != pix:
                         raise UnitConversionError(
-                            "back_bin_pix must have units of pixels or angular units convertible to degrees."
+                            "The 'back_bin_pix' argument must have units of pixels or angular units convertible to "
+                            "degrees."
                         )
 
-                    inn_artist = Circle(pix_coord, back_bin_pix[0].value, fill=False, ec='white', linewidth=1.6,
-                                        linestyle='dashed')
-                    out_artist = Circle(pix_coord, back_bin_pix[1].value, fill=False, ec='white', linewidth=1.6,
-                                        linestyle='dashed')
+                    inn_artist = Circle(
+                        pix_coord, back_bin_pix[0].value, fill=False, ec="white", linewidth=1.6, linestyle="dashed"
+                    )
+                    out_artist = Circle(
+                        pix_coord, back_bin_pix[1].value, fill=False, ec="white", linewidth=1.6, linestyle="dashed"
+                    )
                     ax.add_artist(inn_artist)
                     ax.add_artist(out_artist)
 
@@ -1606,15 +1736,27 @@ class Image(BaseProduct):
 
         return ax
 
-    def view(self, cross_hair: Optional[Quantity] = None, mask: Optional[np.ndarray] = None,
-             chosen_points: Optional[np.ndarray] = None, other_points: Optional[List[np.ndarray]] = None,
-             figsize: Tuple = (10, 8), zoom_in: bool = False, manual_zoom_xlims: Optional[tuple] = None,
-             manual_zoom_ylims: Optional[tuple] = None,
-             radial_bins_pix: Union[Quantity, np.ndarray] = Quantity(np.array([]), 'pix'),
-             back_bin_pix: Optional[Union[Quantity, np.ndarray]] = None, stretch: BaseStretch = LogStretch(),
-             mask_edges: bool = True, view_regions: bool = False, ch_thickness: Union[float, int] = 0.8,
-             low_val_lim: Optional[Union[float, int]] = None, upp_val_lim: Optional[Union[float, int]] = None,
-             custom_title: Optional[str] = None, color_map: str = 'gnuplot2'):
+    def view(
+        self,
+        cross_hair: Quantity | None = None,
+        mask: np.ndarray | None = None,
+        chosen_points: np.ndarray | None = None,
+        other_points: list[np.ndarray] | None = None,
+        figsize: tuple = (10, 8),
+        zoom_in: bool = False,
+        manual_zoom_xlims: tuple | None = None,
+        manual_zoom_ylims: tuple | None = None,
+        radial_bins_pix: Quantity | np.ndarray = Quantity(np.array([]), "pix"),
+        back_bin_pix: Quantity | np.ndarray | None = None,
+        stretch: BaseStretch = LogStretch(),
+        mask_edges: bool = True,
+        view_regions: bool = False,
+        ch_thickness: float | int = 0.8,
+        low_val_lim: float | int | None = None,
+        upp_val_lim: float | int | None = None,
+        custom_title: str | None = None,
+        color_map: str = "gnuplot2",
+    ) -> None:
         """
         Powerful method to view this Image/RateMap/Expmap, with different options that can be used for eyeballing
         and producing figures for publication.
@@ -1666,16 +1808,32 @@ class Image(BaseProduct):
         :param str color_map: The name of the matplotlib colormap to use when visualizing the
             Image/RateMap/ExpMap/etc. data. The default value is 'gnuplot2'.
         """
-
         # Create figure object
         fig = plt.figure(figsize=figsize)
 
         ax = plt.gca()
-        ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
-                           manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges, view_regions,
-                           ch_thickness, low_val_lim, upp_val_lim, custom_title, color_map)
+        ax = self.get_view(
+            ax,
+            cross_hair,
+            mask,
+            chosen_points,
+            other_points,
+            zoom_in,
+            manual_zoom_xlims,
+            manual_zoom_ylims,
+            radial_bins_pix,
+            back_bin_pix,
+            stretch,
+            mask_edges,
+            view_regions,
+            ch_thickness,
+            low_val_lim,
+            upp_val_lim,
+            custom_title,
+            color_map,
+        )
         cbar = plt.colorbar(ax.images[0])
-        cbar.ax.set_ylabel(self.data_unit.to_string('latex'), fontsize=15)
+        cbar.ax.set_ylabel(self.data_unit.to_string("latex"), fontsize=15)
         plt.tight_layout()
 
         # Display the image
@@ -1684,15 +1842,28 @@ class Image(BaseProduct):
         # Wipe the figure
         plt.close("all")
 
-    def save_view(self, save_path: str, cross_hair: Optional[Quantity] = None, mask: Optional[np.ndarray] = None,
-                  chosen_points: Optional[np.ndarray] = None, other_points: Optional[List[np.ndarray]] = None,
-                  figsize: Tuple = (10, 8), zoom_in: bool = False, manual_zoom_xlims: Optional[tuple] = None,
-                  manual_zoom_ylims: Optional[tuple] = None,
-                  radial_bins_pix: Union[Quantity, np.ndarray] = Quantity(np.array([]), 'pix'),
-                  back_bin_pix: Optional[Union[Quantity, np.ndarray]] = None, stretch: BaseStretch = LogStretch(),
-                  mask_edges: bool = True, view_regions: bool = False, ch_thickness: Union[float, int] = 0.8,
-                  low_val_lim: Optional[Union[float, int]] = None, upp_val_lim: Optional[Union[float, int]] = None,
-                  custom_title: Optional[str] = None, color_map: str = 'gnuplot2'):
+    def save_view(
+        self,
+        save_path: str,
+        cross_hair: Quantity | None = None,
+        mask: np.ndarray | None = None,
+        chosen_points: np.ndarray | None = None,
+        other_points: list[np.ndarray] | None = None,
+        figsize: tuple = (10, 8),
+        zoom_in: bool = False,
+        manual_zoom_xlims: tuple | None = None,
+        manual_zoom_ylims: tuple | None = None,
+        radial_bins_pix: Quantity | np.ndarray = Quantity(np.array([]), "pix"),
+        back_bin_pix: Quantity | np.ndarray | None = None,
+        stretch: BaseStretch = LogStretch(),
+        mask_edges: bool = True,
+        view_regions: bool = False,
+        ch_thickness: float | int = 0.8,
+        low_val_lim: float | int | None = None,
+        upp_val_lim: float | int | None = None,
+        custom_title: str | None = None,
+        color_map: str = "gnuplot2",
+    ) -> None:
         """
         This is entirely equivalent to the view() method, but instead of displaying the view it will save it to
         a path of your choosing.
@@ -1745,18 +1916,34 @@ class Image(BaseProduct):
         :param str color_map: The name of the matplotlib colormap to use when visualizing the
             Image/RateMap/ExpMap/etc. data. The default value is 'gnuplot2'.
         """
-
         # Create figure object
         fig = plt.figure(figsize=figsize)
 
         # Turns off any ticks and tick labels, we don't want them in an image
         ax = plt.gca()
 
-        ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
-                           manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges, view_regions,
-                           ch_thickness, low_val_lim, upp_val_lim, custom_title, color_map)
-        cbar = plt.colorbar(ax.images[0], label=self.data_unit.to_string('latex'))
-        cbar.ax.set_ylabel(self.data_unit.to_string('latex'), fontsize=15)
+        ax = self.get_view(
+            ax,
+            cross_hair,
+            mask,
+            chosen_points,
+            other_points,
+            zoom_in,
+            manual_zoom_xlims,
+            manual_zoom_ylims,
+            radial_bins_pix,
+            back_bin_pix,
+            stretch,
+            mask_edges,
+            view_regions,
+            ch_thickness,
+            low_val_lim,
+            upp_val_lim,
+            custom_title,
+            color_map,
+        )
+        cbar = plt.colorbar(ax.images[0], label=self.data_unit.to_string("latex"))
+        cbar.ax.set_ylabel(self.data_unit.to_string("latex"), fontsize=15)
         plt.tight_layout()
 
         # Save figure to disk
@@ -1765,9 +1952,15 @@ class Image(BaseProduct):
         # Wipe the figure
         plt.close("all")
 
-    def edit_regions(self, figsize: Tuple = (7, 7), cmap: str = 'gnuplot2', reg_save_path: str = None,
-                     cross_hair: Quantity = None, radial_bins_pix: Quantity = Quantity(np.array([]), 'pix'),
-                     back_bin_pix: Quantity = None):
+    def edit_regions(
+        self,
+        figsize: tuple = (7, 7),
+        cmap: str = "gnuplot2",
+        reg_save_path: str = None,
+        cross_hair: Quantity = None,
+        radial_bins_pix: Quantity = Quantity(np.array([]), "pix"),
+        back_bin_pix: Quantity = None,
+    ) -> None:
         """
         This allows for displaying, interacting with, editing, and adding new regions to an image. These can
         then be saved as a new region file. It also allows for the dynamic adjustment of which regions
@@ -1790,13 +1983,17 @@ class Image(BaseProduct):
             also specified and contains only one coordinate.
         """
         # TODO UPDATE THE DOCSTRING WHEN I HAVE INTEGRATED THIS WITH THE REST OF XGA
-        view_inst = self._InteractiveView(self, figsize, cmap, reg_save_path, cross_hair, radial_bins_pix,
-                                          back_bin_pix)
+        view_inst = self._InteractiveView(self, figsize, cmap, reg_save_path, cross_hair, radial_bins_pix, back_bin_pix)
         view_inst.edit_view()
 
-    def dynamic_view(self, figsize: Tuple = (7, 7), cmap: str = 'gnuplot2', cross_hair: Quantity = None,
-                     radial_bins_pix: Quantity = Quantity(np.array([]), 'pix'),
-                     back_bin_pix: Quantity = None):
+    def dynamic_view(
+        self,
+        figsize: tuple = (7, 7),
+        cmap: str = "gnuplot2",
+        cross_hair: Quantity = None,
+        radial_bins_pix: Quantity = Quantity(np.array([]), "pix"),
+        back_bin_pix: Quantity = None,
+    ) -> None:
         """
         This allows for displaying regions on an image. It also allows for the dynamic adjustment of which regions
         are displayed, the scaling of the image, and smoothing.
@@ -1821,9 +2018,17 @@ class Image(BaseProduct):
         for an observation (with the capability of adding completely new regions as well). This is 'private' as
         I can't really see a use-case where the user would define an instance of this themselves.
         """
-        def __init__(self, phot_prod, figsize: Tuple = (7, 7), cmap: str = "gnuplot2", reg_save_path: str = None,
-                     cross_hair: Quantity = None, radial_bins_pix: Quantity = Quantity(np.array([]), 'pix'),
-                     back_bin_pix: Quantity = None):
+
+        def __init__(
+            self,
+            phot_prod,
+            figsize: tuple = (7, 7),
+            cmap: str = "gnuplot2",
+            reg_save_path: str = None,
+            cross_hair: Quantity = None,
+            radial_bins_pix: Quantity = Quantity(np.array([]), "pix"),
+            back_bin_pix: Quantity = None,
+        ):
             """
             The init of the _InteractiveView class, which enables dynamic viewing of XGA photometric products.
 
@@ -1848,12 +2053,14 @@ class Image(BaseProduct):
             self._regions = deepcopy(phot_prod.regions)
 
             # Store the passed-in save path for regions in an attribute for later
-            if reg_save_path is not None and reg_save_path[-4:] == '.reg':
+            if reg_save_path is not None and reg_save_path[-4:] == ".reg":
                 self._reg_save_path = reg_save_path
-            elif reg_save_path is not None and reg_save_path[-4:] != '.reg':
-                raise ValueError("The last four characters of the save path must be '.reg', as extra strings "
-                                 "will be inserted into the save path to account for different region files for "
-                                 "different ObsIDs.")
+            elif reg_save_path is not None and reg_save_path[-4:] != ".reg":
+                raise ValueError(
+                    "The last four characters of the save path must be '.reg', as extra strings "
+                    "will be inserted into the save path to account for different region files for "
+                    "different ObsIDs."
+                )
             else:
                 self._reg_save_path = None
 
@@ -1874,7 +2081,7 @@ class Image(BaseProduct):
             self._ax_loc = self._im_ax.get_position()
 
             # Setting up the look of the data axis, removing ticks and tick labels because it's an image
-            self._im_ax.tick_params(axis='both', direction='in', which='both', top=False, right=False)
+            self._im_ax.tick_params(axis="both", direction="in", which="both", top=False, right=False)
             self._im_ax.xaxis.set_ticklabels([])
             self._im_ax.yaxis.set_ticklabels([])
 
@@ -1907,23 +2114,23 @@ class Image(BaseProduct):
             # These buttons act as toggles, they are all active by default and clicking one will turn off the source
             #  type its associated with. Clicking it again will turn it back on.
             # This button toggles extended (green) sources.
-            top_pos = self._ax_loc.y1-0.0771
+            top_pos = self._ax_loc.y1 - 0.0771
             ext_src_loc = plt.axes([0.045, top_pos, 0.075, 0.075])
             self._ext_src_button = Button(ext_src_loc, "EXT", color=self._but_act_col)
             self._ext_src_button.on_clicked(self._toggle_ext)
 
             # This button toggles point (red) sources.
-            pnt_src_loc = plt.axes([0.045, top_pos-(0.075 + 0.005), 0.075, 0.075])
+            pnt_src_loc = plt.axes([0.045, top_pos - (0.075 + 0.005), 0.075, 0.075])
             self._pnt_src_button = Button(pnt_src_loc, "PNT", color=self._but_act_col)
             self._pnt_src_button.on_clicked(self._toggle_pnt)
 
             # This button toggles types of region other than green or red (mostly valid for XCS XAPA sources).
-            oth_src_loc = plt.axes([0.045, top_pos-2*(0.075 + 0.005), 0.075, 0.075])
+            oth_src_loc = plt.axes([0.045, top_pos - 2 * (0.075 + 0.005), 0.075, 0.075])
             self._oth_src_button = Button(oth_src_loc, "OTHER", color=self._but_act_col)
             self._oth_src_button.on_clicked(self._toggle_oth)
 
             # This button toggles custom source regions
-            cust_src_loc = plt.axes([0.045, top_pos-3*(0.075 + 0.005), 0.075, 0.075])
+            cust_src_loc = plt.axes([0.045, top_pos - 3 * (0.075 + 0.005), 0.075, 0.075])
             self._cust_src_button = Button(cust_src_loc, "CUST", color=self._but_act_col)
             self._cust_src_button.on_clicked(self._toggle_cust)
 
@@ -1937,8 +2144,11 @@ class Image(BaseProduct):
             # These set up the default colours, red for point, green for extended, and white for custom. I already
             #  know these colour codes because this is what the regions module colours translate into in matplotlib
             # Maybe I should automate this rather than hard coding
-            self._colour_convert = {(1.0, 0.0, 0.0, 1.0): 'red', (0.0, 0.5019607843137255, 0.0, 1.0): 'green',
-                                    (1.0, 1.0, 1.0, 1.0): 'white'}
+            self._colour_convert = {
+                (1.0, 0.0, 0.0, 1.0): "red",
+                (0.0, 0.5019607843137255, 0.0, 1.0): "green",
+                (1.0, 1.0, 1.0, 1.0): "white",
+            }
             # There can be other coloured regions though, XAPA for instance has lots of subclasses of region. This
             #  loop goes through the regions and finds their colour name / matplotlib colour code and adds it to the
             #  dictionary for reference
@@ -1976,10 +2186,10 @@ class Image(BaseProduct):
             # These store the current settings for colour map, stretch, and scaling
             self._cmap = cmap
             self._interval = MinMaxInterval()
-            self._stretch = stretch_dict['LOG']
+            self._stretch = stretch_dict["LOG"]
             # This is just a convenient place to store the name that XGA uses for the current stretch - it lets us
             #  access the current stretch instance from stretch_dict more easily (and accompanying buttons etc.)
-            self._active_stretch_name = 'LOG'
+            self._active_stretch_name = "LOG"
             # This is used to store all the button instances created for controlling stretch
             self._stretch_buttons = {}
 
@@ -2005,7 +2215,7 @@ class Image(BaseProduct):
             #  as upper and lower boundaries and starting points for the sliders.
             init_range = self._interval.get_limits(self._plot_data)
             # Define the RangeSlider instance, set the value text to invisible, and connect to the method it activates
-            self._vrange_slider = RangeSlider(ax_slid, 'DATA INTERVAL', *init_range, valinit=init_range)
+            self._vrange_slider = RangeSlider(ax_slid, "DATA INTERVAL", *init_range, valinit=init_range)
             # We move the RangeSlider label so that is sits within the bar
             self._vrange_slider.label.set_x(0.6)
             self._vrange_slider.label.set_y(0.45)
@@ -2019,7 +2229,7 @@ class Image(BaseProduct):
             # Iterate through the stretches that I chose to store in the stretch_dict
             for stretch_name, stretch in stretch_dict.items():
                 # Increments the position of the button
-                loc[0] += (0.075 + 0.005)
+                loc[0] += 0.075 + 0.005
                 # Sets up an axis for the button we're about to create
                 stretch_loc = plt.axes(loc)
 
@@ -2040,12 +2250,13 @@ class Image(BaseProduct):
             self._smooth_button = Button(smooth_loc, "SMOOTH", color=self._but_inact_col)
             self._smooth_button.on_clicked(self._toggle_smooth)
 
-            ax_smooth_slid = plt.axes([self._ax_loc.x1 + 0.03, self._ax_loc.y0+0.002, 0.05, 0.685], facecolor="white")
+            ax_smooth_slid = plt.axes([self._ax_loc.x1 + 0.03, self._ax_loc.y0 + 0.002, 0.05, 0.685], facecolor="white")
             # Hides the ticks to make it look nicer
             ax_smooth_slid.set_xticks([])
             # Define the Slider instance, add and position a label, and connect to the method it activates
-            self._smooth_slider = Slider(ax_smooth_slid, 'KERNEL RADIUS', 0.5, 5, valinit=1, valstep=0.5,
-                                         orientation='vertical')
+            self._smooth_slider = Slider(
+                ax_smooth_slid, "KERNEL RADIUS", 0.5, 5, valinit=1, valstep=0.5, orientation="vertical"
+            )
             # Remove the annoying line representing initial value that is automatically added
             self._smooth_slider.hline.remove()
             # We move the Slider label so that is sits within the bar
@@ -2096,8 +2307,8 @@ class Image(BaseProduct):
                     self._im_ax.axhline(pix_coord[0, 1], color="white", linewidth=ch_thickness)
 
                     # And this the second
-                    self._im_ax.axvline(pix_coord[1, 0], color="white", linewidth=ch_thickness, linestyle='dashed')
-                    self._im_ax.axhline(pix_coord[1, 1], color="white", linewidth=ch_thickness, linestyle='dashed')
+                    self._im_ax.axvline(pix_coord[1, 0], color="white", linewidth=ch_thickness, linestyle="dashed")
+                    self._im_ax.axhline(pix_coord[1, 1], color="white", linewidth=ch_thickness, linestyle="dashed")
 
                     # Here I reset the pix_coord variable, so it ONLY contains the first entry. This is for the benefit
                     #  of the annulus-drawing part of the code that comes after
@@ -2106,8 +2317,11 @@ class Image(BaseProduct):
                 else:
                     # I don't want to bring someone's code grinding to a halt just because they passed crosshair wrong,
                     #  it isn't essential, so I'll just display a warning
-                    warn("The 'cross_hair' quantity has more than two coordinate pairs in it, or is otherwise "
-                         "the wrong shape.", stacklevel=2)
+                    warn(
+                        "The 'cross_hair' quantity has more than two coordinate pairs in it, or is otherwise "
+                        "the wrong shape.",
+                        stacklevel=2,
+                    )
                     # Just in case annuli were also passed, I set the coordinate to None so that it knows something is
                     # wrong
                     pix_coord = None
@@ -2116,10 +2330,10 @@ class Image(BaseProduct):
                     from ..imagetools.misc import physical_rad_to_pix
 
                     if not isinstance(radial_bins_pix, Quantity):
-                        radial_bins_pix = Quantity(radial_bins_pix, 'pix')
-                    elif radial_bins_pix.unit.is_equivalent('deg'):
+                        radial_bins_pix = Quantity(radial_bins_pix, "pix")
+                    elif radial_bins_pix.unit.is_equivalent("deg"):
                         radial_bins_pix = physical_rad_to_pix(
-                            self._parent_phot_obj, radial_bins_pix, Quantity(pix_coord, 'pix')
+                            self._parent_phot_obj, radial_bins_pix, Quantity(pix_coord, "pix")
                         )
                     elif radial_bins_pix.unit != pix:
                         raise UnitConversionError(
@@ -2133,8 +2347,7 @@ class Image(BaseProduct):
                     #  been passed then I assume that they want to centre on the first entry
                     for ann_rad in radial_bins_pix:
                         # Creates the artist for the current annular region
-                        artist = Circle(pix_coord, ann_rad.value, fill=False, ec='white',
-                                        linewidth=ch_thickness)
+                        artist = Circle(pix_coord, ann_rad.value, fill=False, ec="white", linewidth=ch_thickness)
                         # Means it can't be interacted with
                         artist.set_picker(False)
                         # Adds it to the list that lets the class know it needs to not treat it as a region
@@ -2146,10 +2359,10 @@ class Image(BaseProduct):
                     # This draws the background region on as well, if present
                     if back_bin_pix is not None:
                         if not isinstance(back_bin_pix, Quantity):
-                            back_bin_pix = Quantity(back_bin_pix, 'pix')
-                        elif back_bin_pix.unit.is_equivalent('deg'):
+                            back_bin_pix = Quantity(back_bin_pix, "pix")
+                        elif back_bin_pix.unit.is_equivalent("deg"):
                             back_bin_pix = physical_rad_to_pix(
-                                self._parent_phot_obj, back_bin_pix, Quantity(pix_coord, 'pix')
+                                self._parent_phot_obj, back_bin_pix, Quantity(pix_coord, "pix")
                             )
                         elif back_bin_pix.unit != pix:
                             raise UnitConversionError(
@@ -2157,10 +2370,22 @@ class Image(BaseProduct):
                             )
 
                         # The background annulus is guaranteed to only have two entries, inner and outer
-                        inn_artist = Circle(pix_coord, back_bin_pix[0].value, fill=False, ec='white',
-                                            linewidth=ch_thickness, linestyle='dashed')
-                        out_artist = Circle(pix_coord, back_bin_pix[1].value, fill=False, ec='white',
-                                            linewidth=ch_thickness, linestyle='dashed')
+                        inn_artist = Circle(
+                            pix_coord,
+                            back_bin_pix[0].value,
+                            fill=False,
+                            ec="white",
+                            linewidth=ch_thickness,
+                            linestyle="dashed",
+                        )
+                        out_artist = Circle(
+                            pix_coord,
+                            back_bin_pix[1].value,
+                            fill=False,
+                            ec="white",
+                            linewidth=ch_thickness,
+                            linestyle="dashed",
+                        )
                         # Make sure neither region can be interacted with
                         inn_artist.set_picker(False)
                         out_artist.set_picker(False)
@@ -2178,7 +2403,7 @@ class Image(BaseProduct):
                     art_reg = match_reg.as_artist()
                     # Setting the style for these regions, to make it obvious that they are different from
                     #  any other regions that might be displayed
-                    art_reg.set_linestyle('dotted')
+                    art_reg.set_linestyle("dotted")
 
                     # Makes sure that the region cannot be 'picked'
                     art_reg.set_picker(False)
@@ -2245,8 +2470,9 @@ class Image(BaseProduct):
 
             # This does the actual plotting bit, saving the output in an attribute, so it can be
             #  removed when re-plotting
-            self._im_plot = self._im_ax.imshow(self._plot_data*self._plot_mask, norm=self._norm, origin="lower",
-                                               cmap=self._cmap)
+            self._im_plot = self._im_ax.imshow(
+                self._plot_data * self._plot_mask, norm=self._norm, origin="lower", cmap=self._cmap
+            )
 
         def _renorm(self) -> ImageNormalize:
             """
@@ -2259,8 +2485,9 @@ class Image(BaseProduct):
             """
             # We calculate the normalisation using masked data, but mask will be all ones if that
             #  feature is not currently turned on
-            norm = ImageNormalize(data=self._plot_data*self._plot_mask, interval=self._interval,
-                                  stretch=self._stretch)
+            norm = ImageNormalize(
+                data=self._plot_data * self._plot_mask, interval=self._interval, stretch=self._stretch
+            )
 
             return norm
 
@@ -2295,13 +2522,15 @@ class Image(BaseProduct):
                         # Adds an entry to the shape dictionary. If a region from the parent Image is elliptical but
                         #  has the same height and width then I define it as a circle.
                         if type(art_reg) == Circle or (type(art_reg) == Ellipse and art_reg.height == art_reg.width):
-                            self._shape_dict[art_reg] = 'circle'
+                            self._shape_dict[art_reg] = "circle"
                         elif type(art_reg) == Ellipse:
-                            self._shape_dict[art_reg] = 'ellipse'
+                            self._shape_dict[art_reg] = "ellipse"
                         else:
-                            raise NotImplementedError("This method does not currently support regions other than "
-                                                      "circles or ellipses, but please get in touch to discuss "
-                                                      "this further.")
+                            raise NotImplementedError(
+                                "This method does not currently support regions other than "
+                                "circles or ellipses, but please get in touch to discuss "
+                                "this further."
+                            )
                         # Add entries in the dictionary that keeps track of whether a region has been edited or
                         #  not. All entries start out being False of course.
                         self._edited_dict[art_reg] = False
@@ -2326,15 +2555,18 @@ class Image(BaseProduct):
             #  method.
             else:
                 allowed_colours = []
-                if self._cur_act_reg_type['EXT']:
-                    allowed_colours.append(self._inv_colour_convert['green'])
-                if self._cur_act_reg_type['PNT']:
-                    allowed_colours.append(self._inv_colour_convert['red'])
-                if self._cur_act_reg_type['CUST']:
-                    allowed_colours.append(self._inv_colour_convert['white'])
-                if self._cur_act_reg_type['OTH']:
-                    allowed_colours += [self._inv_colour_convert[c] for c in self._inv_colour_convert
-                                        if c not in ['green', 'red', 'white']]
+                if self._cur_act_reg_type["EXT"]:
+                    allowed_colours.append(self._inv_colour_convert["green"])
+                if self._cur_act_reg_type["PNT"]:
+                    allowed_colours.append(self._inv_colour_convert["red"])
+                if self._cur_act_reg_type["CUST"]:
+                    allowed_colours.append(self._inv_colour_convert["white"])
+                if self._cur_act_reg_type["OTH"]:
+                    allowed_colours += [
+                        self._inv_colour_convert[c]
+                        for c in self._inv_colour_convert
+                        if c not in ["green", "red", "white"]
+                    ]
 
             # This iterates through all the artists currently added to the data axis, setting their linewidth
             #  to zero if their colour isn't in the approved list
@@ -2371,6 +2603,7 @@ class Image(BaseProduct):
             :param str stretch_name: The name of the stretch associated with a specific button.
             :return: A function matching the input stretch_name that will change the stretch applied to the data.
             """
+
             def gen_func(event):
                 """
                 A generated function to change the data stretch.
@@ -2394,7 +2627,7 @@ class Image(BaseProduct):
 
             return gen_func
 
-        def _change_interval(self, boundaries: Tuple):
+        def _change_interval(self, boundaries: tuple):
             """
             This method is called when a change is made to the RangeSlider that controls the interval range
             of the data that is displayed.
@@ -2506,7 +2739,7 @@ class Image(BaseProduct):
                 # If the rotation angle is zero then the conversion to mask by the regions module will be upset,
                 #  so I perturb the angle by 0.1 degrees
                 if isinstance(r, EllipsePixelRegion) and r.angle.value == 0:
-                    r.angle += Quantity(0.1, 'deg')
+                    r.angle += Quantity(0.1, "deg")
                 masks.append(r.to_mask().to_image(self._parent_phot_obj.shape))
 
             interlopers = sum([m for m in masks if m is not None])
@@ -2525,10 +2758,10 @@ class Image(BaseProduct):
             # Need to save the new state of this type of region being displayed in the dictionary thats used
             #  to keep track of such things. The invert function just switches whatever entry was already there
             #  (True or False) to the opposite (False or True).
-            self._cur_act_reg_type['EXT'] = np.invert(self._cur_act_reg_type['EXT'])
+            self._cur_act_reg_type["EXT"] = np.invert(self._cur_act_reg_type["EXT"])
 
             # Then the colour of the button is switched to indicate whether its toggled on or not
-            if self._cur_act_reg_type['EXT']:
+            if self._cur_act_reg_type["EXT"]:
                 self._ext_src_button.color = self._but_act_col
             else:
                 self._ext_src_button.color = self._but_inact_col
@@ -2544,8 +2777,8 @@ class Image(BaseProduct):
             :param event: The matplotlib event passed through from the button press that triggers this method.
             """
             # See the _toggle_ext method for comments explaining
-            self._cur_act_reg_type['PNT'] = np.invert(self._cur_act_reg_type['PNT'])
-            if self._cur_act_reg_type['PNT']:
+            self._cur_act_reg_type["PNT"] = np.invert(self._cur_act_reg_type["PNT"])
+            if self._cur_act_reg_type["PNT"]:
                 self._pnt_src_button.color = self._but_act_col
             else:
                 self._pnt_src_button.color = self._but_inact_col
@@ -2560,8 +2793,8 @@ class Image(BaseProduct):
             :param event: The matplotlib event passed through from the button press that triggers this method.
             """
             # See the _toggle_ext method for comments explaining
-            self._cur_act_reg_type['OTH'] = np.invert(self._cur_act_reg_type['OTH'])
-            if self._cur_act_reg_type['OTH']:
+            self._cur_act_reg_type["OTH"] = np.invert(self._cur_act_reg_type["OTH"])
+            if self._cur_act_reg_type["OTH"]:
                 self._oth_src_button.color = self._but_act_col
             else:
                 self._oth_src_button.color = self._but_inact_col
@@ -2576,8 +2809,8 @@ class Image(BaseProduct):
             :param event: The matplotlib event passed through from the button press that triggers this method.
             """
             # See the _toggle_ext method for comments explaining
-            self._cur_act_reg_type['CUST'] = np.invert(self._cur_act_reg_type['CUST'])
-            if self._cur_act_reg_type['CUST']:
+            self._cur_act_reg_type["CUST"] = np.invert(self._cur_act_reg_type["CUST"])
+            if self._cur_act_reg_type["CUST"]:
                 self._cust_src_button.color = self._but_act_col
             else:
                 self._cust_src_button.color = self._but_inact_col
@@ -2598,7 +2831,7 @@ class Image(BaseProduct):
             #  to just be denoted by their edges. The edge colour is set to white, fetching the colour definition
             #  set up in the class init.
             new_patch.set_facecolor((0.0, 0.0, 0.0, 0.0))
-            new_patch.set_edgecolor(self._inv_colour_convert['white'])
+            new_patch.set_edgecolor(self._inv_colour_convert["white"])
             # This enables 'picking' of the artist. When enabled picking will trigger an event when the
             #  artist is clicked on
             new_patch.set_picker(True)
@@ -2607,7 +2840,7 @@ class Image(BaseProduct):
             # And adds the artist into the axis. As this is a new artist we don't call _draw_regions for this one.
             self._im_ax.add_artist(new_patch)
             # Updates the shape dictionary
-            self._shape_dict[new_patch] = 'ellipse'
+            self._shape_dict[new_patch] = "ellipse"
             # Adds an entry to the dictionary that keeps track of whether regions have been modified or not. In
             #  this case the region in question is brand new so the entry will always be True.
             self._edited_dict[new_patch] = True
@@ -2625,7 +2858,7 @@ class Image(BaseProduct):
             #  to just be denoted by their edges. The edge colour is set to white, fetching the colour definition
             #  set up in the class init.
             new_patch.set_facecolor((0.0, 0.0, 0.0, 0.0))
-            new_patch.set_edgecolor(self._inv_colour_convert['white'])
+            new_patch.set_edgecolor(self._inv_colour_convert["white"])
             # This enables 'picking' of the artist. When enabled picking will trigger an event when the
             #  artist is clicked on
             new_patch.set_picker(True)
@@ -2634,7 +2867,7 @@ class Image(BaseProduct):
             # And adds the artist into the axis. As this is a new artist we don't call _draw_regions for this one.
             self._im_ax.add_artist(new_patch)
             # Updates the shape dictionary
-            self._shape_dict[new_patch] = 'circle'
+            self._shape_dict[new_patch] = "circle"
             # Adds an entry to the dictionary that keeps track of whether regions have been modified or not. In
             #  this case the region in question is brand new so the entry will always be True.
             self._edited_dict[new_patch] = True
@@ -2721,7 +2954,7 @@ class Image(BaseProduct):
                 # It is possible for actual artist type to be an Ellipse but for the region to be circular when
                 #  it was taken from the parent Image of this instance, and in that case we still want it to behave
                 #  like a circle for resizing.
-                elif self._shape_dict[self._cur_pick] == 'circle':
+                elif self._shape_dict[self._cur_pick] == "circle":
                     self._cur_pick.height += self._size_step
                     self._cur_pick.width += self._size_step
                 else:
@@ -2735,7 +2968,7 @@ class Image(BaseProduct):
             if event.key == "s" and self._cur_pick is not None:
                 if type(self._cur_pick) == Circle:
                     self._cur_pick.radius -= self._size_step
-                elif self._shape_dict[self._cur_pick] == 'circle':
+                elif self._shape_dict[self._cur_pick] == "circle":
                     self._cur_pick.height -= self._size_step
                     self._cur_pick.width -= self._size_step
                 else:
@@ -2747,7 +2980,7 @@ class Image(BaseProduct):
             if event.key == "d" and self._cur_pick is not None:
                 if type(self._cur_pick) == Circle:
                     self._cur_pick.radius += self._size_step
-                elif self._shape_dict[self._cur_pick] == 'circle':
+                elif self._shape_dict[self._cur_pick] == "circle":
                     self._cur_pick.height += self._size_step
                     self._cur_pick.width += self._size_step
                 else:
@@ -2759,7 +2992,7 @@ class Image(BaseProduct):
             if event.key == "a" and self._cur_pick is not None:
                 if type(self._cur_pick) == Circle:
                     self._cur_pick.radius -= self._size_step
-                elif self._shape_dict[self._cur_pick] == 'circle':
+                elif self._shape_dict[self._cur_pick] == "circle":
                     self._cur_pick.height -= self._size_step
                     self._cur_pick.width -= self._size_step
                 else:
@@ -2780,7 +3013,7 @@ class Image(BaseProduct):
                 # The region has had its size changed, thus we make sure the class knows the region has been edited
                 self._edited_dict[self._cur_pick] = True
 
-        def _update_reg_list(self) -> Dict:
+        def _update_reg_list(self) -> dict:
             """
             This method goes through the current artists, checks whether any represent new or updated regions, and
             generates a new list of region objects from them.
@@ -2794,7 +3027,7 @@ class Image(BaseProduct):
                 #  associated with the parent product, and then another list with the key 'new'; for regions
                 #  that have been added during the editing.
                 new_reg_dict = {o: [] for o in self._parent_phot_obj.obs_ids}
-                new_reg_dict['new'] = []
+                new_reg_dict["new"] = []
 
                 # These artists are the ones that represent regions, the ones in self._ignore_arts are there
                 #  just for visualisation (for instance showing an analysis/background region) and can't be
@@ -2811,17 +3044,17 @@ class Image(BaseProduct):
                         #  output PixelRegions here
                         cen = PixCoord(x=artist.center[0], y=artist.center[1])
                         # Creating the equivalent region object from the artist
-                        new_reg = EllipsePixelRegion(cen, artist.width, artist.height, Quantity(artist.angle, 'deg'))
+                        new_reg = EllipsePixelRegion(cen, artist.width, artist.height, Quantity(artist.angle, "deg"))
                         # Fetches and sets the colour of the region, converting from matplotlib colour
-                        new_reg.visual['edgecolor'] = self._colour_convert[artist.get_edgecolor()]
-                        new_reg.visual['facecolor'] = self._colour_convert[artist.get_edgecolor()]
+                        new_reg.visual["edgecolor"] = self._colour_convert[artist.get_edgecolor()]
+                        new_reg.visual["facecolor"] = self._colour_convert[artist.get_edgecolor()]
                     elif altered and type(artist) == Circle:
                         cen = PixCoord(x=artist.center[0], y=artist.center[1])
                         # Creating the equivalent region object from the artist
                         new_reg = CirclePixelRegion(cen, artist.radius)
                         # Fetches and sets the colour of the region, converting from matplotlib colour
-                        new_reg.visual['edgecolor'] = self._colour_convert[artist.get_edgecolor()]
-                        new_reg.visual['facecolor'] = self._colour_convert[artist.get_edgecolor()]
+                        new_reg.visual["edgecolor"] = self._colour_convert[artist.get_edgecolor()]
+                        new_reg.visual["facecolor"] = self._colour_convert[artist.get_edgecolor()]
                     else:
                         # Looking up the region because if we get to this point we know its an original region that
                         #  hasn't been altered
@@ -2832,7 +3065,7 @@ class Image(BaseProduct):
                     if artist in self._artist_obsids:
                         new_reg_dict[self._artist_obsids[artist]].append(new_reg)
                     else:
-                        new_reg_dict['new'].append(new_reg)
+                        new_reg_dict["new"].append(new_reg)
 
             # In this case none of the entries in the dictionary that stores whether regions have been
             #  edited (or added) is True, so the new region list is exactly the same as the old one
@@ -2854,7 +3087,7 @@ class Image(BaseProduct):
                 if event is not None:
                     # In the case of this button being successfully clicked I want it to turn green. Really I wanted
                     #  it to just flash green, but that doesn't seem to be working so turning green will be fine
-                    self._save_button.color = 'green'
+                    self._save_button.color = "green"
 
                 # Runs the method that updates the list of regions with any alterations that the user has made
                 final_regions = self._update_reg_list()
@@ -2864,14 +3097,14 @@ class Image(BaseProduct):
                     # Convert them to degrees
                     rel_regs = [r.to_sky(self._parent_phot_obj.radec_wcs) for r in rel_regs]
                     # Construct a save_path
-                    rel_save_path = self._reg_save_path.replace('.reg', '_{o}.reg'.format(o=o))
+                    rel_save_path = self._reg_save_path.replace(".reg", f"_{o}.reg")
                     # write_ds9(rel_regs, rel_save_path, 'image', radunit='')
                     # This function is a part of the regions module, and will write out a region file.
                     #  Specifically RA-Dec coordinate system in units of degrees.
-                    Regions(rel_regs).write(rel_save_path, format='ds9')
+                    Regions(rel_regs).write(rel_save_path, format="ds9")
 
             else:
-                raise ValueError('No save path was passed, so region files cannot be output.')
+                raise ValueError("No save path was passed, so region files cannot be output.")
 
 
 class ExpMap(Image):
@@ -2895,9 +3128,21 @@ class ExpMap(Image):
         many products from the same directory/directory structure, it can be more performant to run listdir
         or scandir and confirm files exist externally, than one by one in each product declaration.
     """
-    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
-                 lo_en: Quantity, hi_en: Quantity, obs_inst_combs: List[List] = None, telescope: str = None,
-                 check_exists: bool = True):
+
+    def __init__(
+        self,
+        path: str,
+        obs_id: str,
+        instrument: str,
+        stdout_str: str,
+        stderr_str: str,
+        gen_cmd: str,
+        lo_en: Quantity,
+        hi_en: Quantity,
+        obs_inst_combs: list[list] = None,
+        telescope: str = None,
+        check_exists: bool = True,
+    ):
         """
         Init of the ExpMap class.
 
@@ -2918,8 +3163,19 @@ class ExpMap(Image):
             many products from the same directory/directory structure, it can be more performant to run listdir
             or scandir and confirm files exist externally, than one by one in each product declaration.
         """
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en,
-                         obs_inst_combs=obs_inst_combs, telescope=telescope, check_exists=check_exists)
+        super().__init__(
+            path,
+            obs_id,
+            instrument,
+            stdout_str,
+            stderr_str,
+            gen_cmd,
+            lo_en,
+            hi_en,
+            obs_inst_combs=obs_inst_combs,
+            telescope=telescope,
+            check_exists=check_exists,
+        )
         self._prod_type = "expmap"
         # Need to overwrite the data unit attribute set by the Image init
         self._data_unit = Unit("s")
@@ -2940,7 +3196,7 @@ class ExpMap(Image):
             exp = self.data[pix_coord[:, 1], pix_coord[:, 0]]
         return Quantity(exp, "s")
 
-    def get_count(self, *args, **kwargs):
+    def get_count(self, *args, **kwargs) -> None:
         """
         Inherited method from Image superclass, disabled as does not make sense in an exposure map.
         """
@@ -2983,9 +3239,14 @@ class RateMap(Image):
         if there is no match. Such a dictionary can be retrieved from a source using the 'matched_regions'
         property. Default is None.
     """
-    def __init__(self, xga_image: Image, xga_expmap: ExpMap,
-                 regs: Union[str, List[Union[SkyRegion, PixelRegion]], np.ndarray, dict] = '',
-                 matched_regs: Union[SkyRegion, PixelRegion, dict] = None):
+
+    def __init__(
+        self,
+        xga_image: Image,
+        xga_expmap: ExpMap,
+        regs: str | list[SkyRegion | PixelRegion] | np.ndarray | dict = "",
+        matched_regs: SkyRegion | PixelRegion | dict = None,
+    ):
         """
         This initialises a RateMap instance, where a count image is divided by an exposure map, to create a map
         of X-ray count rate.
@@ -3001,27 +3262,41 @@ class RateMap(Image):
             property. Default is None.
         """
         if type(xga_image) != Image or type(xga_expmap) != ExpMap:
-            raise TypeError("'xga_image' must be an XGA Image object, and 'xga_expmap' must be an "
-                            "XGA ExpMap object.")
+            raise TypeError("'xga_image' must be an XGA Image object, and 'xga_expmap' must be an XGA ExpMap object.")
 
         if xga_image.obs_id != xga_expmap.obs_id:
-            raise RateMapPairError("The ObsIDs of xga_image ({0}) and xga_expmap ({1}) "
-                                   "do not match".format(xga_image.obs_id, xga_expmap.obs_id))
+            raise RateMapPairError(
+                f"The ObsIDs of xga_image ({xga_image.obs_id}) and xga_expmap ({xga_expmap.obs_id}) do not match"
+            )
         elif xga_image.instrument != xga_expmap.instrument:
-            raise RateMapPairError("The instruments of xga_image ({0}) and xga_expmap ({1}) "
-                                   "do not match".format(xga_image.instrument, xga_expmap.instrument))
+            raise RateMapPairError(
+                f"The instruments of xga_image ({xga_image.instrument}) and xga_expmap ({xga_expmap.instrument}) "
+                "do not match"
+            )
         elif xga_image.energy_bounds != xga_expmap.energy_bounds:
-            raise RateMapPairError("The energy bounds of xga_image ({0}) and xga_expmap ({1}) "
-                                   "do not match".format(xga_image.energy_bounds, xga_expmap.energy_bounds))
+            raise RateMapPairError(
+                f"The energy bounds of xga_image ({xga_image.energy_bounds}) and xga_expmap ({xga_expmap.energy_bounds}) "
+                "do not match"
+            )
 
         # This path nonsense is to support the smoothing of RateMaps with general_smooth(..., ratemap_smooth_im=True) and
         #  will become unnecessary once the RateMap/wider 2D data product redesign is implemented.
         pass_path = xga_image.path if xga_image.path is not None else xga_expmap.path
 
         # Call the superclass's init.
-        super().__init__(pass_path, xga_image.obs_id, xga_image.instrument, xga_image.unprocessed_stdout,
-                         xga_image.unprocessed_stderr, "", xga_image.energy_bounds[0], xga_image.energy_bounds[1],
-                         telescope=xga_image.telescope, obs_inst_combs=xga_image._comb_oi_pairs, check_exists=False)
+        super().__init__(
+            pass_path,
+            xga_image.obs_id,
+            xga_image.instrument,
+            xga_image.unprocessed_stdout,
+            xga_image.unprocessed_stderr,
+            "",
+            xga_image.energy_bounds[0],
+            xga_image.energy_bounds[1],
+            telescope=xga_image.telescope,
+            obs_inst_combs=xga_image._comb_oi_pairs,
+            check_exists=False,
+        )
         self._prod_type = "ratemap"
         self._data_unit = Unit("ct/s")
 
@@ -3044,12 +3319,15 @@ class RateMap(Image):
         self._edge_mask = None
         self._on_sensor_mask = None
 
-        # Don't have to do any checks, they'll be done for me in the image object.
+        # If explicit regions were passed to RateMap.__init__, assign them via the RateMap.regions setter (which also
+        #  propagates them to the underlying Image); otherwise copy any regions already associated with xga_image
         if regs != "":
             self.regions = regs
             self._im_obj.regions = regs
         else:
             self._regions = deepcopy(xga_image.regions)
+        # Likewise, if matched regions were passed to RateMap.__init__, assign them via the setter; otherwise inherit
+        #  any matched regions already stored on xga_image
         if matched_regs is not None:
             self.matched_regions = matched_regs
             self._im_obj.matched_regions = matched_regs
@@ -3093,7 +3371,7 @@ class RateMap(Image):
         #  mask as to whether you are on or off the sensor
         det_map = self.expmap.data.copy()
         det_map[det_map != 0] = 1
-        self._on_sensor_mask = det_map.astype('int8')
+        self._on_sensor_mask = det_map.astype("int8")
 
         # Re-setting some paths to make more sense
         self._path = self._im_path
@@ -3105,7 +3383,7 @@ class RateMap(Image):
         self.expmap.unload(unload_data=True, unload_header=False)
 
     @property
-    def shape(self) -> Tuple[int, int]:
+    def shape(self) -> tuple[int, int]:
         """
         Property getter for the resolution of the ratemap. Standard XGA settings will make this 512x512.
 
@@ -3143,8 +3421,9 @@ class RateMap(Image):
         if not isinstance(new_rt_arr, np.ndarray):
             raise TypeError("You may only assign a numpy array to the data attribute.")
         elif new_rt_arr.shape != self.shape:
-            raise ValueError("You may only assign a numpy array to the data attribute if it "
-                             "is the same shape as the original.")
+            raise ValueError(
+                "You may only assign a numpy array to the data attribute if it is the same shape as the original."
+            )
         else:
             self._data = new_rt_arr
 
@@ -3206,7 +3485,7 @@ class RateMap(Image):
             exp = self.expmap.data[pix_coord[:, 1], pix_coord[:, 0]]
         return Quantity(exp, "s")
 
-    def simple_peak(self, mask: np.ndarray, out_unit: Union[UnitBase, str] = deg) -> Tuple[Quantity, bool]:
+    def simple_peak(self, mask: np.ndarray, out_unit: UnitBase | str = deg) -> tuple[Quantity, bool]:
         """
         Simplest possible way to find the position of the peak of X-ray emission in a ratemap. This method
         takes a mask in the form of a numpy array, which allows the user to mask out parts of the ratemap
@@ -3221,8 +3500,10 @@ class RateMap(Image):
         :rtype: Tuple[Quantity, bool]
         """
         if mask.shape != self.data.shape:
-            raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
-                             "({1}).".format(mask.shape, self.data.shape))
+            raise ValueError(
+                f"The shape of the mask array ({mask.shape}) must be the same as that of the data array "
+                f"({self.data.shape})."
+            )
 
         # Creates the data array that we'll be searching. Takes into account the passed mask, as well as
         #  the edge mask designed to remove pixels at the edges of detectors, where RateMap values can
@@ -3246,9 +3527,14 @@ class RateMap(Image):
 
         return peak_conv, edge_flag
 
-    def clustering_peak(self, mask: np.ndarray, out_unit: Union[UnitBase, str] = deg, top_frac: float = 0.05,
-                        max_dist: float = 5, clean_point_clusters: bool = False) \
-            -> Tuple[Quantity, bool, np.ndarray, List[np.ndarray]]:
+    def clustering_peak(
+        self,
+        mask: np.ndarray,
+        out_unit: UnitBase | str = deg,
+        top_frac: float = 0.05,
+        max_dist: float = 5,
+        clean_point_clusters: bool = False,
+    ) -> tuple[Quantity, bool, np.ndarray, list[np.ndarray]]:
         """
         An experimental peak finding function that cuts out the top 5% (by default) of array elements
         (by value), and runs a hierarchical clustering algorithm on their positions. The motivation
@@ -3272,8 +3558,10 @@ class RateMap(Image):
         :rtype: Tuple[Quantity, bool]
         """
         if mask.shape != self.data.shape:
-            raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
-                             "({1}).".format(mask.shape, self.data.shape))
+            raise ValueError(
+                f"The shape of the mask array ({mask.shape}) must be the same as that of the data array "
+                f"({self.data.shape})."
+            )
 
         # Creates the data array that we'll be searching. Takes into account the passed mask, as well as
         #  the edge mask designed to remove pixels at the edges of detectors, where RateMap values can
@@ -3343,8 +3631,9 @@ class RateMap(Image):
 
         return peak_conv, edge_flag, chosen_coord_pairs, other_coord_pairs
 
-    def convolved_peak(self, mask: np.ndarray, redshift: float, cosmology, out_unit: UnitBase = deg) \
-            -> Tuple[Quantity, bool]:
+    def convolved_peak(
+        self, mask: np.ndarray, redshift: float, cosmology, out_unit: UnitBase = deg
+    ) -> tuple[Quantity, bool]:
         """
         A very experimental peak finding algorithm, credit for the idea and a lot of the code in this function
         go to Lucas Porth. A radial profile (for instance a project king profile for clusters) is convolved
@@ -3363,6 +3652,7 @@ class RateMap(Image):
             the user's mask), in units of out_unit, as specified by the user.
         :rtype: Tuple[Quantity, bool]
         """
+
         def cartesian(arrays):
             arrays = [np.asarray(a) for a in arrays]
             shape = (len(x) for x in arrays)
@@ -3378,22 +3668,28 @@ class RateMap(Image):
             ds = cartesian([_, _])
             r_grid = np.hypot(ds[:, 0], ds[:, 1]).reshape((len(_), len(_))) * pix_size
 
-            func = (1 + (r_grid / r)**2)**((-3*beta) + 0.5)
+            func = (1 + (r_grid / r) ** 2) ** ((-3 * beta) + 0.5)
             res = (r_grid < r) * func
             return res / np.sum(r_grid < r)
 
-        raise NotImplementedError("The convolved peak method sort of works, but needs to be much more general"
-                                  " before its available for proper use.")
+        raise NotImplementedError(
+            "The convolved peak method sort of works, but needs to be much more general"
+            " before its available for proper use."
+        )
 
         if mask.shape != self.data.shape:
-            raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
-                             "({1}).".format(mask.shape, self.data.shape))
+            raise ValueError(
+                f"The shape of the mask array ({mask.shape}) must be the same as that of the data array "
+                f"({self.data.shape})."
+            )
 
-        start_pos = self.coord_conv(Quantity([int(self.shape[1]/2), int(self.shape[0]/2)], pix), deg)
-        end_pos = self.coord_conv(Quantity([int(self.shape[1]/2) + 10, int(self.shape[0]/2)], pix), deg)
+        start_pos = self.coord_conv(Quantity([int(self.shape[1] / 2), int(self.shape[0] / 2)], pix), deg)
+        end_pos = self.coord_conv(Quantity([int(self.shape[1] / 2) + 10, int(self.shape[0] / 2)], pix), deg)
 
-        separation = Quantity(np.sqrt(abs(start_pos[0].value - end_pos[0].value) ** 2 +
-                                      abs(start_pos[1].value - end_pos[1].value) ** 2), deg)
+        separation = Quantity(
+            np.sqrt(abs(start_pos[0].value - end_pos[0].value) ** 2 + abs(start_pos[1].value - end_pos[1].value) ** 2),
+            deg,
+        )
 
         resolution = ang_to_rad(separation, redshift, cosmology) / 10
 
@@ -3403,7 +3699,7 @@ class RateMap(Image):
         # TODO Could totally make this into a basic cluster finder combined with clustering algorithm
         filt = projected_king(1000, resolution.value, 3)
         n_cut = int(filt.shape[0] / 2)
-        conv_data = fftconvolve(self.data*self.edge_mask, filt)[n_cut:-n_cut, n_cut:-n_cut]
+        conv_data = fftconvolve(self.data * self.edge_mask, filt)[n_cut:-n_cut, n_cut:-n_cut]
         mask_conv_data = conv_data * mask
 
         max_coords = np.unravel_index(np.argmax(mask_conv_data == mask_conv_data.max()), mask_conv_data.shape)
@@ -3437,8 +3733,7 @@ class RateMap(Image):
 
             # Checks the edge mask within a 5 by 5 array centered on the peak coord, if there are no edges then
             #  all elements will be 1 and it will sum to 25.
-            edge_sum = self.edge_mask[pix_coord[1] - 2:pix_coord[1] + 3,
-                                      pix_coord[0] - 2:pix_coord[0] + 3].sum()
+            edge_sum = self.edge_mask[pix_coord[1] - 2 : pix_coord[1] + 3, pix_coord[0] - 2 : pix_coord[0] + 3].sum()
             # If it sums to less then we know that there is an edge near the peak.
             if edge_sum != 25:
                 edge_flag = True
@@ -3450,9 +3745,15 @@ class RateMap(Image):
 
         return edge_flag
 
-    def signal_to_noise(self, source_mask: np.ndarray, back_mask: np.ndarray, exp_corr: bool = True,
-                        allow_negative: bool = False, x_slice_lims: List[int] | None = None,
-                        y_slice_lims: List[int] | None = None) -> np.float64:
+    def signal_to_noise(
+        self,
+        source_mask: np.ndarray,
+        back_mask: np.ndarray,
+        exp_corr: bool = True,
+        allow_negative: bool = False,
+        x_slice_lims: list[int] | None = None,
+        y_slice_lims: list[int] | None = None,
+    ) -> np.float64:
         """
         A signal-to-noise calculation method which takes information on source and background regions, then uses
         that to calculate a signal-to-noise for the source. This was primarily motivated by the desire to produce
@@ -3492,20 +3793,23 @@ class RateMap(Image):
 
         # Perform some quick checks on the masks to check they are broadly compatible with this ratemap
         if source_mask.shape != sel_shape:
-            raise ValueError("The source mask shape {sm} is not the same as the selected ratemap shape "
-                             "{rt}!".format(sm=source_mask.shape, rt=sel_shape))
+            raise ValueError(
+                f"The source mask shape {source_mask.shape} is not the same as the selected ratemap shape {sel_shape}!"
+            )
         elif not (source_mask >= 0).all() or not (source_mask <= 1).all():
             raise ValueError("The source mask has illegal values in it, there should only be ones and zeros.")
         elif back_mask.shape != sel_shape:
-            raise ValueError("The background mask shape {bm} is not the same as the selected ratemap shape "
-                             "{rt}!".format(bm=back_mask.shape, rt=sel_shape))
+            raise ValueError(
+                f"The background mask shape {back_mask.shape} is not the same as the selected ratemap shape "
+                f"{sel_shape}!"
+            )
         elif not (back_mask >= 0).all() or not (back_mask <= 1).all():
             raise ValueError("The background mask has illegal values in it, there should only be ones and zeros.")
 
         # Find the total mask areas. As the mask is just an array of ones and zeros we can just sum the
         #  whole thing to find the total pixel area covered.
-        src_area = (source_mask*self.sensor_mask[y_slice, x_slice]).sum()
-        back_area = (back_mask*self.sensor_mask[y_slice, x_slice]).sum()
+        src_area = (source_mask * self.sensor_mask[y_slice, x_slice]).sum()
+        back_area = (back_mask * self.sensor_mask[y_slice, x_slice]).sum()
 
         # Exposure correction takes into account the different exposure times of the individual pixels
         if exp_corr:
@@ -3534,13 +3838,17 @@ class RateMap(Image):
 
             # Signal-to-noise is then just finding the source counts by subtracting the area scaled background counts
             #  and dividing by the square root of the total counts within the source area
-            sn = (tot_cnt - bck_cnt*area_norm) / np.sqrt(tot_cnt)
+            sn = (tot_cnt - bck_cnt * area_norm) / np.sqrt(tot_cnt)
 
         return sn
 
-    def background_subtracted_counts(self, source_mask: np.ndarray, back_mask: np.ndarray,
-                                     x_slice_lims: List[int] = None,
-                                     y_slice_lims: List[int] = None) -> Quantity:
+    def background_subtracted_counts(
+        self,
+        source_mask: np.ndarray,
+        back_mask: np.ndarray,
+        x_slice_lims: list[int] = None,
+        y_slice_lims: list[int] = None,
+    ) -> Quantity:
         """
         This method uses a user-supplied source and background mask (alongside knowledge of the sensor layout
         drawn from the exposure map) to calculate the number of background-subtracted counts within the source
@@ -3577,13 +3885,16 @@ class RateMap(Image):
 
         # Perform some quick checks on the masks to check they are broadly compatible with this ratemap
         if source_mask.shape != sel_shape:
-            raise ValueError("The source mask shape {sm} is not the same as the selected ratemap shape "
-                             "{rt}!".format(sm=source_mask.shape, rt=sel_shape))
+            raise ValueError(
+                f"The source mask shape {source_mask.shape} is not the same as the selected ratemap shape {sel_shape}!"
+            )
         elif not (source_mask >= 0).all() or not (source_mask <= 1).all():
             raise ValueError("The source mask has illegal values in it, there should only be ones and zeros.")
         elif back_mask.shape != sel_shape:
-            raise ValueError("The background mask shape {bm} is not the same as the selected ratemap shape "
-                             "{rt}!".format(bm=back_mask.shape, rt=sel_shape))
+            raise ValueError(
+                f"The background mask shape {back_mask.shape} is not the same as the selected ratemap shape "
+                f"{sel_shape}!"
+            )
         elif not (back_mask >= 0).all() or not (back_mask <= 1).all():
             raise ValueError("The background mask has illegal values in it, there should only be ones and zeros.")
 
@@ -3601,11 +3912,11 @@ class RateMap(Image):
 
         # Simple calculation, re-normalising the background counts with the area ratio and subtracting background
         #  from the source. Then storing it in an astropy quantity
-        cnts = Quantity(tot_cnt - (bck_cnt*area_norm), 'ct')
+        cnts = Quantity(tot_cnt - (bck_cnt * area_norm), "ct")
 
         return cnts
 
-    def unload(self, unload_data: bool = True, unload_header: bool = False):
+    def unload(self, unload_data: bool = True, unload_header: bool = False) -> None:
         """
         This method allows you to safely remove the data and/or header information contained in this
         RateMap (and its component image and exposure map) from memory, while guaranteeing that it will be
@@ -3688,7 +3999,7 @@ class RateMap(Image):
         return self._ex_obj
 
     @property
-    def regions(self) -> Dict:
+    def regions(self) -> dict:
         """
         Property getter for regions associated with this ratemap.
 
@@ -3698,7 +4009,7 @@ class RateMap(Image):
         return self._regions
 
     @regions.setter
-    def regions(self, new_reg: Optional[Union[str, List[Union[SkyRegion, PixelRegion]], np.ndarray, dict]]):
+    def regions(self, new_reg: str | list[SkyRegion | PixelRegion] | np.ndarray | dict | None):
         """
         A setter for regions associated with this object, a region file path or a list/array/dict of regions is passed,
         then that file/set of regions is processed into the required format. If a list or array of regions is passed, it
@@ -3708,62 +4019,13 @@ class RateMap(Image):
         :param str/List[SkyRegion/PixelRegion]/np.ndarray/dict new_reg: A new region file path, a list or numpy array
             of region objects, or a dictionary of region lists/arrays with ObsIDs as dictionary keys.
         """
-        if new_reg is not None and not isinstance(new_reg, (str, list, np.ndarray, dict)):
-            raise TypeError("Please pass either a path to a region file, a list or numpy array of "
-                            "SkyRegion/PixelRegion objects, or a dictionary of lists/arrays of SkyRegion/PixelRegion "
-                            "objects with ObsIDs as keys.")
-
-        if (
-            isinstance(new_reg, dict)
-            and self.telescope is not None
-            and self.telescope in new_reg
-            and isinstance(new_reg[self.telescope], dict)
-        ):
-            new_reg = new_reg[self.telescope]
-
-        if new_reg is None:
-            self._reg_file_path = ""
-            self._regions = {}
-        # Checks to make sure that a region file path exists, if passed, then processes the file
-        elif isinstance(new_reg, str) and new_reg != '' and os.path.exists(new_reg):
-            self._reg_file_path = new_reg
-            self._regions = self._process_regions(new_reg)
-        # Possible for an empty string to be passed in which case nothing happens
-        elif isinstance(new_reg, str) and new_reg == '':
-            pass
-        elif isinstance(new_reg, str):
-            warn("The region file path does not exist", stacklevel=2)
-        # If an existing list/array of regions are passed then we just process them and assign them to regions attribute
-        elif isinstance(new_reg, (list, np.ndarray)) and all(
-            [r is None or isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]
-        ):
-            self._reg_file_path = ""
-            self._regions = self._process_regions(reg_objs=new_reg)
-        elif isinstance(new_reg, dict) and all(
-            [
-                rl is None
-                or isinstance(rl, (SkyRegion, PixelRegion))
-                or (
-                    isinstance(rl, (list, np.ndarray))
-                    and all([r is None or isinstance(r, (SkyRegion, PixelRegion)) for r in rl])
-                )
-                for o, rl in new_reg.items()
-            ]
-        ):
-            self._reg_file_path = ""
-            self._regions = self._process_regions(reg_objs=new_reg)
-        else:
-            raise ValueError("That value of new_reg is not valid, please pass either a path to a region file or "
-                             "a list/array/dictionary of SkyRegion/PixelRegion objects")
-
-        # This is the only part that's different from the implementation in the superclass. Here we make sure that
-        #  the same attribute is set for the Image, so if the user were to access the image from the RateMap
-        #  they would still see any regions that have been added. No doubt there is a more elegant solution but this
-        #  is what you're getting right now because I am exhausted
+        # Delegate region validation, dictionary unwrapping, and processing to Image.regions, then synchronise the
+        #  underlying Image component so accessing the Image from the RateMap sees the same regions
+        Image.regions.fset(self, new_reg)
         self._im_obj.regions = new_reg
 
     @property
-    def matched_regions(self) -> Dict:
+    def matched_regions(self) -> dict:
         """
         Property getter for any regions which have been designated a 'match' in the current analysis, if
         they have been set.
@@ -3774,7 +4036,7 @@ class RateMap(Image):
         return self._matched_regions
 
     @matched_regions.setter
-    def matched_regions(self, new_reg: Union[str, List[Union[SkyRegion, PixelRegion]], dict]):
+    def matched_regions(self, new_reg: SkyRegion | PixelRegion | dict[str, SkyRegion | PixelRegion | None] | None):
         """
         A setter for matched regions associated with this object, with a new single matched region or dictionary of
         matched regions (with keys being ObsIDs and one entry for each ObsID associated with this object) being passed.
@@ -3785,16 +4047,9 @@ class RateMap(Image):
             subject of a current analysis. This should either be supplied as a single region object, or as a
             dictionary of region objects with ObsIDs as keys.
         """
-        if new_reg is not None and not isinstance(new_reg, (PixelRegion, SkyRegion, dict)):
-            raise TypeError("Please pass either a dictionary of SkyRegion/PixelRegion objects with ObsIDs as "
-                            "keys, or a single SkyRegion/PixelRegion object. Alternatively pass None for no match.")
-
-        self._matched_regions = self._process_matched_regions(new_reg)
-
-        # This is the only part that's different from the implementation in the superclass. Here we make sure that
-        #  the same attribute is set for the Image, so if the user was to access the image from the RateMap
-        #  they would still see any regions that have been added. No doubt there is a more elegant solution but this
-        #  is what you're getting right now because I am exhausted
+        # Delegate matched-region validation and conversion to Image.matched_regions, then synchronise the underlying
+        #  Image component
+        Image.matched_regions.fset(self, new_reg)
         self._im_obj.matched_regions = new_reg
 
 
@@ -3816,8 +4071,19 @@ class PSF(Image):
         many products from the same directory/directory structure, it can be more performant to run listdir
         or scandir and confirm files exist externally, than one by one in each product declaration.
     """
-    def __init__(self, path: str, psf_model: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, telescope: str = None, check_exists: bool = True):
+
+    def __init__(
+        self,
+        path: str,
+        psf_model: str,
+        obs_id: str,
+        instrument: str,
+        stdout_str: str,
+        stderr_str: str,
+        gen_cmd: str,
+        telescope: str = None,
+        check_exists: bool = True,
+    ):
         """
         The init method for PSF class.
 
@@ -3834,12 +4100,22 @@ class PSF(Image):
             many products from the same directory/directory structure, it can be more performant to run listdir
             or scandir and confirm files exist externally, than one by one in each product declaration.
         """
-        lo_en = Quantity(0, 'keV')
-        hi_en = Quantity(100, 'keV')
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en,
-                         telescope=telescope, check_exists=check_exists)
+        lo_en = Quantity(0, "keV")
+        hi_en = Quantity(100, "keV")
+        super().__init__(
+            path,
+            obs_id,
+            instrument,
+            stdout_str,
+            stderr_str,
+            gen_cmd,
+            lo_en,
+            hi_en,
+            telescope=telescope,
+            check_exists=check_exists,
+        )
         self._prod_type = "psf"
-        self._data_unit = Unit('')
+        self._data_unit = Unit("")
         self._psf_centre = None
         self._psf_model = psf_model
 
@@ -3888,11 +4164,13 @@ class PSF(Image):
         :rtype: np.ndarray
         """
         if im_prod.obs_id != self.obs_id:
-            raise IncompatibleProductError("Image ObsID ({o1}) is not the same as PSF ObsID "
-                                           "({o2})".format(o1=im_prod.obs_id, o2=self.obs_id))
+            raise IncompatibleProductError(
+                f"Image ObsID ({im_prod.obs_id}) is not the same as PSF ObsID ({self.obs_id})"
+            )
         elif im_prod.instrument != self.instrument:
-            raise IncompatibleProductError("Image instrument ({i1}) is not the same as PSF instrument "
-                                           "({i2})".format(i1=im_prod.instrument, i2=self.instrument))
+            raise IncompatibleProductError(
+                f"Image instrument ({im_prod.instrument}) is not the same as PSF instrument ({self.instrument})"
+            )
         if half_side_length.unit != pix:
             raise UnitConversionError("side_length must be in pixels")
 
@@ -3900,9 +4178,11 @@ class PSF(Image):
         im_pix_psf_gen = im_prod.coord_conv(self.ra_dec, pix).value
 
         hs = half_side_length.value.astype(int)
-        grid = np.meshgrid(np.arange(im_pix_psf_gen[0] - hs, im_pix_psf_gen[0] + hs),
-                           np.arange(im_pix_psf_gen[1] - hs, im_pix_psf_gen[1] + hs))
-        pix_coords = Quantity(np.stack([grid[0].ravel(), grid[1].ravel()]).T, 'pix')
+        grid = np.meshgrid(
+            np.arange(im_pix_psf_gen[0] - hs, im_pix_psf_gen[0] + hs),
+            np.arange(im_pix_psf_gen[1] - hs, im_pix_psf_gen[1] + hs),
+        )
+        pix_coords = Quantity(np.stack([grid[0].ravel(), grid[1].ravel()]).T, "pix")
         # Just tell the conversion method that I want degrees out, and the image's WCS is used to convert
         deg_coords = im_prod.coord_conv(pix_coords, deg)
 
@@ -3911,7 +4191,7 @@ class PSF(Image):
         psf_vals = self.get_val(deg_coords)
 
         # Now need to reshape the values into a 2D array
-        new_psf = np.reshape(psf_vals, (hs*2, hs*2))
+        new_psf = np.reshape(psf_vals, (hs * 2, hs * 2))
 
         # Renormalising this resampled PSF
         new_psf /= new_psf.sum()
@@ -3958,8 +4238,21 @@ class PSFGrid(BaseAggregateProduct):
     :param str gen_cmd: The commands used to generate the products.
     :param str telescope: The telescope that this PSFGrid is derived for. Default is None.
     """
-    def __init__(self, file_paths: list, bins: int, psf_model: str, x_bounds: np.ndarray, y_bounds: np.ndarray,
-                 obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str, telescope: str = None):
+
+    def __init__(
+        self,
+        file_paths: list,
+        bins: int,
+        psf_model: str,
+        x_bounds: np.ndarray,
+        y_bounds: np.ndarray,
+        obs_id: str,
+        instrument: str,
+        stdout_str: str,
+        stderr_str: str,
+        gen_cmd: str,
+        telescope: str = None,
+    ):
         """
         The init of the PSFGrid class - a subclass of BaseAggregateProduct that wraps a set of PSFs that have been
         generated at different points on the detector.
@@ -3976,7 +4269,7 @@ class PSFGrid(BaseAggregateProduct):
         :param str gen_cmd: The commands used to generate the products.
         :param str telescope: The telescope that this PSFGrid is derived for. Default is None.
         """
-        super().__init__(file_paths, 'psf', obs_id, instrument, telescope=telescope)
+        super().__init__(file_paths, "psf", obs_id, instrument, telescope=telescope)
         self._psf_model = psf_model
         # Set none here because if I want positions of PSFs and there has been an error during generation, the user
         #  will only see the FileNotFoundError not the SAS error
@@ -4054,7 +4347,7 @@ class PSFGrid(BaseAggregateProduct):
                 self._grid_loc[pos[0], pos[1], :] = self._component_products.ra_dec
         return self._grid_loc
 
-    def unload_data(self):
+    def unload_data(self) -> None:
         """
         A convenience method that will iterate through the component PSFs of this object and remove their data from
         memory using the data property deleter. This ensures that, if the data needs to be accessed again, the call
@@ -4062,5 +4355,3 @@ class PSFGrid(BaseAggregateProduct):
         """
         for p in self._component_products:
             del self._component_products[p].data
-
-

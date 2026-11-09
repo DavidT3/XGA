@@ -1,6 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/15/26, 2:40 PM. Copyright (c) The Contributors.
-from typing import Tuple, Union, List
 from warnings import warn
 
 import numpy as np
@@ -20,28 +19,44 @@ from xga.samples import ClusterSample
 from xga.xspec import single_temp_apec
 
 # This just sets the data columns that MUST be present in the sample data passed by the user
-LT_REQUIRED_COLS = ['ra', 'dec', 'name', 'redshift']
+LT_REQUIRED_COLS = ["ra", "dec", "name", "redshift"]
 
 
-def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Quantity, use_peak: bool = False,
-                                    peak_find_method: str = "hierarchical", convergence_frac: float = 0.1,
-                                    min_iter: int = 3, max_iter: int = 10, rad_temp_rel: ScalingRelation = arnaud_r500,
-                                    lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
-                                    freeze_nh: bool = True, freeze_met: bool = True, freeze_temp: bool = False,
-                                    start_temp: Quantity = Quantity(3.0, 'keV'),
-                                    temp_lum_rel: ScalingRelation = xcs_sdss_r500_52_TL,
-                                    lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
-                                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                                    over_sample: float = None, back_inn_rad_factor: float = 1.05,
-                                    back_out_rad_factor: float = 1.5, clean_obs: bool = True,
-                                    clean_obs_threshold: float = 0.7, save_samp_results_path: str = None,
-                                    save_rad_history_path: str = None, cosmo: Cosmology = DEFAULT_COSMO,
-                                    telescope: str = 'xmm', search_distance: Quantity = None,
-                                    stacked_spectra: bool = False, timeout: Quantity = Quantity(1, 'hr'),
-                                    include_core_pnt_srcs: Union[bool, List[bool], np.ndarray] = True,
-                                    num_cores: int = NUM_CORES) \
-        -> Tuple[ClusterSample, pd.DataFrame, pd.DataFrame]:
-
+def luminosity_temperature_pipeline(
+    sample_data: pd.DataFrame,
+    start_aperture: Quantity,
+    use_peak: bool = False,
+    peak_find_method: str = "hierarchical",
+    convergence_frac: float = 0.1,
+    min_iter: int = 3,
+    max_iter: int = 10,
+    rad_temp_rel: ScalingRelation = arnaud_r500,
+    lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
+    freeze_nh: bool = True,
+    freeze_met: bool = True,
+    freeze_temp: bool = False,
+    start_temp: Quantity = Quantity(3.0, "keV"),
+    temp_lum_rel: ScalingRelation = xcs_sdss_r500_52_TL,
+    lo_en: Quantity = Quantity(0.3, "keV"),
+    hi_en: Quantity = Quantity(7.9, "keV"),
+    group_spec: bool = True,
+    min_counts: int = 5,
+    min_sn: float = None,
+    over_sample: float = None,
+    back_inn_rad_factor: float = 1.05,
+    back_out_rad_factor: float = 1.5,
+    clean_obs: bool = True,
+    clean_obs_threshold: float = 0.7,
+    save_samp_results_path: str = None,
+    save_rad_history_path: str = None,
+    cosmo: Cosmology = DEFAULT_COSMO,
+    telescope: str = "xmm",
+    search_distance: Quantity = None,
+    stacked_spectra: bool = False,
+    timeout: Quantity = Quantity(1, "hr"),
+    include_core_pnt_srcs: bool | list[bool] | np.ndarray = True,
+    num_cores: int = NUM_CORES,
+) -> tuple[ClusterSample, pd.DataFrame, pd.DataFrame]:
     """
     This is the XGA pipeline for measuring overdensity radii, and the temperatures and luminosities within the
     radii, for a sample of clusters. No knowledge of the overdensity radii of the clusters is required
@@ -163,9 +178,10 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     :param Quantity timeout: This sets the amount of time an XSPEC fit can run before it is
         timed out, the default is 1 hour.
     :param bool/List[bool]/np.ndarray include_core_pnt_srcs: Controls whether bright point sources near the
-        user-defined coordinates (hopefully in cluster cores) are allowed to contribute to analyses. Default is
-        True, in which case such point sources will NOT be included in masks, in case they are a bright cool core.
-        Lists or arrays of boolean values may also be supplied, for more nuanced control.
+        user-defined coordinates (hopefully in cluster cores) are left unmasked (the default) or are masked during
+        spectrum generation. Default is True, in which case such point sources will NOT be included in masks, in
+        case they are a bright cool core. Lists or arrays of boolean values may also be supplied, for more nuanced
+        control.
     :param int num_cores: The number of cores that can be used for spectrum generation and fitting. The default is
         90% of the cores detected on the system.
     :return: The GalaxyCluster sample object used for this analysis, the dataframe of results for all input
@@ -174,51 +190,71 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     :rtype: Tuple[ClusterSample, pd.DataFrame, pd.DataFrame]
     """
     # Given the nature of most eROSITA data, I am putting this here as a message to the user with some advice
-    if telescope == 'erass' and not stacked_spectra:
-        warn("It is strongly recommended that 'stacked_spectra' be set to True for eROSITA survey observations.",
-             stacklevel=2)
+    if telescope == "erass" and not stacked_spectra:
+        warn(
+            "It is strongly recommended that 'stacked_spectra' be set to True for eROSITA survey observations.",
+            stacklevel=2,
+        )
 
     # This is because eROSITA results are still pretty new and most scaling relations in this module (at the time
     #  of writing) are from XMM data - it is known that Tx values can be different between eROSITA and XMM (from
     #  Turner et al. eFEDS-XCS paper).
-    if telescope != 'xmm':
-        warn("Scaling relations packaged in this module are currently based off of XMM data - eROSITA & Chandra "
-             "temperatures have been shown to be somewhat discrepant, so be cautious or provide your own "
-             "scaling relations.", stacklevel=2)
+    if telescope != "xmm":
+        warn(
+            "Scaling relations packaged in this module are currently based off of XMM data - eROSITA & Chandra "
+            "temperatures have been shown to be somewhat discrepant, so be cautious or provide your own "
+            "scaling relations.",
+            stacklevel=2,
+        )
 
     # I want the sample to be passed in as a DataFrame, so I can easily extract the information I need
     if not isinstance(sample_data, pd.DataFrame):
-        raise TypeError("The sample_data argument must be a Pandas DataFrame, with the following columns; "
-                        "{}".format(', '.join(LT_REQUIRED_COLS)))
+        raise TypeError(
+            "The sample_data argument must be a Pandas DataFrame, with the following columns; {}".format(
+                ", ".join(LT_REQUIRED_COLS)
+            )
+        )
 
     # Also have to make sure that the required information exists in the dataframe, otherwise obviously this tool
     #  is not going to work
     if not set(LT_REQUIRED_COLS).issubset(sample_data.columns):
-        raise KeyError("Not all required columns ({}) are present in the sample_data "
-                       "DataFrame.".format(', '.join(LT_REQUIRED_COLS)))
+        raise KeyError(
+            "Not all required columns ({}) are present in the sample_data DataFrame.".format(
+                ", ".join(LT_REQUIRED_COLS)
+            )
+        )
 
-    if (sample_data['name'].str.contains(' ') | sample_data['name'].str.contains('_')).any():
-        warn("One or more cluster name has been modified. Empty spaces (' ') are removed, and underscores ('_') are "
-             "replaced with hyphens ('-').", stacklevel=2)
-        sample_data['name'] = sample_data['name'].apply(lambda x: x.replace(" ", "").replace("_", "-"))
+    if (sample_data["name"].str.contains(" ") | sample_data["name"].str.contains("_")).any():
+        warn(
+            "One or more cluster name has been modified. Empty spaces (' ') are removed, and underscores ('_') are "
+            "replaced with hyphens ('-').",
+            stacklevel=2,
+        )
+        sample_data["name"] = sample_data["name"].apply(lambda x: x.replace(" ", "").replace("_", "-"))
 
     # A key part of this process is a relation between the temperature we measure, and the overdensity radius. As
     #  scaling relations can be between basically any two parameters, and I want this relation object to be an XGA
     #  scaling relation instance, I need to check some things with the rad_temp_rel passed by the user
     if not isinstance(rad_temp_rel, ScalingRelation):
         raise TypeError("The 'rad_temp_rel' argument requires an XGA ScalingRelation instance to be passed.")
-    elif not rad_temp_rel.x_unit.is_equivalent(Unit('keV')):
-        raise UnitConversionError("The x-unit of the relation passed for the 'rad_temp_rel' (radius-temperature "
-                                  "relation) argument is {bu}, and cannot be converted to "
-                                  "keV.".format(bu=rad_temp_rel.x_unit.to_string()))
-    elif not rad_temp_rel.y_unit.is_equivalent(Unit('kpc')):
-        raise UnitConversionError("The y-unit of the relation passed for the 'rad_temp_rel' (radius-temperature "
-                                  "relation) argument is {bu}, and cannot be converted to "
-                                  "kpc.".format(bu=rad_temp_rel.y_unit.to_string()))
+    elif not rad_temp_rel.x_unit.is_equivalent(Unit("keV")):
+        raise UnitConversionError(
+            "The x-unit of the relation passed for the 'rad_temp_rel' (radius-temperature "
+            f"relation) argument is {rad_temp_rel.x_unit.to_string()}, and cannot be converted to "
+            "keV."
+        )
+    elif not rad_temp_rel.y_unit.is_equivalent(Unit("kpc")):
+        raise UnitConversionError(
+            "The y-unit of the relation passed for the 'rad_temp_rel' (radius-temperature "
+            f"relation) argument is {rad_temp_rel.y_unit.to_string()}, and cannot be converted to "
+            "kpc."
+        )
     elif rad_temp_rel.telescope != telescope:
-        raise ValueError("The relation passed for the 'rad_temp_rel' argument was made for the {rt} telescope, but "
-                         "this pipeline is running for the {pt} telescope (specified by the 'telescope' "
-                         "argument).".format(rt=rad_temp_rel.telescope, pt=telescope))
+        raise ValueError(
+            f"The relation passed for the 'rad_temp_rel' argument was made for the {rad_temp_rel.telescope} telescope, but "
+            f"this pipeline is running for the {telescope} telescope (specified by the 'telescope' "
+            "argument)."
+        )
 
     # We ensure that the energy bounds used to measure the luminosity in the temperature-luminosity relation are also
     #  being measured by our pipeline run - if they aren't already then we add them and give the user a warning. This
@@ -228,9 +264,11 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
 
         # Have to make sure that the return from that wasn't None
         if rel_lum_bounds is None:
-            raise TypeError("The supplied temperature-luminosity relation does not have the energy bounds which "
-                            "the luminosity was measured set - you can remedy this by setting the "
-                            "'x_energy_bounds' property.")
+            raise TypeError(
+                "The supplied temperature-luminosity relation does not have the energy bounds which "
+                "the luminosity was measured set - you can remedy this by setting the "
+                "'x_energy_bounds' property."
+            )
 
         present = False
         for row_ind in range(len(lum_en)):
@@ -242,9 +280,12 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         #  we make sure to add it, so that we have a matching luminosity to feed into the scaling relation
         if not present:
             lum_en = np.vstack([lum_en, rel_lum_bounds])
-            warn("The passed value of 'lum_en' meant that the energy-bound luminosity required to predict "
-                 "temperature from the passed temperature-luminosity scaling relation would not be measured - the"
-                 "required energy bounds have been added.", stacklevel=2)
+            warn(
+                "The passed value of 'lum_en' meant that the energy-bound luminosity required to predict "
+                "temperature from the passed temperature-luminosity scaling relation would not be measured - the"
+                "required energy bounds have been added.",
+                stacklevel=2,
+            )
 
     # I'm going to make sure that the user isn't allowed to request that it not iterate at all
     if min_iter < 2:
@@ -252,15 +293,16 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
 
     # Also have to make sure the user hasn't something daft like make min_iter larger than max_iter
     if max_iter <= min_iter:
-        raise ValueError("The max_iter value ({mai}) is less than or equal to the min_iter value "
-                         "({mii}).".format(mai=max_iter, mii=min_iter))
+        raise ValueError(f"The max_iter value ({max_iter}) is less than or equal to the min_iter value ({min_iter}).")
 
     # Trying to determine the targeted overdensity based on the name of the 'outer_aperture'
     # The LT pipeline will not process if using a fixed aperture
     if isinstance(rad_temp_rel.outer_aperture, Quantity):
-        raise TypeError("The XGA luminosity-temperature-radius pipeline requires that the radius-temperature relation "
-                        "passed to 'rad_temp_rel' be measured within overdensity radii (e.g. R500), not a fixed "
-                        "numerical aperture such as {}".format(rad_temp_rel.outer_aperture.to_string()))
+        raise TypeError(
+            "The XGA luminosity-temperature-radius pipeline requires that the radius-temperature relation "
+            "passed to 'rad_temp_rel' be measured within overdensity radii (e.g. R500), not a fixed "
+            f"numerical aperture such as {rad_temp_rel.outer_aperture.to_string()}"
+        )
 
     # We already checked the string format when declaring a scaling relation, so we know if we got this
     #  far it should definitely be in the format of am overdensity name
@@ -281,48 +323,72 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     #  normalisation, measures the luminosity, and uses that combined with a temp-lum scaling relation to calculate
     #  the temperature that the next fitting step should be fixed at
     if freeze_temp and not isinstance(temp_lum_rel, ScalingRelation):
-        raise TypeError("The pipeline is operating in frozen-temperature mode, which means that at each step we "
-                        "must estimate the next temperature with a temperature-luminosity relation; as such "
-                        "'temp_lum_rel' cannot be None.")
-    elif freeze_temp and not temp_lum_rel.x_unit.is_equivalent(Unit('erg/s')):
-        raise UnitConversionError("Frozen-temperature mode requires a temperature-luminosity relation, but the x-unit "
-                                  "of the relation passed for argument 'rad_temp_rel' is {bu}. It cannot be "
-                                  "converted to erg/s.".format(bu=temp_lum_rel.x_unit.to_string()))
-    elif freeze_temp and not temp_lum_rel.y_unit.is_equivalent(Unit('keV')):
-        raise UnitConversionError("Frozen-temperature mode requires a temperature-luminosity relation, but the y-unit "
-                                  "of the relation passed for argument 'rad_temp_rel' is {bu}. It cannot be "
-                                  "converted to keV.".format(bu=temp_lum_rel.y_unit.to_string()))
+        raise TypeError(
+            "The pipeline is operating in frozen-temperature mode, which means that at each step we "
+            "must estimate the next temperature with a temperature-luminosity relation; as such "
+            "'temp_lum_rel' cannot be None."
+        )
+    elif freeze_temp and not temp_lum_rel.x_unit.is_equivalent(Unit("erg/s")):
+        raise UnitConversionError(
+            "Frozen-temperature mode requires a temperature-luminosity relation, but the x-unit "
+            f"of the relation passed for argument 'rad_temp_rel' is {temp_lum_rel.x_unit.to_string()}. It cannot be "
+            "converted to erg/s."
+        )
+    elif freeze_temp and not temp_lum_rel.y_unit.is_equivalent(Unit("keV")):
+        raise UnitConversionError(
+            "Frozen-temperature mode requires a temperature-luminosity relation, but the y-unit "
+            f"of the relation passed for argument 'rad_temp_rel' is {temp_lum_rel.y_unit.to_string()}. It cannot be "
+            "converted to keV."
+        )
     elif freeze_temp and temp_lum_rel.outer_aperture != o_dens:
-        raise ValueError("The outer aperture used to construct the relation passed as the 'temp_lum_rel' "
-                         "argument ({rr}), does not match the target overdensity "
-                         "({tr}).".format(rr=temp_lum_rel.outer_aperture.to_string(), tr=o_dens))
+        raise ValueError(
+            "The outer aperture used to construct the relation passed as the 'temp_lum_rel' "
+            f"argument ({temp_lum_rel.outer_aperture.to_string()}), does not match the target overdensity "
+            f"({o_dens})."
+        )
     elif freeze_temp and temp_lum_rel.core_radius_fraction != rad_temp_rel.core_radius_fraction:
-        raise ValueError("The core radius used to construct the relation passed as the 'temp_lum_rel' "
-                         "argument ({rr}), does not match that of the passed temperature-radius relation "
-                         "({tr}).".format(rr=temp_lum_rel.core_radius_fraction, tr=rad_temp_rel.core_radius_fraction))
+        raise ValueError(
+            "The core radius used to construct the relation passed as the 'temp_lum_rel' "
+            f"argument ({temp_lum_rel.core_radius_fraction}), does not match that of the passed temperature-radius relation "
+            f"({rad_temp_rel.core_radius_fraction})."
+        )
     elif freeze_temp and rad_temp_rel.telescope != telescope:
-        raise ValueError("The relation passed for the 'temp_lum_rel' argument was made for the {rt} telescope, but "
-                         "this pipeline is running for the {pt} telescope (specified by the 'telescope' "
-                         "argument).".format(rt=temp_lum_rel.telescope, pt=telescope))
+        raise ValueError(
+            f"The relation passed for the 'temp_lum_rel' argument was made for the {temp_lum_rel.telescope} telescope, but "
+            f"this pipeline is running for the {telescope} telescope (specified by the 'telescope' "
+            "argument)."
+        )
 
     # Keeps track of the current iteration number
     iter_num = 0
 
     # Set up the ClusterSample to be used for this process (I did consider setting up a new one each time but that
     #  adds overhead, and I think that this way should work fine).
-    samp = ClusterSample(sample_data['ra'].values, sample_data['dec'].values, sample_data['redshift'].values,
-                         sample_data['name'].values, use_peak=use_peak, peak_find_method=peak_find_method,
-                         clean_obs=clean_obs, clean_obs_threshold=clean_obs_threshold, clean_obs_reg=o_dens,
-                         load_fits=False, cosmology=cosmo, back_inn_rad_factor=back_inn_rad_factor,
-                         back_out_rad_factor=back_out_rad_factor, **o_dens_arg,
-                         telescope=telescope, search_distance=search_distance,
-                         include_core_pnt_srcs=include_core_pnt_srcs)
+    samp = ClusterSample(
+        sample_data["ra"].values,
+        sample_data["dec"].values,
+        sample_data["redshift"].values,
+        sample_data["name"].values,
+        use_peak=use_peak,
+        peak_find_method=peak_find_method,
+        clean_obs=clean_obs,
+        clean_obs_threshold=clean_obs_threshold,
+        clean_obs_reg=o_dens,
+        load_fits=False,
+        cosmology=cosmo,
+        back_inn_rad_factor=back_inn_rad_factor,
+        back_out_rad_factor=back_out_rad_factor,
+        **o_dens_arg,
+        telescope=telescope,
+        search_distance=search_distance,
+        include_core_pnt_srcs=include_core_pnt_srcs,
+    )
 
     # As it is possible some clusters in the sample_data dataframe don't actually have X-ray data, we copy
     #  the sample_data and cut it down, so it only contains entries for clusters that were loaded in the sample at the
     #  beginning of this process
     loaded_samp_data = sample_data.copy()
-    loaded_samp_data = loaded_samp_data[loaded_samp_data['name'].isin(samp.names)]
+    loaded_samp_data = loaded_samp_data[loaded_samp_data["name"].isin(samp.names)]
 
     # This is a boolean array of whether the current radius has been accepted or not - starts off False
     acc_rad = np.full(len(samp), False)
@@ -347,35 +413,65 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         try:
             # TODO THIS WILL BENEFIT FROM THE FUTURE UNIVERSAL SPECTRUM GENERATION FUNCTION
             # Run the spectrum generation for the current values of the over density radius
-            if telescope == 'xmm':
+            if telescope == "xmm":
                 # This will generate either core-included or core-excluded spectra - if the user wants to employ
                 #  core-included spectra for inference of radii then core_rad_frac will be zero
-                evselect_spectrum(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * core_rad_frac,
-                                  num_cores=num_cores, one_rmf=False, group_spec=group_spec, min_counts=min_counts,
-                                  min_sn=min_sn, over_sample=over_sample)
+                evselect_spectrum(
+                    samp,
+                    samp.get_radius(o_dens),
+                    samp.get_radius(o_dens) * core_rad_frac,
+                    num_cores=num_cores,
+                    one_rmf=False,
+                    group_spec=group_spec,
+                    min_counts=min_counts,
+                    min_sn=min_sn,
+                    over_sample=over_sample,
+                )
 
-            elif telescope == 'erosita' or telescope == 'erass':
+            elif telescope == "erosita" or telescope == "erass":
                 # This will generate either core-included or core-excluded spectra - if the user wants to employ
                 #  core-included spectra for inference of radii then core_rad_frac will be zero
-                srctool_spectrum(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * core_rad_frac,
-                                 group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, num_cores=num_cores,
-                                 combine_tm=stacked_spectra)
-            elif telescope == 'chandra':
+                srctool_spectrum(
+                    samp,
+                    samp.get_radius(o_dens),
+                    samp.get_radius(o_dens) * core_rad_frac,
+                    group_spec=group_spec,
+                    min_counts=min_counts,
+                    min_sn=min_sn,
+                    num_cores=num_cores,
+                    combine_tm=stacked_spectra,
+                )
+            elif telescope == "chandra":
                 # This will generate either core-included or core-excluded spectra - if the user wants to employ
                 #  core-included spectra for inference of radii then core_rad_frac will be zero
-                specextract_spectrum(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * core_rad_frac,
-                                     num_cores=num_cores, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn)
+                specextract_spectrum(
+                    samp,
+                    samp.get_radius(o_dens),
+                    samp.get_radius(o_dens) * core_rad_frac,
+                    num_cores=num_cores,
+                    group_spec=group_spec,
+                    min_counts=min_counts,
+                    min_sn=min_sn,
+                )
             else:
-                raise NotImplementedError("Support for telescopes other than XMM, eROSITA, and Chandra is not yet "
-                                          "implemented.")
+                raise NotImplementedError(
+                    "Support for telescopes other than XMM, eROSITA, and Chandra is not yet implemented."
+                )
             # If the end of evselect_spectrum doesn't throw a ProductGenerationError then we know we're all good, so we
             #  define the not_bad_gen_ind to just contain an index for all the clusters
             not_bad_gen_ind = np.nonzero(samp.names)
         except ProductGenerationError as err:
             # Otherwise if something went wrong we can parse the error messages and extract the names of the sources
             #  for which the error occurred
-            poss_bad_gen = list(set([me.message.split(' is the associated source')[0].split('- ')[-1]
-                                     for i_err in err.message for me in i_err]))
+            poss_bad_gen = list(
+                set(
+                    [
+                        me.message.split(" is the associated source")[0].split("- ")[-1]
+                        for i_err in err.message
+                        for me in i_err
+                    ]
+                )
+            )
             # Do also need to check that the entries in poss_bad_gen are actually source names - as XGA is raising
             #  the errors we're parsing, we SHOULD be able to rely on them being a certain format, but we had better
             #  be safe
@@ -384,9 +480,12 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 # If there are entries in poss_bad_gen that ARE NOT names in the sample, then something has gone wrong
                 #  with the error parsing, and we need to warn the user.
                 problem = [en for en in poss_bad_gen if en not in samp.names]
-                warn("ProductGenerationError parsing has recovered a string that is not a source name, a "
-                     "problem source may not have been removed from the sample (contact the development team). The "
-                     "offending strings are, {}".format(', '.join(problem)), stacklevel=2)
+                warn(
+                    "ProductGenerationError parsing has recovered a string that is not a source name, a "
+                    "problem source may not have been removed from the sample (contact the development team). The "
+                    "offending strings are, {}".format(", ".join(problem)),
+                    stacklevel=2,
+                )
 
             # Just to be safe I'm adding a check to make sure bad_gen has entries
             if len(bad_gen) == 0:
@@ -408,40 +507,77 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             for bad_name in bad_gen:
                 if bad_name in samp.names:
                     del samp[bad_name]
-            warn("Some sources ({}) have been removed because of spectrum generation "
-                 "failures.".format(', '.join(bad_gen)), stacklevel=2)
+            warn(
+                "Some sources ({}) have been removed because of spectrum generation failures.".format(
+                    ", ".join(bad_gen)
+                ),
+                stacklevel=2,
+            )
 
         # We fit the spectra that we just generated using the current values of the overdensity radii (be they
         #  core-included or core-excluded),
-        single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * core_rad_frac,
-                         lum_en=lum_en, freeze_nh=freeze_nh, freeze_met=freeze_met, lo_en=lo_en, hi_en=hi_en,
-                         group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
-                         one_rmf=False, num_cores=num_cores, start_temp=start_temp, freeze_temp=freeze_temp,
-                         stacked_spectra=stacked_spectra, timeout=timeout)
+        single_temp_apec(
+            samp,
+            samp.get_radius(o_dens),
+            samp.get_radius(o_dens) * core_rad_frac,
+            lum_en=lum_en,
+            freeze_nh=freeze_nh,
+            freeze_met=freeze_met,
+            lo_en=lo_en,
+            hi_en=hi_en,
+            group_spec=group_spec,
+            min_counts=min_counts,
+            min_sn=min_sn,
+            over_sample=over_sample,
+            one_rmf=False,
+            num_cores=num_cores,
+            start_temp=start_temp,
+            freeze_temp=freeze_temp,
+            stacked_spectra=stacked_spectra,
+            timeout=timeout,
+        )
 
         # This is for the standard use of this pipeline, where the temperature has been allowed to vary during the
         #  spectral fit - as such we are reading out the measured temperatures here
         if not freeze_temp:
             # Just reading out the temperatures, not the uncertainties at the moment
-            tx_all = samp.Tx(telescope, samp.get_radius(o_dens), inner_radius=samp.get_radius(o_dens)*core_rad_frac,
-                             quality_checks=False, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                             over_sample=over_sample, stacked_spectra=stacked_spectra,
-                             fit_conf={'lum_en': lum_en,
-                                       'freeze_nh': freeze_nh, 'freeze_met': freeze_met, 'start_temp': start_temp})
+            tx_all = samp.Tx(
+                telescope,
+                samp.get_radius(o_dens),
+                inner_radius=samp.get_radius(o_dens) * core_rad_frac,
+                quality_checks=False,
+                group_spec=group_spec,
+                min_counts=min_counts,
+                min_sn=min_sn,
+                over_sample=over_sample,
+                stacked_spectra=stacked_spectra,
+                fit_conf={"lum_en": lum_en, "freeze_nh": freeze_nh, "freeze_met": freeze_met, "start_temp": start_temp},
+            )
             txs = tx_all[:, 0]
             tx_errs = tx_all[:, 1]
         # But, if the pipeline has been run in frozen temperature mode then there ARE no temperatures to read out, so
         #  the temperature-luminosity scaling relation has to step in for us, and we just need to read out Lxs
         else:
-            lx_all = samp.Lx(samp.get_radius(o_dens), inner_radius=samp.get_radius(o_dens)*core_rad_frac,
-                             telescope=telescope, quality_checks=False, group_spec=group_spec, min_counts=min_counts,
-                             min_sn=min_sn, over_sample=over_sample, lo_en=rel_lum_bounds[0],
-                             hi_en=rel_lum_bounds[1], stacked_spectra=stacked_spectra,
-                             fit_conf={'lum_en': lum_en,
-                                       'freeze_nh': freeze_nh,
-                                       'freeze_met': freeze_met,
-                                       'start_temp': start_temp,
-                                       'freeze_temp': freeze_temp})
+            lx_all = samp.Lx(
+                samp.get_radius(o_dens),
+                inner_radius=samp.get_radius(o_dens) * core_rad_frac,
+                telescope=telescope,
+                quality_checks=False,
+                group_spec=group_spec,
+                min_counts=min_counts,
+                min_sn=min_sn,
+                over_sample=over_sample,
+                lo_en=rel_lum_bounds[0],
+                hi_en=rel_lum_bounds[1],
+                stacked_spectra=stacked_spectra,
+                fit_conf={
+                    "lum_en": lum_en,
+                    "freeze_nh": freeze_nh,
+                    "freeze_met": freeze_met,
+                    "start_temp": start_temp,
+                    "freeze_temp": freeze_temp,
+                },
+            )
             lxs = lx_all[:, 0]
             lx_errs = lx_all[:, 1:]
             # We can also propagate errors in the predict method - so we pass the lx_errs
@@ -487,15 +623,26 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         # This HAS to go here because it is after sources have been deleted from the sample (if any are) and BEFORE
         #  the overdensity radius calculated from this iteration is added to the sources
         if freeze_temp:
-            all_lx = samp.Lx(samp.get_radius(o_dens), inner_radius=samp.get_radius(o_dens)*core_rad_frac,
-                             telescope=telescope, quality_checks=False, group_spec=group_spec,
-                             min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, lo_en=rel_lum_bounds[0],
-                             hi_en=rel_lum_bounds[1], stacked_spectra=stacked_spectra,
-                             fit_conf={'lum_en': lum_en,
-                                       'freeze_nh': freeze_nh,
-                                       'freeze_met': freeze_met,
-                                       'start_temp': start_temp,
-                                       'freeze_temp': freeze_temp})
+            all_lx = samp.Lx(
+                samp.get_radius(o_dens),
+                inner_radius=samp.get_radius(o_dens) * core_rad_frac,
+                telescope=telescope,
+                quality_checks=False,
+                group_spec=group_spec,
+                min_counts=min_counts,
+                min_sn=min_sn,
+                over_sample=over_sample,
+                lo_en=rel_lum_bounds[0],
+                hi_en=rel_lum_bounds[1],
+                stacked_spectra=stacked_spectra,
+                fit_conf={
+                    "lum_en": lum_en,
+                    "freeze_nh": freeze_nh,
+                    "freeze_met": freeze_met,
+                    "start_temp": start_temp,
+                    "freeze_temp": freeze_temp,
+                },
+            )
             lxs = all_lx[:, 0]
             lx_errs = all_lx[:, 1]
             all_start_temp = temp_lum_rel.predict(lxs, samp.redshifts, cosmo, lx_errs)
@@ -525,15 +672,17 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
 
         # Use the new radius value inferred from the temperature + scaling relation and add it to the ClusterSample (or
         #  just re-adding the same value as is already here if that radius has converged and been accepted).
-        if o_dens == 'r500':
+        if o_dens == "r500":
             samp.r500 = new_rads
-        elif o_dens == 'r2500':
+        elif o_dens == "r2500":
             samp.r2500 = new_rads
-        elif o_dens == 'r200':
+        elif o_dens == "r200":
             samp.r200 = new_rads
         else:
-            raise XGADeveloperError("XGA-LTR implicitly only supports r500, r2500, r200 overdensities right "
-                                    "now - please contact the developer if you need other overdensities.")
+            raise XGADeveloperError(
+                "XGA-LTR implicitly only supports r500, r2500, r200 overdensities right "
+                "now - please contact the developer if you need other overdensities."
+            )
 
         # If there have been enough iterations, then we need to start checking whether any of the radii have
         #  converged to within the user-specified fraction. If they have then we accept them and those radii won't
@@ -541,16 +690,21 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         if iter_num >= min_iter:
             acc_rad = ((rad_rat > (1 - convergence_frac)) & (rad_rat < (1 + convergence_frac))) | acc_rad
         # This dictionary is used to store the various radius steps that are made for each source
-        rad_hist = {n: vals + [samp[n].get_radius(o_dens, 'kpc').value] if n in samp.names else vals
-                    for n, vals in rad_hist.items()}
+        rad_hist = {
+            n: vals + [samp[n].get_radius(o_dens, "kpc").value] if n in samp.names else vals
+            for n, vals in rad_hist.items()
+        }
 
         # Got to increment the counter otherwise the while loop may go on and on forever :O
         iter_num += 1
 
     # Throw a warning if the maximum number of iterations being reached was the reason the loop exited
     if iter_num == max_iter:
-        warn("The radius measurement process reached the maximum number of iterations; as such one or more clusters "
-             "may have unconverged radii.", stacklevel=2)
+        warn(
+            "The radius measurement process reached the maximum number of iterations; as such one or more clusters "
+            "may have unconverged radii.",
+            stacklevel=2,
+        )
 
     # This is probably unnecessary, but rather than rely on ordering staying the same, I am making a lookup
     #  dictionary for the start temperatures IF the pipeline was operating in frozen-temperature mode
@@ -560,16 +714,46 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # At this point we've exited the loop - the final radii have been decided on. However, we cannot guarantee that
     #  the final radii have had spectra generated/fit for them, so we run single_temp_apec again one last time
     # First of all, we run the core-included temperature and luminosity measurements
-    single_temp_apec(samp, samp.get_radius(o_dens), lum_en=lum_en, freeze_nh=freeze_nh, freeze_met=freeze_met,
-                     lo_en=lo_en, hi_en=hi_en, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                     over_sample=over_sample, one_rmf=False, num_cores=num_cores, start_temp=start_temp,
-                     freeze_temp=freeze_temp, stacked_spectra=stacked_spectra, timeout=timeout)
+    single_temp_apec(
+        samp,
+        samp.get_radius(o_dens),
+        lum_en=lum_en,
+        freeze_nh=freeze_nh,
+        freeze_met=freeze_met,
+        lo_en=lo_en,
+        hi_en=hi_en,
+        group_spec=group_spec,
+        min_counts=min_counts,
+        min_sn=min_sn,
+        over_sample=over_sample,
+        one_rmf=False,
+        num_cores=num_cores,
+        start_temp=start_temp,
+        freeze_temp=freeze_temp,
+        stacked_spectra=stacked_spectra,
+        timeout=timeout,
+    )
     # And then we do the same for final core-excised measurements
-    single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * core_rad_frac, lum_en=lum_en,
-                     freeze_nh=freeze_nh, freeze_met=freeze_met, lo_en=lo_en, hi_en=hi_en, group_spec=group_spec,
-                     min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, one_rmf=False,
-                     num_cores=num_cores, start_temp=start_temp, freeze_temp=freeze_temp,
-                     stacked_spectra=stacked_spectra, timeout=timeout)
+    single_temp_apec(
+        samp,
+        samp.get_radius(o_dens),
+        samp.get_radius(o_dens) * core_rad_frac,
+        lum_en=lum_en,
+        freeze_nh=freeze_nh,
+        freeze_met=freeze_met,
+        lo_en=lo_en,
+        hi_en=hi_en,
+        group_spec=group_spec,
+        min_counts=min_counts,
+        min_sn=min_sn,
+        over_sample=over_sample,
+        one_rmf=False,
+        num_cores=num_cores,
+        start_temp=start_temp,
+        freeze_temp=freeze_temp,
+        stacked_spectra=stacked_spectra,
+        timeout=timeout,
+    )
 
     # Now to assemble the final sample information dataframe - note that the sample does have methods for the bulk
     #  retrieval of temperature and luminosity values, but they aren't so useful here because I know that some of the
@@ -578,10 +762,10 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         # We're iterating through the rows of the sample information passed in, because we want there to be an
         #  entry even if the LT pipeline didn't succeed. As such we have to check if the current row's cluster
         #  is actually still a part of the sample
-        if row['name'] in samp.names:
+        if row["name"] in samp.names:
             # Grab the relevant source out of the ClusterSample object
-            rel_src = samp[row['name']]
-            rel_rad = rel_src.get_radius(o_dens, 'kpc')
+            rel_src = samp[row["name"]]
+            rel_rad = rel_src.get_radius(o_dens, "kpc")
             rel_rad_err = cur_rad_errs[np.where(samp.names == rel_src.name)[0]]
             if isinstance(rel_rad_err, np.ndarray):
                 rel_rad_err = rel_rad_err[0]
@@ -590,13 +774,13 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             #  column names for the dataframe. Firstly though, we make sure that the measured radius is present in the
             #  data, as well as including the nH value used (a pet hate of mine when that isn't in a paper table).
             vals = [rel_src.nH.value, rel_rad.value, rel_rad_err.value]
-            cols = ['nH', o_dens, o_dens + '+-']
+            cols = ["nH", o_dens, o_dens + "+-"]
 
             # If the user let XGA determine a peak coordinate for the cluster, we will need to add it to the results
             #  as all the spectra for the cluster were generated with that as the central point
             if use_peak:
                 vals += [*rel_src.peak.value]
-                cols += ['peak_ra', 'peak_dec']
+                cols += ["peak_ra", "peak_dec"]
 
             # We have to use try-excepts here, because even at this stage it is possible that we have a failed
             #  spectral fit to contend with - if there are no successful fits then the entry for the current
@@ -607,14 +791,25 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 if not freeze_temp:
                     # The temperature measured within the overdensity radius, with its - and + uncertainties are
                     #  read out
-                    vals += list(rel_src.get_temperature(rel_rad, telescope=telescope, group_spec=group_spec,
-                                                         min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
-                                                         stacked_spectra=stacked_spectra,
-                                                         fit_conf={'lum_en': lum_en,
-                                                                   'freeze_nh': freeze_nh, 'freeze_met': freeze_met,
-                                                                   'start_temp': start_temp}).value)
+                    vals += list(
+                        rel_src.get_temperature(
+                            rel_rad,
+                            telescope=telescope,
+                            group_spec=group_spec,
+                            min_counts=min_counts,
+                            min_sn=min_sn,
+                            over_sample=over_sample,
+                            stacked_spectra=stacked_spectra,
+                            fit_conf={
+                                "lum_en": lum_en,
+                                "freeze_nh": freeze_nh,
+                                "freeze_met": freeze_met,
+                                "start_temp": start_temp,
+                            },
+                        ).value
+                    )
                     # We add columns with informative names
-                    cols += ['Tx' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
+                    cols += ["Tx" + o_dens[1:] + p_fix for p_fix in ["", "-", "+"]]
 
                 # If operating in frozen-temperature mode however, we can't extract a temperature from the XGA
                 #  sources - instead we use the look-up dictionary for the final temperatures arrived at by feeding
@@ -622,44 +817,72 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 else:
                     # Will make a distinction in the column name for temperatures arrived at by this route
                     vals += [start_temp_lookup[rel_src.name][0].value, start_temp_lookup[rel_src.name][1].value]
-                    cols += ['froz_Tx' + o_dens[1:], 'froz_Tx' + o_dens[1:] + '+-']
+                    cols += ["froz_Tx" + o_dens[1:], "froz_Tx" + o_dens[1:] + "+-"]
 
                 # Cycle through every available luminosity, this will return all luminosities in all energy bands
                 #  requested by the user with lum_en
-                for lum_name, lum in rel_src.get_luminosities(rel_rad, telescope=telescope, group_spec=group_spec,
-                                                              min_counts=min_counts, min_sn=min_sn,
-                                                              over_sample=over_sample,
-                                                              stacked_spectra=stacked_spectra,
-                                                              fit_conf={'lum_en': lum_en,
-                                                                        'freeze_nh': freeze_nh,
-                                                                        'freeze_met': freeze_met,
-                                                                        'start_temp': start_temp,
-                                                                        'freeze_temp': freeze_temp}).items():
+                for lum_name, lum in rel_src.get_luminosities(
+                    rel_rad,
+                    telescope=telescope,
+                    group_spec=group_spec,
+                    min_counts=min_counts,
+                    min_sn=min_sn,
+                    over_sample=over_sample,
+                    stacked_spectra=stacked_spectra,
+                    fit_conf={
+                        "lum_en": lum_en,
+                        "freeze_nh": freeze_nh,
+                        "freeze_met": freeze_met,
+                        "start_temp": start_temp,
+                        "freeze_temp": freeze_temp,
+                    },
+                ).items():
                     # The luminosity and its uncertainties gets added to the values list
                     vals += list(lum.value)
                     # Then the column names get added
-                    cols += ['Lx' + o_dens[1:] + lum_name.split('bound')[-1] + p_fix for p_fix in ['', '-', '+']]
+                    cols += ["Lx" + o_dens[1:] + lum_name.split("bound")[-1] + p_fix for p_fix in ["", "-", "+"]]
 
                 # If we note that the metallicity and/or nH were left free to vary, we had better save those values
                 #  as well!
                 if not freeze_met:
-                    met = rel_src.get_results(rel_rad, telescope=telescope, par='Abundanc', group_spec=group_spec,
-                                              min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
-                                              fit_conf={'lum_en': lum_en,
-                                                        'freeze_nh': freeze_nh, 'freeze_met': freeze_met,
-                                                        'start_temp': start_temp, 'freeze_temp': freeze_temp})
+                    met = rel_src.get_results(
+                        rel_rad,
+                        telescope=telescope,
+                        par="Abundanc",
+                        group_spec=group_spec,
+                        min_counts=min_counts,
+                        min_sn=min_sn,
+                        over_sample=over_sample,
+                        fit_conf={
+                            "lum_en": lum_en,
+                            "freeze_nh": freeze_nh,
+                            "freeze_met": freeze_met,
+                            "start_temp": start_temp,
+                            "freeze_temp": freeze_temp,
+                        },
+                    )
                     vals += list(met)
-                    cols += ['Zmet' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
+                    cols += ["Zmet" + o_dens[1:] + p_fix for p_fix in ["", "-", "+"]]
 
                 if not freeze_nh:
-                    nh = rel_src.get_results(rel_rad, telescope=telescope, par='nH', group_spec=group_spec,
-                                             min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
-                                             fit_conf={'lum_en': lum_en,
-                                                       'freeze_nh': freeze_nh, 'freeze_met': freeze_met,
-                                                       'start_temp': start_temp, 'freeze_temp': freeze_temp}
-                                             )
+                    nh = rel_src.get_results(
+                        rel_rad,
+                        telescope=telescope,
+                        par="nH",
+                        group_spec=group_spec,
+                        min_counts=min_counts,
+                        min_sn=min_sn,
+                        over_sample=over_sample,
+                        fit_conf={
+                            "lum_en": lum_en,
+                            "freeze_nh": freeze_nh,
+                            "freeze_met": freeze_met,
+                            "start_temp": start_temp,
+                            "freeze_temp": freeze_temp,
+                        },
+                    )
                     vals += list(nh)
-                    cols += ['fit_nH' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
+                    cols += ["fit_nH" + o_dens[1:] + p_fix for p_fix in ["", "-", "+"]]
 
             except ModelNotAssociatedError:
                 pass
@@ -671,55 +894,94 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 #  relation to be passed.
                 if not freeze_temp:
                     # Adding temperature value and uncertainties
-                    vals += list(rel_src.get_temperature(rel_rad, telescope=telescope, inner_radius=core_rad_frac*rel_rad,
-                                                         group_spec=group_spec, min_counts=min_counts,
-                                                         min_sn=min_sn, over_sample=over_sample,
-                                                         stacked_spectra=stacked_spectra,
-                                                         fit_conf={'lum_en': lum_en,
-                                                                   'freeze_nh': freeze_nh,
-                                                                   'freeze_met': freeze_met,
-                                                                   'start_temp': start_temp}
-                                                         ).value)
+                    vals += list(
+                        rel_src.get_temperature(
+                            rel_rad,
+                            telescope=telescope,
+                            inner_radius=core_rad_frac * rel_rad,
+                            group_spec=group_spec,
+                            min_counts=min_counts,
+                            min_sn=min_sn,
+                            over_sample=over_sample,
+                            stacked_spectra=stacked_spectra,
+                            fit_conf={
+                                "lum_en": lum_en,
+                                "freeze_nh": freeze_nh,
+                                "freeze_met": freeze_met,
+                                "start_temp": start_temp,
+                            },
+                        ).value
+                    )
                     # Corresponding column names (with ce now included to indicate core-excised).
-                    cols += ['Tx' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
+                    cols += ["Tx" + o_dens[1:] + "ce" + p_fix for p_fix in ["", "-", "+"]]
 
                 # The same process again for core-excised luminosities
-                lce_res = rel_src.get_luminosities(rel_rad, telescope=telescope, inner_radius=core_rad_frac * rel_rad,
-                                                   group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                                   over_sample=over_sample, stacked_spectra=stacked_spectra,
-                                                   fit_conf={'lum_en': lum_en,
-                                                             'freeze_nh': freeze_nh, 'freeze_met': freeze_met,
-                                                             'start_temp': start_temp, 'freeze_temp': freeze_temp}
-                                                   )
+                lce_res = rel_src.get_luminosities(
+                    rel_rad,
+                    telescope=telescope,
+                    inner_radius=core_rad_frac * rel_rad,
+                    group_spec=group_spec,
+                    min_counts=min_counts,
+                    min_sn=min_sn,
+                    over_sample=over_sample,
+                    stacked_spectra=stacked_spectra,
+                    fit_conf={
+                        "lum_en": lum_en,
+                        "freeze_nh": freeze_nh,
+                        "freeze_met": freeze_met,
+                        "start_temp": start_temp,
+                        "freeze_temp": freeze_temp,
+                    },
+                )
                 for lum_name, lum in lce_res.items():
                     vals += list(lum.value)
-                    cols += ['Lx' + o_dens[1:] + 'ce' + lum_name.split('bound')[-1] + p_fix
-                             for p_fix in ['', '-', '+']]
+                    cols += ["Lx" + o_dens[1:] + "ce" + lum_name.split("bound")[-1] + p_fix for p_fix in ["", "-", "+"]]
 
                 # If we note that the metallicity and/or nH were left free to vary, we had better save those values
                 #  as well!
                 if not freeze_met:
-                    metce = rel_src.get_results(rel_rad, telescope=telescope, inner_radius=core_rad_frac * rel_rad,
-                                                par='Abundanc', group_spec=group_spec, min_counts=min_counts,
-                                                min_sn=min_sn, over_sample=over_sample, stacked_spectra=stacked_spectra,
-                                                fit_conf={'lum_en': lum_en,
-                                                          'freeze_nh': freeze_nh,
-                                                          'freeze_met': freeze_met,
-                                                          'start_temp': start_temp,
-                                                          'freeze_temp': freeze_temp}
-                                                )
+                    metce = rel_src.get_results(
+                        rel_rad,
+                        telescope=telescope,
+                        inner_radius=core_rad_frac * rel_rad,
+                        par="Abundanc",
+                        group_spec=group_spec,
+                        min_counts=min_counts,
+                        min_sn=min_sn,
+                        over_sample=over_sample,
+                        stacked_spectra=stacked_spectra,
+                        fit_conf={
+                            "lum_en": lum_en,
+                            "freeze_nh": freeze_nh,
+                            "freeze_met": freeze_met,
+                            "start_temp": start_temp,
+                            "freeze_temp": freeze_temp,
+                        },
+                    )
                     vals += list(metce)
-                    cols += ['Zmet' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
+                    cols += ["Zmet" + o_dens[1:] + "ce" + p_fix for p_fix in ["", "-", "+"]]
 
                 if not freeze_nh:
-                    nhce = rel_src.get_results(rel_rad, telescope=telescope, inner_radius=core_rad_frac * rel_rad, par='nH',
-                                               group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                               over_sample=over_sample, stacked_spectra=stacked_spectra,
-                                               fit_conf={'lum_en': lum_en,
-                                                         'freeze_nh': freeze_nh, 'freeze_met': freeze_met,
-                                                         'start_temp': start_temp, 'freeze_temp': freeze_temp})
+                    nhce = rel_src.get_results(
+                        rel_rad,
+                        telescope=telescope,
+                        inner_radius=core_rad_frac * rel_rad,
+                        par="nH",
+                        group_spec=group_spec,
+                        min_counts=min_counts,
+                        min_sn=min_sn,
+                        over_sample=over_sample,
+                        stacked_spectra=stacked_spectra,
+                        fit_conf={
+                            "lum_en": lum_en,
+                            "freeze_nh": freeze_nh,
+                            "freeze_met": freeze_met,
+                            "start_temp": start_temp,
+                            "freeze_temp": freeze_temp,
+                        },
+                    )
                     vals += list(nhce)
-                    cols += ['fit_nH' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
+                    cols += ["fit_nH" + o_dens[1:] + "ce" + p_fix for p_fix in ["", "-", "+"]]
 
             except ModelNotAssociatedError:
                 pass
@@ -733,7 +995,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         loaded_samp_data.to_csv(save_samp_results_path, index=False)
 
     # Finally, we put together the radius history throughout the iteration-convergence process
-    radius_hist_df = pd.DataFrame.from_dict(rad_hist, orient='index')
+    radius_hist_df = pd.DataFrame.from_dict(rad_hist, orient="index")
 
     # There is already an array detailing whether particular radii have been 'accepted' (i.e. converged) or not, but
     #  it only contains entries for those clusters which are still loaded in the ClusterSample - in the next part
@@ -741,20 +1003,20 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     #  ClusterSample), and want the final column to declare if they converged or not.
     rad_hist_acc_rad = []
     for row_ind, row in loaded_samp_data.iterrows():
-        if row['name'] in samp.names:
+        if row["name"] in samp.names:
             # Did this radius converge?
-            converged = acc_rad[np.argwhere(samp.names == row['name'])[0][0]]
+            converged = acc_rad[np.argwhere(samp.names == row["name"])[0][0]]
         else:
             converged = False
         rad_hist_acc_rad.append(converged)
 
     # We add the final column which just tells the user whether the radius was converged or not
-    radius_hist_df['converged'] = rad_hist_acc_rad
+    radius_hist_df["converged"] = rad_hist_acc_rad
 
     # And if the user wants this saved as well they can
     if save_rad_history_path is not None:
         # This one I keep indexing set to True, because the names of the clusters are acting as the index for
         #  this dataframe
-        radius_hist_df.to_csv(save_rad_history_path, index=True, index_label='name')
+        radius_hist_df.to_csv(save_rad_history_path, index=True, index_label="name")
 
     return samp, loaded_samp_data, radius_hist_df

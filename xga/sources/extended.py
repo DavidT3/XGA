@@ -603,6 +603,9 @@ class GalaxyCluster(ExtendedSource):
         #  associated with them, as that means that they were not generated from an annular spectrum
         init_matches = [p for p in init_matches if p.set_ident is not None]
 
+        # Spectra can be grouped either by minimum signal-to-noise or by minimum counts (not both simultaneously);
+        #  when min_sn is specified, clear min_counts to None so it matches how AnnularSpectra stores grouping settings,
+        #  and cast the non-None grouping parameters to their expected numeric types
         if min_sn is not None:
             min_counts = None
         over_sample = int(over_sample) if over_sample is not None else None
@@ -644,7 +647,7 @@ class GalaxyCluster(ExtendedSource):
         self,
         outer_radius: str | Quantity,
         telescope: str,
-        model: str = "constant*tbabs*apec",
+        model: str | None = "constant*tbabs*apec",
         inner_radius: str | Quantity = Quantity(0, "arcsec"),
         par: str | None = None,
         group_spec: bool = True,

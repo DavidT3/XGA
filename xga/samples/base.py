@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 1:34 PM. Copyright (c) The Contributors.
+"""This module defines the BaseSample superclass for all XGA sample containers."""
 
 from warnings import warn
 
@@ -21,6 +22,7 @@ from ..exceptions import (
     ParameterNotAssociatedError,
     TelescopeNotAssociatedError,
 )
+from ..products import BaseProduct
 from ..sources.base import BaseSource
 from ..sourcetools.misc import coord_to_name
 from ..utils import PRETTY_TELESCOPE_NAMES, check_telescope_choices
@@ -66,7 +68,7 @@ class BaseSample:
         no_prog_bar: bool = False,
         telescope: str | list[str] | None = None,
         search_distance: Quantity | dict | None = None,
-    ):
+    ) -> None:
         """
         The superclass for all sample classes. These store whole samples of sources, to make bulk analysis of
         interesting X-ray sources easy. This in particular creates samples of BaseSource object. It doesn't seem
@@ -104,7 +106,7 @@ class BaseSample:
         #  the warning is disabled when called from BaseSource. This is to save us from a deluge of identical
         #  warnings for every source.
         # Instead, we check and warn just once here
-        if type(search_distance) == dict and any([t not in search_distance for t in telescope]):
+        if isinstance(search_distance, dict) and any([t not in search_distance for t in telescope]):
             warn(
                 "A dictionary of search distances that did not contain all requested telescopes has been "
                 "passed, default values have been used for the missing telescopes.",
@@ -134,9 +136,10 @@ class BaseSample:
         # Also check that duplicate coordinate pairs have not been supplied
         if len(ra) != len(dec):
             raise ValueError("The RA and Dec arrays supplied to samples must have the same length.")
-        if len(set(zip(np.asarray(ra).tolist(), np.asarray(dec).tolist()))) != len(ra):
-            raise ValueError("Duplicate RA and Dec coordinate pairs have been supplied; sample coordinates must be "
-                             "unique.")
+        if np.unique(np.column_stack([ra, dec]), axis=0).shape[0] != len(ra):
+            raise ValueError(
+                "Duplicate RA and Dec coordinate pairs have been supplied; sample coordinates must be unique."
+            )
 
         with tqdm(desc="Declaring BaseSource Sample", total=len(ra), disable=no_prog_bar) as dec_base:
             for ind, r in enumerate(ra):
@@ -202,7 +205,7 @@ class BaseSample:
         #  class declaration does its own (somewhat different) check on which sources have data
         no_data = [name for name in self._failed_sources if "cleaning" not in self._failed_sources[name]]
         # If there are names in that list, then we do the warning
-        if len(no_data) != 0 and type(self) == BaseSample:
+        if len(no_data) != 0 and type(self) is BaseSample:
             nice_tels = "/".join([PRETTY_TELESCOPE_NAMES[t] for t in telescope])
             no_data_str = ", ".join(no_data)
             warn(
@@ -213,7 +216,7 @@ class BaseSample:
 
         # This calls the method that checks for suppressed source-level warnings that occurred during declaration, but
         #  only if this init has been called for a BaseSample declaration, rather than by a sub-class
-        if type(self) == BaseSample:
+        if type(self) is BaseSample:
             self._check_source_warnings()
 
     # These next few properties are all quantities passed in by the user on init, then used to
@@ -272,7 +275,7 @@ class BaseSample:
         return np.array([s.redshift for s in self._sources.values()])
 
     @property
-    def nHs(self) -> Quantity:
+    def nHs(self) -> Quantity:  # noqa: N802
         """
         Property getter for the list of nH values of the sources in this sample.
 
@@ -408,7 +411,7 @@ class BaseSample:
         """
         return {n: s.suppressed_warnings for n, s in self._sources.items() if len(s.suppressed_warnings) > 0}
 
-    def _check_source_warnings(self):
+    def _check_source_warnings(self) -> None:
         """
         This method checks the suppressed_warnings property of the member sources, and if any have had warnings
         suppressed then it itself raises a warning that instructs the user to look at the suppressed_warnings
@@ -422,7 +425,7 @@ class BaseSample:
                 stacklevel=2,
             )
 
-    def _del_data(self, key: int):
+    def _del_data(self, key: int) -> None:
         """
         This function will be replaced in subclasses that store more information about sources
         in internal attributes.
@@ -431,7 +434,7 @@ class BaseSample:
         """
         pass
 
-    def Lx(
+    def Lx(  # noqa: N802
         self,
         outer_radius: str | Quantity,
         telescope: str,
@@ -446,7 +449,7 @@ class BaseSample:
         quality_checks: bool | None = True,
         stacked_spectra: bool = False,
         fit_conf: str | dict | None = None,
-    ):
+    ) -> Quantity:
         """
         A get method for luminosities measured for the constituent sources of this sample. An error will be
         thrown if luminosities haven't been measured for the given region and model, no default model has been
@@ -596,7 +599,9 @@ class BaseSample:
 
             spectra = src.get_products("spectrum")
             spec_check = [
-                (spec.obs_id, spec.instrument, spec.not_usable_reasons) for spec in spectra if not spec.usable
+                (spec.obs_id, spec.instrument, spec.not_usable_reasons)
+                for spec in spectra
+                if isinstance(spec, BaseProduct) and not spec.usable
             ]
             if len(spec_check) > 0:
                 print(src.name, spec_check)
@@ -618,7 +623,7 @@ class BaseSample:
         # TODO This will need to be updated when I figure out what to do about peaks
         # This call fetches peaks which we then never use, but it triggers a check that will trigger a warning if
         #  all the ra_dec values are the same as all the peak values
-        ps = self.peaks
+        _ = self.peaks
         # Use list comprehension to grab all the offsets, then convert to a single quantity
         offsets = Quantity([s.offset(off_unit) for s in self._sources.values()])
 
@@ -716,9 +721,7 @@ class BaseSample:
         plt.show()
 
     def info(self) -> None:
-        """
-        Simple function to show basic information about the sample.
-        """
+        """Simple function to show basic information about the sample."""
         # TODO There must be more useful info I can add to this
 
         print("\n-----------------------------------------------------")
@@ -736,7 +739,7 @@ class BaseSample:
             pass
         print("-----------------------------------------------------\n")
 
-    def __len__(self):
+    def __len__(self) -> int:
         """
         The result of using the Python len() command on this sample.
 
@@ -746,9 +749,7 @@ class BaseSample:
         return len(self._sources)
 
     def __iter__(self) -> "BaseSample":
-        """
-        Called when initiating iterating through a BaseSample based object. Resets the counter _n.
-        """
+        """Called when initiating iterating through a BaseSample based object. Resets the counter _n."""
         self._n = 0
         return self
 
@@ -783,7 +784,7 @@ class BaseSample:
             raise ValueError("Only a source name or integer index may be used to address a sample object")
         return src
 
-    def __delitem__(self, key: int | str):
+    def __delitem__(self, key: int | str) -> None:
         """
         This deletes a source from the sample, along with all accompanying data, using the index or
         name of the source.
@@ -806,7 +807,7 @@ class BaseSample:
         #  that will need to be deleted.
         self._del_data(key)
 
-    def __contains__(self, name) -> bool:
+    def __contains__(self, name: str) -> bool:
         """
         Determines whether this sample contains a particular source name.
 

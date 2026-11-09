@@ -5,6 +5,7 @@ This module defines the generic PointSource and ExtendedSource classes, which ar
 importantly exist to be inherited by classes representing specific astrophysical objects (e.g. galaxy clusters).
 """
 
+from typing import Any
 from warnings import simplefilter, warn
 
 import numpy as np
@@ -432,10 +433,10 @@ class ExtendedSource(BaseSource):
                 f"The instrument {inst} is not associated with observation {obs_id} of this source."
             )
         elif obs_id is None and inst is None:
-            chosen = self._peaks[telescope]
+            chosen: Any = self._peaks[telescope]
         elif obs_id is not None and inst is None:
             chosen = self._peaks[telescope][obs_id]
-        else:
+        elif obs_id is not None and inst is not None:
             chosen = self._peaks[telescope][obs_id][inst]
 
         return chosen
@@ -495,6 +496,9 @@ class ExtendedSource(BaseSource):
         else:
             raise ValueError("Outer radius may only be a string or an astropy quantity")
 
+        # If the user explicitly requests a combined profile (via obs_id='combined' or inst='combined') or leaves both
+        #  obs_id and inst as None (which defaults to searching for a combined-observation, combined-instrument
+        #  profile), delegate to get_combined_profiles; otherwise look up single-observation profiles via get_profiles
         if obs_id == "combined" or inst == "combined" or (obs_id is None and inst is None):
             interim_prods = self.get_combined_profiles(
                 "brightness",

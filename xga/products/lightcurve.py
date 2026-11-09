@@ -2,7 +2,7 @@
 #  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 2:55 PM. Copyright (c) The Contributors.
 import re
 from datetime import datetime
-from typing import Union, List, Tuple, Dict
+from typing import Union
 from warnings import warn
 
 import matplotlib.dates as mdates
@@ -14,9 +14,8 @@ from fitsio import FITS, FITSHDR, read_header
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-from xga.exceptions import (FailedProductError, IncompatibleProductError, NotAssociatedError,
-                            TelescopeNotAssociatedError)
-from xga.products import BaseProduct, BaseAggregateProduct
+from xga.exceptions import FailedProductError, IncompatibleProductError, NotAssociatedError, TelescopeNotAssociatedError
+from xga.products import BaseAggregateProduct, BaseProduct
 from xga.utils import dict_search
 
 
@@ -47,10 +46,27 @@ class LightCurve(BaseProduct):
         many products from the same directory/directory structure, it can be more performant to run listdir
         or scandir and confirm files exist externally, than one by one in each product declaration.
     """
-    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
-                 central_coord: Quantity, inn_rad: Quantity, out_rad: Quantity, lo_en: Quantity, hi_en: Quantity,
-                 time_bin_size: Quantity, pattern_expr: str = "", region: bool = False, is_back_sub: bool = True,
-                 telescope: str = None, check_exists: bool = True):
+
+    def __init__(
+        self,
+        path: str,
+        obs_id: str,
+        instrument: str,
+        stdout_str: str,
+        stderr_str: str,
+        gen_cmd: str,
+        central_coord: Quantity,
+        inn_rad: Quantity,
+        out_rad: Quantity,
+        lo_en: Quantity,
+        hi_en: Quantity,
+        time_bin_size: Quantity,
+        pattern_expr: str = "",
+        region: bool = False,
+        is_back_sub: bool = True,
+        telescope: str = None,
+        check_exists: bool = True,
+    ):
         """
         This is the XGA LightCurve product class, which is used to interface with X-ray lightcurves generated
         for a variety of sources. It provides simple access to data and information about the lightcurve, fitting
@@ -77,20 +93,21 @@ class LightCurve(BaseProduct):
             many products from the same directory/directory structure, it can be more performant to run listdir
             or scandir and confirm files exist externally, than one by one in each product declaration.
         """
-
         # Call the BaseProduct init, sets up some attributes
         # TODO Support streaming of remote data
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope,
-                         check_exists=check_exists)
+        super().__init__(
+            path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope, check_exists=check_exists
+        )
 
         # Set the product type
         self._prod_type = "lightcurve"
 
         # Store the size of the time binning used to generate the lightcurve as an attribute
-        self._time_bin = time_bin_size.to('s')
+        self._time_bin = time_bin_size.to("s")
 
         # Unfortunate local import to avoid circular import errors
         from xga.generate.common import check_pattern
+
         self._pattern_expr, self._pattern_name = check_pattern(pattern_expr, telescope)
 
         # Put the energy bounds into an attribute
@@ -104,31 +121,39 @@ class LightCurve(BaseProduct):
         self._outer_rad = out_rad
         # And also the shape of the region
         if self._inner_rad.isscalar:
-            self._shape = 'circular'
+            self._shape = "circular"
         else:
-            self._shape = 'elliptical'
+            self._shape = "elliptical"
 
         # This describes whether this spectrum was generated directly from a region present in a region file
         self._region = region
 
         lc_storage_name = "bound_{l}-{u}_ra{ra}_dec{dec}_ri{ri}_ro{ro}"
         if not self._region and self.inner_rad.isscalar:
-            lc_storage_name = lc_storage_name.format(ra=self.central_coord[0].value, dec=self.central_coord[1].value,
-                                                     ri=self._inner_rad.value, ro=self._outer_rad.value,
-                                                     l=self.energy_bounds[0].to('keV').value,
-                                                     u=self.energy_bounds[1].to('keV').value)
+            lc_storage_name = lc_storage_name.format(
+                ra=self.central_coord[0].value,
+                dec=self.central_coord[1].value,
+                ri=self._inner_rad.value,
+                ro=self._outer_rad.value,
+                l=self.energy_bounds[0].to("keV").value,
+                u=self.energy_bounds[1].to("keV").value,
+            )
         elif not self._region and not self._inner_rad.isscalar:
-            inn_rad_str = 'and'.join(self._inner_rad.value.astype(str))
-            out_rad_str = 'and'.join(self._outer_rad.value.astype(str))
-            lc_storage_name = lc_storage_name.format(ra=self.central_coord[0].value, dec=self.central_coord[1].value,
-                                                     ri=inn_rad_str, ro=out_rad_str,
-                                                     l=self.energy_bounds[0].to('keV').value,
-                                                     u=self.energy_bounds[1].to('keV').value)
+            inn_rad_str = "and".join(self._inner_rad.value.astype(str))
+            out_rad_str = "and".join(self._outer_rad.value.astype(str))
+            lc_storage_name = lc_storage_name.format(
+                ra=self.central_coord[0].value,
+                dec=self.central_coord[1].value,
+                ri=inn_rad_str,
+                ro=out_rad_str,
+                l=self.energy_bounds[0].to("keV").value,
+                u=self.energy_bounds[1].to("keV").value,
+            )
         else:
             lc_storage_name = "region"
 
         # Add the time bin information
-        lc_storage_name += "_timebin{tb}_pattern{p}".format(tb=time_bin_size.value, p=self._pattern_name)
+        lc_storage_name += f"_timebin{time_bin_size.value}_pattern{self._pattern_name}"
 
         # And we save the completed key to an attribute
         self._storage_key = lc_storage_name
@@ -364,7 +389,7 @@ class LightCurve(BaseProduct):
         #  XGA product instance
         self._read_on_demand()
 
-        return (self.ref_time + TimeDelta(self.time, format='sec', scale=self.time_system.lower())).to_datetime()
+        return (self.ref_time + TimeDelta(self.time, format="sec", scale=self.time_system.lower())).to_datetime()
 
     @property
     def bck_count_rate(self) -> Quantity:
@@ -470,7 +495,7 @@ class LightCurve(BaseProduct):
         """
         self._read_on_demand()
 
-        return (self.ref_time + TimeDelta(self._time_start, format='sec', scale=self.time_system.lower())).to_datetime()
+        return (self.ref_time + TimeDelta(self._time_start, format="sec", scale=self.time_system.lower())).to_datetime()
 
     @property
     def stop_datetime(self) -> datetime:
@@ -481,7 +506,7 @@ class LightCurve(BaseProduct):
         :rtype: datetime
         """
         self._read_on_demand()
-        return (self.ref_time + TimeDelta(self._time_stop, format='sec', scale=self.time_system.lower())).to_datetime()
+        return (self.ref_time + TimeDelta(self._time_stop, format="sec", scale=self.time_system.lower())).to_datetime()
 
     @property
     def time_assign(self) -> str:
@@ -506,8 +531,10 @@ class LightCurve(BaseProduct):
             self._header = read_header(self.path)
         elif not self.usable:
             reasons = ", ".join(self.not_usable_reasons)
-            raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
-                                     "the header from it; reason given is {}.".format(reasons))
+            raise FailedProductError(
+                "SAS failed to generate this product successfully, so you cannot access "
+                f"the header from it; reason given is {reasons}."
+            )
 
         return self._header
 
@@ -524,16 +551,16 @@ class LightCurve(BaseProduct):
         # Usable flag to check that nothing went wrong in the light-curve generation, and the _read_in flag to
         #  check that we haven't already read this in to memory - no sense doing it again
         if self.usable and not self._read_in:
-            with (FITS(self.path) as all_lc):
+            with FITS(self.path) as all_lc:
                 # This chunk reads out the various columns of the 'RATE' entry in the light curve file, storing
                 #  them in suitably unit-ed astropy quantities
                 if self._is_back_sub:
                     # TODO I should email the XMM help desk about this and double check
-                    self._bck_sub_cnt_rate = Quantity(all_lc['RATE'].read_column('RATE'), 'ct/s')
-                    if 'ERROR' in all_lc['RATE'].get_colnames():
-                        self._bck_sub_cnt_rate_err = Quantity(all_lc['RATE'].read_column('ERROR'), 'ct/s')
+                    self._bck_sub_cnt_rate = Quantity(all_lc["RATE"].read_column("RATE"), "ct/s")
+                    if "ERROR" in all_lc["RATE"].get_colnames():
+                        self._bck_sub_cnt_rate_err = Quantity(all_lc["RATE"].read_column("ERROR"), "ct/s")
                     else:
-                        self._bck_sub_cnt_rate_err = Quantity(all_lc['RATE'].read_column('RATE_ERR'), 'ct/s')
+                        self._bck_sub_cnt_rate_err = Quantity(all_lc["RATE"].read_column("RATE_ERR"), "ct/s")
 
                     if np.isnan(self._bck_sub_cnt_rate).any():
                         good_ent = np.where(~np.isnan(self._bck_sub_cnt_rate))
@@ -544,11 +571,11 @@ class LightCurve(BaseProduct):
                 else:
                     # If we weren't told that the rate data are background subtracted when the light curve was
                     #  declared, then we store the values in the source count rate attributes
-                    self._src_cnt_rate = Quantity(all_lc['RATE'].read_column('RATE'), 'ct/s')
-                    if 'ERROR' in all_lc['RATE'].get_colnames():
-                        self._src_cnt_rate_err = Quantity(all_lc['RATE'].read_column('ERROR'), 'ct/s')
+                    self._src_cnt_rate = Quantity(all_lc["RATE"].read_column("RATE"), "ct/s")
+                    if "ERROR" in all_lc["RATE"].get_colnames():
+                        self._src_cnt_rate_err = Quantity(all_lc["RATE"].read_column("ERROR"), "ct/s")
                     else:
-                        self._src_cnt_rate_err = Quantity(all_lc['RATE'].read_column('RATE_ERR'), 'ct/s')
+                        self._src_cnt_rate_err = Quantity(all_lc["RATE"].read_column("RATE_ERR"), "ct/s")
 
                     if np.isnan(self._src_cnt_rate).any():
                         good_ent = np.where(~np.isnan(self._src_cnt_rate))
@@ -557,68 +584,78 @@ class LightCurve(BaseProduct):
                     else:
                         good_ent = np.arange(0, len(self._src_cnt_rate))
 
-                self._time = Quantity(all_lc['RATE'].read_column('TIME'), 's')[good_ent]
-                self._frac_exp = Quantity(all_lc['RATE'].read_column('FRACEXP'))[good_ent]
-                if "BACKV" in all_lc['RATE'].read_column('RATE'):
-                    self._bck_cnt_rate = Quantity(all_lc['RATE'].read_column('BACKV'), 'ct/s')[good_ent]
-                    self._bck_cnt_rate_err = Quantity(all_lc['RATE'].read_column('BACKE'), 'ct/s')[good_ent]
+                self._time = Quantity(all_lc["RATE"].read_column("TIME"), "s")[good_ent]
+                self._frac_exp = Quantity(all_lc["RATE"].read_column("FRACEXP"))[good_ent]
+                if "BACKV" in all_lc["RATE"].read_column("RATE"):
+                    self._bck_cnt_rate = Quantity(all_lc["RATE"].read_column("BACKV"), "ct/s")[good_ent]
+                    self._bck_cnt_rate_err = Quantity(all_lc["RATE"].read_column("BACKE"), "ct/s")[good_ent]
 
                 else:
-                    self._bck_cnt_rate = Quantity(np.full(len(all_lc['RATE'].read_column('TIME')),
-                                                          np.nan), 'ct/s')[good_ent]
-                    self._bck_cnt_rate_err = Quantity(np.full(len(all_lc['RATE'].read_column('TIME')),
-                                                              np.nan), 'ct/s')[good_ent]
+                    self._bck_cnt_rate = Quantity(np.full(len(all_lc["RATE"].read_column("TIME")), np.nan), "ct/s")[
+                        good_ent
+                    ]
+                    self._bck_cnt_rate_err = Quantity(np.full(len(all_lc["RATE"].read_column("TIME")), np.nan), "ct/s")[
+                        good_ent
+                    ]
 
                 # Grab the start, stop, and time assign values from the overall header of the light curve
-                hdr = all_lc['RATE'].read_header()
-                if 'TSTART' in hdr:
-                    self._time_start = Quantity(hdr['TSTART'], 's')
-                elif 'TSTARTI' in hdr and 'TSTARTF' in hdr:
-                    self._time_start = Quantity(hdr['TSTARTI']+hdr['TSTARTF'], 's')
+                hdr = all_lc["RATE"].read_header()
+                if "TSTART" in hdr:
+                    self._time_start = Quantity(hdr["TSTART"], "s")
+                elif "TSTARTI" in hdr and "TSTARTF" in hdr:
+                    self._time_start = Quantity(hdr["TSTARTI"] + hdr["TSTARTF"], "s")
                 else:
                     raise KeyError("Neither TSTART or TSTARTI/TSTARTF are present in the light curve header.")
 
-                if 'TSTOP' in hdr:
-                    self._time_stop = Quantity(hdr['TSTOP'], 's')
-                elif 'TSTOPI' in hdr and 'TSTOPF' in hdr:
-                    self._time_stop = Quantity(hdr['TSTOPI']+hdr['TSTOPF'], 's')
+                if "TSTOP" in hdr:
+                    self._time_stop = Quantity(hdr["TSTOP"], "s")
+                elif "TSTOPI" in hdr and "TSTOPF" in hdr:
+                    self._time_stop = Quantity(hdr["TSTOPI"] + hdr["TSTOPF"], "s")
                 else:
                     raise KeyError("Neither TSTOP or TSTOPI/TSTOPF are present in the light curve header.")
 
-                if 'TASSIGN' in hdr:
-                    self._time_assign = hdr['TASSIGN']
+                if "TASSIGN" in hdr:
+                    self._time_assign = hdr["TASSIGN"]
                 else:
                     self._time_assign = None
 
-                if 'MJDREF' in hdr:
-                    self._ref_time = Time(hdr['MJDREF'], format='mjd')
-                elif 'MJDREFI' in hdr and 'MJDREFF' in hdr:
-                    self._ref_time = Time(hdr['MJDREFI']+hdr['MJDREFF'], format='mjd')
+                if "MJDREF" in hdr:
+                    self._ref_time = Time(hdr["MJDREF"], format="mjd")
+                elif "MJDREFI" in hdr and "MJDREFF" in hdr:
+                    self._ref_time = Time(hdr["MJDREFI"] + hdr["MJDREFF"], format="mjd")
 
-                self._time_sys = hdr['TIMESYS']
+                self._time_sys = hdr["TIMESYS"]
 
                 # TODO NEED TO ASK EROSITA TEAM IF THE COMBINED LIGHTCURVES ARE MEANT TO HAVE GTIs WRITTEN
                 # I now read in the GTIs after dealing with the header keywords because I might need to construct
                 #  my own GTI entry if there is no specific GTI in the lightcurve
-                if self.telescope == 'xmm':
+                if self.telescope == "xmm":
                     # Here we read out the beginning and end times of the GTIs for source and background
-                    self._src_gti = Quantity([all_lc['SRC_GTIS'].read_column('START'),
-                                              all_lc['SRC_GTIS'].read_column('STOP')], 's').T
-                    self._bck_gti = Quantity([all_lc['BKG_GTIS'].read_column('START'),
-                                              all_lc['BKG_GTIS'].read_column('STOP')], 's').T
+                    self._src_gti = Quantity(
+                        [all_lc["SRC_GTIS"].read_column("START"), all_lc["SRC_GTIS"].read_column("STOP")], "s"
+                    ).T
+                    self._bck_gti = Quantity(
+                        [all_lc["BKG_GTIS"].read_column("START"), all_lc["BKG_GTIS"].read_column("STOP")], "s"
+                    ).T
 
-                elif ((self.telescope == 'erosita' or self.telescope == 'erass') and
-                      'SRCGTI{}'.format(self.instrument[-1]) in all_lc):
-                    self._src_gti = Quantity([all_lc['SRCGTI{}'.format(self.instrument[-1])].read_column('START'),
-                                              all_lc['SRCGTI{}'.format(self.instrument[-1])].read_column('STOP')],
-                                             's').T
+                elif (
+                    self.telescope == "erosita" or self.telescope == "erass"
+                ) and f"SRCGTI{self.instrument[-1]}" in all_lc:
+                    self._src_gti = Quantity(
+                        [
+                            all_lc[f"SRCGTI{self.instrument[-1]}"].read_column("START"),
+                            all_lc[f"SRCGTI{self.instrument[-1]}"].read_column("STOP"),
+                        ],
+                        "s",
+                    ).T
                     self._bck_gti = self._src_gti
                 elif "STDGTI" in all_lc:
-                    self._src_gti = Quantity([all_lc['STDGTI'].read_column('START'),
-                                              all_lc['STDGTI'].read_column('STOP')], 's').T
+                    self._src_gti = Quantity(
+                        [all_lc["STDGTI"].read_column("START"), all_lc["STDGTI"].read_column("STOP")], "s"
+                    ).T
                     self._bck_gti = self._src_gti
                 else:
-                    self._src_gti = Quantity([[self._time_start.value, self._time_stop.value]], 's')
+                    self._src_gti = Quantity([[self._time_start.value, self._time_stop.value]], "s")
                     self._bck_gti = self._src_gti
 
             # TODO add calculation for error prop of src-bck or bck+bckcorr
@@ -627,11 +664,13 @@ class LightCurve(BaseProduct):
 
         elif not self.usable:
             reasons = ", ".join(self.not_usable_reasons)
-            raise FailedProductError("Failed to generate this product successfully, so you cannot access "
-                                     "data from it; reason given is {}.".format(reasons))
+            raise FailedProductError(
+                "Failed to generate this product successfully, so you cannot access "
+                f"data from it; reason given is {reasons}."
+            )
 
     # Then define user-facing methods
-    def overlap_check(self, lightcurves: Union['LightCurve', List['LightCurve']]) -> Union[np.ndarray, bool]:
+    def overlap_check(self, lightcurves: Union["LightCurve", list["LightCurve"]]) -> np.ndarray | bool:
         """
         A simple method which checks whether a passed LightCurve (or list of lightcurves) overlap temporally with
         this lightcurve.
@@ -653,17 +692,20 @@ class LightCurve(BaseProduct):
 
         # Simply constructs a boolean array that tells us if each lightcurve starts in, finishes in, or completely
         #  encloses the light curve we're checking against
-        overlap = ((starts >= self.start_datetime) & (starts < self.stop_datetime)) | \
-                  ((ends >= self.start_datetime) & (ends < self.stop_datetime)) | \
-                  ((starts <= self.start_datetime) & (ends >= self.stop_datetime))
+        overlap = (
+            ((starts >= self.start_datetime) & (starts < self.stop_datetime))
+            | ((ends >= self.start_datetime) & (ends < self.stop_datetime))
+            | ((starts <= self.start_datetime) & (ends >= self.stop_datetime))
+        )
 
         if len(overlap) == 1:
             overlap = overlap[0]
 
         return overlap
 
-    def get_data(self, date_time: bool = False, fracexp_corr: bool = False) \
-            -> Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]:
+    def get_data(
+        self, date_time: bool = False, fracexp_corr: bool = False
+    ) -> tuple[Quantity, Quantity, TimeDelta | np.ndarray]:
         """
         A get method to retrieve the count-rate (and error) and timing data from this LightCurve.
 
@@ -678,7 +720,6 @@ class LightCurve(BaseProduct):
         :return: The count rate data, count rate uncertainty data, and time data.
         :rtype: Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]
         """
-
         # Read out the count-rate and count-rate-error data, applying fractional exposure correction
         #  if the user requested it
         if fracexp_corr:
@@ -699,11 +740,23 @@ class LightCurve(BaseProduct):
         # Return the requested information
         return cr_data, cr_err_data, t_data
 
-    def get_view(self, ax: Axes, time_unit: Union[str, Unit] = Unit('s'), lo_time_lim: Quantity = None,
-                 hi_time_lim: Quantity = None, colour: str = 'black', plot_sep: bool = False,
-                 src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick', custom_title: str = None,
-                 label_font_size: int = 15, title_font_size: int = 18, highlight_bad_times: bool = True,
-                 fracexp_corr: bool = False, alpha: float = 0.8) -> Axes:
+    def get_view(
+        self,
+        ax: Axes,
+        time_unit: str | Unit = Unit("s"),
+        lo_time_lim: Quantity = None,
+        hi_time_lim: Quantity = None,
+        colour: str = "black",
+        plot_sep: bool = False,
+        src_colour: str = "tab:cyan",
+        bck_colour: str = "firebrick",
+        custom_title: str = None,
+        label_font_size: int = 15,
+        title_font_size: int = 18,
+        highlight_bad_times: bool = True,
+        fracexp_corr: bool = False,
+        alpha: float = 0.8,
+    ) -> Axes:
         """
         A method that allows the user to retrieve a populated lightcurve visualisation axes, in a form that allows
         them to then add their own plots in additon to what has been automatically constructed. This is an alternative
@@ -757,27 +810,50 @@ class LightCurve(BaseProduct):
 
         if plot_sep:
             if self.src_count_rate is None:
-                raise ValueError("This light-curve is background subtracted, so we cannot plot the total and "
-                                 "background separately.")
-            ax.errorbar(time_x.value / corr_arr, self.src_count_rate.value / corr_arr,
-                        yerr=self.src_count_rate_err.value / corr_arr, capsize=2, color=src_colour, label='Source',
-                        fmt='x', alpha=alpha)
-            ax.errorbar(time_x.value / corr_arr, self.bck_count_rate.value / corr_arr,
-                        yerr=self.bck_count_rate_err.value / corr_arr, capsize=2, color=bck_colour,
-                        label='Background', fmt='x', alpha=alpha)
+                raise ValueError(
+                    "This light-curve is background subtracted, so we cannot plot the total and background separately."
+                )
+            ax.errorbar(
+                time_x.value / corr_arr,
+                self.src_count_rate.value / corr_arr,
+                yerr=self.src_count_rate_err.value / corr_arr,
+                capsize=2,
+                color=src_colour,
+                label="Source",
+                fmt="x",
+                alpha=alpha,
+            )
+            ax.errorbar(
+                time_x.value / corr_arr,
+                self.bck_count_rate.value / corr_arr,
+                yerr=self.bck_count_rate_err.value / corr_arr,
+                capsize=2,
+                color=bck_colour,
+                label="Background",
+                fmt="x",
+                alpha=alpha,
+            )
         else:
-            ax.errorbar(time_x.value / corr_arr, self.count_rate.value / corr_arr,
-                        yerr=self.count_rate_err.value / corr_arr, capsize=2, color=colour,
-                        label='Background subtracted', fmt='x', alpha=alpha)
+            ax.errorbar(
+                time_x.value / corr_arr,
+                self.count_rate.value / corr_arr,
+                yerr=self.count_rate_err.value / corr_arr,
+                capsize=2,
+                color=colour,
+                label="Background subtracted",
+                fmt="x",
+                alpha=alpha,
+            )
 
-        if highlight_bad_times and (len(self.src_gti) != 1 or self.src_gti[0, 0] != self.start_time
-                                    or self.src_gti[0, 1] != self.stop_time):
+        if highlight_bad_times and (
+            len(self.src_gti) != 1 or self.src_gti[0, 0] != self.start_time or self.src_gti[0, 1] != self.stop_time
+        ):
             for ind in range(len(self.src_gti)):
                 if ind == 0:
                     # This is where the first GTI DOESN'T begin with the start of the observation - so there is a
                     #  bad period between the start of the LC time coverage and the first GTI start
-                    if (self.src_gti[ind, 0] - self.start_time).to('s') != 0:
-                        bad_start = Quantity(0, 's')
+                    if (self.src_gti[ind, 0] - self.start_time).to("s") != 0:
+                        bad_start = Quantity(0, "s")
                     else:
                         bad_start = self.src_gti[ind, 1] - self.start_time.to(time_unit)
 
@@ -790,58 +866,87 @@ class LightCurve(BaseProduct):
 
                     # bad_stop = self.src_gti[ind, 0] - self.start_time.to(time_unit)
                     label = "Bad time interval"
-                elif ind == (len(self.src_gti)-1):
+                elif ind == (len(self.src_gti) - 1):
                     bad_start = self.src_gti[ind, 1]
                     bad_stop = self.stop_time - self.start_time
                     label = ""
                 else:
                     bad_start = self.src_gti[ind, 1] - self.start_time.to(time_unit)
-                    bad_stop = self.src_gti[ind+1, 0] - self.start_time.to(time_unit)
+                    bad_stop = self.src_gti[ind + 1, 0] - self.start_time.to(time_unit)
                     label = ""
 
-                ax.axvspan(bad_start.value, bad_stop.value, color='firebrick', alpha=0.3, label=label)
+                ax.axvspan(bad_start.value, bad_stop.value, color="firebrick", alpha=0.3, label=label)
 
         if custom_title is not None:
             ax.set_title(custom_title, fontsize=title_font_size)
         elif self.src_name is not None:
-            ax.set_title("{s} {t} {o}{i} {l}-{u}keV Lightcurve".format(s=self.src_name, t=self.telescope, o=self.obs_id,
-                                                                        i=self.instrument.upper(),
-                                                                        l=self.energy_bounds[0].to('keV').value,
-                                                                        u=self.energy_bounds[1].to('keV').value),
-                         fontsize=title_font_size)
+            ax.set_title(
+                "{s} {t} {o}{i} {l}-{u}keV Lightcurve".format(
+                    s=self.src_name,
+                    t=self.telescope,
+                    o=self.obs_id,
+                    i=self.instrument.upper(),
+                    l=self.energy_bounds[0].to("keV").value,
+                    u=self.energy_bounds[1].to("keV").value,
+                ),
+                fontsize=title_font_size,
+            )
         else:
-            ax.set_title("{t} {o}{i} {l}-{u}keV Lightcurve".format(s=self.src_name, t=self.telescope, o=self.obs_id,
-                                                                    i=self.instrument.upper(),
-                                                                    l=self.energy_bounds[0].to('keV').value,
-                                                                    u=self.energy_bounds[1].to('keV').value),
-                         fontsize=title_font_size)
+            ax.set_title(
+                "{t} {o}{i} {l}-{u}keV Lightcurve".format(
+                    t=self.telescope,
+                    o=self.obs_id,
+                    i=self.instrument.upper(),
+                    l=self.energy_bounds[0].to("keV").value,
+                    u=self.energy_bounds[1].to("keV").value,
+                ),
+                fontsize=title_font_size,
+            )
 
         if lo_time_lim < time_x.min():
-            warn('The lower time limit is smaller than the lowest time value, it has been set to the '
-                 'lowest available value.', stacklevel=2)
+            warn(
+                "The lower time limit is smaller than the lowest time value, it has been set to the "
+                "lowest available value.",
+                stacklevel=2,
+            )
             lo_time_lim = time_x.min()
         if hi_time_lim > time_x.max():
-            warn('The upper time limit is higher than the greatest time value, it has been set to the '
-                 'greatest available value.', stacklevel=2)
+            warn(
+                "The upper time limit is higher than the greatest time value, it has been set to the "
+                "greatest available value.",
+                stacklevel=2,
+            )
             hi_time_lim = time_x.max()
 
         ax.minorticks_on()
-        ax.tick_params(direction='in', which='both', right=True, top=True)
+        ax.tick_params(direction="in", which="both", right=True, top=True)
 
         # Setting the axis limits
         ax.set_xlim(lo_time_lim.value, hi_time_lim.value)
 
-        ax.set_xlabel("Relative Time [{}]".format(time_unit.to_string('latex')), fontsize=label_font_size)
-        ax.set_ylabel("Count-rate [{}]".format(self.count_rate.unit.to_string('latex')), fontsize=label_font_size)
-        ax.legend(loc='best')
+        ax.set_xlabel("Relative Time [{}]".format(time_unit.to_string("latex")), fontsize=label_font_size)
+        ax.set_ylabel("Count-rate [{}]".format(self.count_rate.unit.to_string("latex")), fontsize=label_font_size)
+        ax.legend(loc="best")
 
         return ax
 
-    def view(self, figsize: tuple = (14, 6), time_unit: Union[str, Unit] = Unit('s'),
-             lo_time_lim: Quantity = None, hi_time_lim: Quantity = None, colour: str = 'black',
-             plot_sep: bool = False, src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick',
-             custom_title: str = None, label_font_size: int = 15, title_font_size: int = 18,
-             highlight_bad_times: bool = True, fracexp_corr: bool = False, alpha: float = 0.8):
+    def view(
+        self,
+        figsize: tuple = (14, 6),
+        time_unit: str | Unit = Unit("s"),
+        lo_time_lim: Quantity = None,
+        hi_time_lim: Quantity = None,
+        colour: str = "black",
+        plot_sep: bool = False,
+        src_colour: str = "tab:cyan",
+        bck_colour: str = "firebrick",
+        custom_title: str = None,
+        label_font_size: int = 15,
+        title_font_size: int = 18,
+        highlight_bad_times: bool = True,
+        fracexp_corr: bool = False,
+        alpha: float = 0.8,
+    ) -> None:
         """
         A method that creates and displays a visualisation of this lightcurve.
 
@@ -869,9 +974,22 @@ class LightCurve(BaseProduct):
 
         ax = plt.gca()
 
-        ax = self.get_view(ax, time_unit, lo_time_lim, hi_time_lim, colour, plot_sep, src_colour, bck_colour,
-                           custom_title, label_font_size, title_font_size, highlight_bad_times, fracexp_corr,
-                           alpha)
+        ax = self.get_view(
+            ax,
+            time_unit,
+            lo_time_lim,
+            hi_time_lim,
+            colour,
+            plot_sep,
+            src_colour,
+            bck_colour,
+            custom_title,
+            label_font_size,
+            title_font_size,
+            highlight_bad_times,
+            fracexp_corr,
+            alpha,
+        )
         plt.tight_layout()
         # Display the image
         plt.show()
@@ -901,7 +1019,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         collated in an AggregateLightCurve. These must be for the same source, and generated with the same
         settings.
     """
-    def __init__(self, lightcurves: Union[List[LightCurve], np.ndarray]):
+
+    def __init__(self, lightcurves: list[LightCurve] | np.ndarray):
         """
         The init method for the AggregateLightCurve class, performs checks and organises the light-curves which
         have been passed in, for easy retrieval. It also allows for analysis to be performed on the combined
@@ -925,8 +1044,10 @@ class AggregateLightCurve(BaseAggregateProduct):
         if isinstance(lightcurves, list):
             lightcurves = np.array(lightcurves)
         elif not isinstance(lightcurves, np.ndarray):
-            raise TypeError("The AggregateLightCurve argument must be either a list of LightCurve objects, or a "
-                            "numpy array of LightCurve Objects.")
+            raise TypeError(
+                "The AggregateLightCurve argument must be either a list of LightCurve objects, or a "
+                "numpy array of LightCurve Objects."
+            )
 
         # Check that all the elements of the list/array are actually LightCurve objects
         if any([not isinstance(lc, LightCurve) for lc in lightcurves]):
@@ -941,31 +1062,36 @@ class AggregateLightCurve(BaseAggregateProduct):
         #  each of them has the same central coordinates, region shape, inner radius, outer radius, and energy bounds
         comp_lc = lightcurves[0]
         if not all([np.array_equal(comp_lc.central_coord, lc.central_coord) for lc in lightcurves[1:]]):
-            raise IncompatibleProductError("Central coordinates of all lightcurves passed to AggregateLightCurve must "
-                                           "be the same.")
+            raise IncompatibleProductError(
+                "Central coordinates of all lightcurves passed to AggregateLightCurve must be the same."
+            )
         elif not all([lc.shape == comp_lc.shape for lc in lightcurves[1:]]):
-            raise IncompatibleProductError("Region shape of all lightcurves passed to AggregateLightCurve must "
-                                           "be the same.")
+            raise IncompatibleProductError(
+                "Region shape of all lightcurves passed to AggregateLightCurve must be the same."
+            )
         elif not all([np.array_equal(comp_lc.inner_rad, lc.inner_rad) for lc in lightcurves[1:]]):
-            raise IncompatibleProductError("Inner radii of lightcurves passed to AggregateLightCurve must "
-                                           "be the same.")
+            raise IncompatibleProductError("Inner radii of lightcurves passed to AggregateLightCurve must be the same.")
         elif not all([np.array_equal(comp_lc.outer_rad, lc.outer_rad) for lc in lightcurves[1:]]):
-            raise IncompatibleProductError("Outer radii of lightcurves passed to AggregateLightCurve must "
-                                           "be the same.")
+            raise IncompatibleProductError("Outer radii of lightcurves passed to AggregateLightCurve must be the same.")
         # Past me made the energy_bounds return a tuple for some reason - just need to convert to a Quantity to compare
-        elif not all([np.array_equal(Quantity(comp_lc.energy_bounds), Quantity(lc.energy_bounds))
-                      for lc in lightcurves[1:]]):
-            raise IncompatibleProductError("The energy bounds of lightcurves passed to AggregateLightCurve must "
-                                           "be the same - if interested in the time varying behaviours of multiple "
-                                           "energy bands then the HardnessCurve and AggregateHardnessCurve products "
-                                           "should be used.")
+        elif not all(
+            [np.array_equal(Quantity(comp_lc.energy_bounds), Quantity(lc.energy_bounds)) for lc in lightcurves[1:]]
+        ):
+            raise IncompatibleProductError(
+                "The energy bounds of lightcurves passed to AggregateLightCurve must "
+                "be the same - if interested in the time varying behaviours of multiple "
+                "energy bands then the HardnessCurve and AggregateHardnessCurve products "
+                "should be used."
+            )
         # Checks that the time bin sizes used to generate the lightcurves are the same
         elif not all([lc.time_bin_size == comp_lc.time_bin_size for lc in lightcurves[1:]]):
-            raise IncompatibleProductError("Time bin sizes of lightcurves passed to AggregateLightCurve must "
-                                           "be the same.")
+            raise IncompatibleProductError(
+                "Time bin sizes of lightcurves passed to AggregateLightCurve must be the same."
+            )
         elif len(list(set([lc.src_name for lc in lightcurves]))) > 1:
-            raise ValueError("Some of the passed light curves were not generated for the same object; their "
-                             "source names must match.")
+            raise ValueError(
+                "Some of the passed light curves were not generated for the same object; their source names must match."
+            )
 
         # Pulls out all the ObsIDs and instruments associated with these light curves
         obs_ids = list(set([lc.obs_id for lc in lightcurves]))
@@ -974,18 +1100,18 @@ class AggregateLightCurve(BaseAggregateProduct):
         if len(obs_ids) == 1:
             obs_id_to_pass = obs_ids[0]
         else:
-            obs_id_to_pass = 'combined'  # nosec
+            obs_id_to_pass = "combined"  # nosec
 
         if len(insts) == 1:
             inst_to_pass = insts[0]
         else:
-            inst_to_pass = 'combined'  # nosec
+            inst_to_pass = "combined"  # nosec
 
         # This just sorts the lightcurves by their start time, for earliest to latest
         start_sort = np.argsort(Quantity([lc.start_time for lc in lightcurves]))
         lightcurves = lightcurves[start_sort]
 
-        super().__init__([lc.path for lc in lightcurves], 'lightcurve', obs_id_to_pass, inst_to_pass)
+        super().__init__([lc.path for lc in lightcurves], "lightcurve", obs_id_to_pass, inst_to_pass)
 
         # Storing the name of the object for which we've generated light curves - we've already checked that all the
         #  input light curves have the same src name.
@@ -1029,8 +1155,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         split_inds = np.argwhere(~split).T[0]
         # Just sets up the time chunk ID 1D matrix for our light curves
         for split_ind_ind, split_ind in enumerate(split_inds):
-            if split_ind_ind != (len(split_inds)-1):
-                groupings[split_ind: split_inds[split_ind_ind+1]] = split_ind_ind
+            if split_ind_ind != (len(split_inds) - 1):
+                groupings[split_ind : split_inds[split_ind_ind + 1]] = split_ind_ind
             else:
                 # As I want it to go to the very end of the array
                 groupings[split_ind:] = split_ind_ind
@@ -1043,11 +1169,15 @@ class AggregateLightCurve(BaseAggregateProduct):
             rel_grp = groupings[lc_ind]
             if lc.obs_id not in self._component_products[lc.telescope]:
                 self._component_products[lc.telescope][lc.obs_id] = {lc.instrument: {rel_grp: lc}}
-            elif (lc.obs_id in self._component_products[lc.telescope] and
-                  lc.instrument not in self._component_products[lc.telescope][lc.obs_id]):
+            elif (
+                lc.obs_id in self._component_products[lc.telescope]
+                and lc.instrument not in self._component_products[lc.telescope][lc.obs_id]
+            ):
                 self._component_products[lc.telescope][lc.obs_id][lc.instrument] = {rel_grp: lc}
-            elif (lc.obs_id in self._component_products[lc.telescope] and
-                  lc.instrument in self._component_products[lc.telescope][lc.obs_id]):
+            elif (
+                lc.obs_id in self._component_products[lc.telescope]
+                and lc.instrument in self._component_products[lc.telescope][lc.obs_id]
+            ):
                 self._component_products[lc.telescope][lc.obs_id][lc.instrument][rel_grp] = lc
 
         # This is a validation step, ensuring that all like light curves (i.e. same
@@ -1056,9 +1186,11 @@ class AggregateLightCurve(BaseAggregateProduct):
         for lc in lightcurves:
             cur_ref_time = ref_times.setdefault(lc.telescope, lc.ref_time)
             if cur_ref_time != lc.ref_time:
-                raise IncompatibleProductError("The time system reference times of AggregateLightCurve component "
-                                               "lightcurves from the same telescope passed to AggregateLightCurve "
-                                               "must be the same.")
+                raise IncompatibleProductError(
+                    "The time system reference times of AggregateLightCurve component "
+                    "lightcurves from the same telescope passed to AggregateLightCurve "
+                    "must be the same."
+                )
         # Make a reference time dictionary attribute
         self._ref_times = ref_times
 
@@ -1067,19 +1199,20 @@ class AggregateLightCurve(BaseAggregateProduct):
         #  the specific MOS instrument, same with eROSITA telescope modules.
         self._patterns = {tel: {} for tel in self.telescopes}
         for lc in lightcurves:
-            patt = lc.storage_key.split('_pattern')[-1]
+            patt = lc.storage_key.split("_pattern")[-1]
             # Turns mos1 and mos2 into just mos, and tm1-7 into tm
-            rel_inst = re.sub(r'\d+', '', lc.instrument)
+            rel_inst = re.sub(r"\d+", "", lc.instrument)
             if rel_inst not in self._patterns[lc.telescope]:
                 self._patterns[lc.telescope][rel_inst] = patt
             elif lc.instrument in self._patterns[lc.telescope] and self._patterns[lc.telescope][rel_inst] != patt:
                 raise IncompatibleProductError(
-                    "Lightcurves for the same instrument ({t}-{i}) must have the same event "
-                    "selection pattern.".format(t=lc.telescope, i=rel_inst.upper()))
+                    f"Lightcurves for the same instrument ({lc.telescope}-{rel_inst.upper()}) must have the same event "
+                    "selection pattern."
+                )
 
-        patts = [tel + "_".join([pk + 'pattern' + pv for pk, pv in pd.items()]) for tel, pd in self._patterns.items()]
+        patts = [tel + "_".join([pk + "pattern" + pv for pk, pv in pd.items()]) for tel, pd in self._patterns.items()]
         # This is what the AggregateLightCurve will be stored under in an XGA source product storage structure.
-        self._storage_key = lightcurves[0].storage_key.split('_pattern')[0] + '_' + '_'.join(patts)
+        self._storage_key = lightcurves[0].storage_key.split("_pattern")[0] + "_" + "_".join(patts)
 
     # Start by defining properties, then internal (protected) methods, and then user facing methods
     @property
@@ -1119,13 +1252,14 @@ class AggregateLightCurve(BaseAggregateProduct):
         :return: Dictionary with telescope names as keys, and lists of unique associated instruments as values.
         :rtype: dict
         """
-
-        assoc_inst = {tel: list(set([inst for inst_list in oi_insts.values() for inst in inst_list]))
-                      for tel, oi_insts in self.instruments.items()}
+        assoc_inst = {
+            tel: list(set([inst for inst_list in oi_insts.values() for inst in inst_list]))
+            for tel, oi_insts in self.instruments.items()
+        }
         return assoc_inst
 
     @property
-    def telescopes(self) -> List[str]:
+    def telescopes(self) -> list[str]:
         """
         Property getter for telescopes that are associated with this aggregate light curve.
 
@@ -1159,7 +1293,7 @@ class AggregateLightCurve(BaseAggregateProduct):
             p.src_name = name
 
     @property
-    def all_lightcurves(self) -> List[LightCurve]:
+    def all_lightcurves(self) -> list[LightCurve]:
         """
         Simple extra wrapper for get_lightcurve that allows the user to retrieve every single lightcurve associated
         with this AggregateLightCurve instance, for all time chunk IDs, telescopes, ObsIDs, and Instruments.
@@ -1237,7 +1371,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         return self.all_lightcurves[0].time_bin_size
 
     @property
-    def ref_times(self) -> Dict[str, Time]:
+    def ref_times(self) -> dict[str, Time]:
         """
         Returns the time system reference times of this aggregate lightcurve's components.
 
@@ -1398,7 +1532,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         return self._patterns
 
     # Now the protected methods of the class
-    def _validate_tel_inst(self, telescope: str = None, inst: str = None) -> Tuple[str, str]:
+    def _validate_tel_inst(self, telescope: str = None, inst: str = None) -> tuple[str, str]:
         """
         Internal method to check telescope and instrument inputs, and fill in values if Nones
         are passed and the light curve only has one telescope and instrument associated.
@@ -1412,28 +1546,39 @@ class AggregateLightCurve(BaseAggregateProduct):
         #  can save the user the trouble and select that single telescope. Otherwise, we throw
         #  an error and tell them to set a value
         if telescope is None and len(self.telescopes) != 1:
-            raise ValueError("For AggregateLightCurve instances containing data from multiple telescopes, a value "
-                             "must be passed to the 'telescope' argument of 'get_data'.")
+            raise ValueError(
+                "For AggregateLightCurve instances containing data from multiple telescopes, a value "
+                "must be passed to the 'telescope' argument of 'get_data'."
+            )
         elif telescope is None:
             telescope = self.telescopes[0]
         elif telescope not in self.telescopes:
-            raise TelescopeNotAssociatedError("The telescope name {0} is not associated with any constituent "
-                                              "products in this AggregateLightCurve.".format(telescope))
+            raise TelescopeNotAssociatedError(
+                f"The telescope name {telescope} is not associated with any constituent "
+                "products in this AggregateLightCurve."
+            )
 
         # Now we do the same thing for instrument name, but with the added context
         #  of the telescope name already set up above
         if inst is None and len(self.associated_instruments[telescope]) != 1:
-            raise ValueError("This AggregateLightCurve instance contains data from multiple instruments of {t}, so a "
-                             "value must be passed to the 'inst' argument of 'get_data'.".format(t=telescope))
+            raise ValueError(
+                f"This AggregateLightCurve instance contains data from multiple instruments of {telescope}, so a "
+                "value must be passed to the 'inst' argument of 'get_data'."
+            )
         elif inst is None:
             inst = self.associated_instruments[telescope][0]
 
         return telescope, inst
 
-    def _get_gtis(self, which_gti: str = "src", inst: str = None, telescope: str = None,
-                  interval_start: Union[Quantity, Time, datetime] = None,
-                  interval_end: Union[Quantity, Time, datetime] = None,
-                  over_run: bool = True) -> Tuple[Quantity, np.ndarray]:
+    def _get_gtis(
+        self,
+        which_gti: str = "src",
+        inst: str = None,
+        telescope: str = None,
+        interval_start: Quantity | Time | datetime = None,
+        interval_end: Quantity | Time | datetime = None,
+        over_run: bool = True,
+    ) -> tuple[Quantity, np.ndarray]:
         """
         Internal get method to retrieve the good time intervals (GTIs) for the source OR background light curves
         of a particular instrument of a particular telescope from this AggregateLightCurve.
@@ -1460,7 +1605,6 @@ class AggregateLightCurve(BaseAggregateProduct):
             indicating which time chunk each GTI belongs in. Data are in the correct temporal order.
         :rtype: Tuple[Quantity, np.ndarray]
         """
-
         # This is an internal method, so I feel okay using a string 'which_gti' rather than
         #  a boolean variable to determine whether to retrieve the source or background GTI.
         # Leaves the option open for some other kind of GTI retrieval to be added as well.
@@ -1507,8 +1651,9 @@ class AggregateLightCurve(BaseAggregateProduct):
         return gtis, tc_data
 
     # Then define user-facing methods
-    def get_lightcurves(self, time_chunk_id: int, obs_id: str = None,
-                        inst: str = None, telescope: str = None) -> Union[List[LightCurve], LightCurve]:
+    def get_lightcurves(
+        self, time_chunk_id: int, obs_id: str = None, inst: str = None, telescope: str = None
+    ) -> list[LightCurve] | LightCurve:
         """
         This is the getter for the lightcurves stored in the AggregateLightCurve data storage structure. They can
         be retrieved based on ObsID and instrument.
@@ -1520,6 +1665,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         :return: List of matching lightcurves, or just a LightCurve object if one match is found.
         :rtype: Union[List[LightCurve], LightCurve]
         """
+
         def unpack_list(to_unpack: list):
             """
             A recursive function to go through every layer of a nested list and flatten it all out. It
@@ -1541,27 +1687,40 @@ class AggregateLightCurve(BaseAggregateProduct):
 
         if time_chunk_id not in self.time_chunk_ids:
             tc_str = ", ".join(self.time_chunk_ids.astype(str))
-            raise IndexError("{i} is not a time chunk ID associated with this AggregateLightCurve object. "
-                             "Allowed time chunk IDs are; {a}".format(i=time_chunk_id, a=tc_str))
+            raise IndexError(
+                f"{time_chunk_id} is not a time chunk ID associated with this AggregateLightCurve object. "
+                f"Allowed time chunk IDs are; {tc_str}"
+            )
         elif telescope not in self.telescopes and telescope is not None:
-            raise TelescopeNotAssociatedError("{0} is not associated with chunk {1} of this "
-                                              "AggregateLightCurve.".format(telescope, time_chunk_id))
-        elif ((telescope is not None and telescope in self.telescopes) and
-              (obs_id not in self.obs_ids[telescope] and obs_id is not None)):
-            raise NotAssociatedError("ObsID {o} is not associated with telescope {t} for chunk {tc} of this "
-                                     "AggregateLightCurve.".format(o=obs_id, tc=time_chunk_id, t=telescope))
-        elif ((telescope is not None and telescope in self.telescopes) and
-              (obs_id is not None and obs_id in self.obs_ids) and
-              (inst is not None and inst not in self.instruments[obs_id])):
-            raise NotAssociatedError("Instrument {i} is not associated with {t}-{o} for time chunk {tc} of this "
-                                     "AggregateLightCurve.".format(o=obs_id, i=inst, tc=time_chunk_id, t=telescope))
+            raise TelescopeNotAssociatedError(
+                f"{telescope} is not associated with chunk {time_chunk_id} of this AggregateLightCurve."
+            )
+        elif (telescope is not None and telescope in self.telescopes) and (
+            obs_id not in self.obs_ids[telescope] and obs_id is not None
+        ):
+            raise NotAssociatedError(
+                f"ObsID {obs_id} is not associated with telescope {telescope} for chunk {time_chunk_id} of this "
+                "AggregateLightCurve."
+            )
+        elif (
+            (telescope is not None and telescope in self.telescopes)
+            and (obs_id is not None and obs_id in self.obs_ids)
+            and (inst is not None and inst not in self.instruments[obs_id])
+        ):
+            raise NotAssociatedError(
+                f"Instrument {inst} is not associated with {telescope}-{obs_id} for time chunk {time_chunk_id} of this "
+                "AggregateLightCurve."
+            )
 
         matches = []
         for match in dict_search(time_chunk_id, self._component_products):
             out = []
             unpack_list(match)
-            if ((telescope == out[0] or telescope is None) and (obs_id == out[1] or obs_id is None)
-                    and (inst == out[2] or inst is None)):
+            if (
+                (telescope == out[0] or telescope is None)
+                and (obs_id == out[1] or obs_id is None)
+                and (inst == out[2] or inst is None)
+            ):
                 matches.append(out[-1])
 
         # Here I only return the object if one match was found
@@ -1570,14 +1729,21 @@ class AggregateLightCurve(BaseAggregateProduct):
         elif len(matches) == 0:
             # This probably means that an instrument was requested without a specific ObsID and it doesn't exist for
             #  the specified time chunk
-            raise NotAssociatedError("The requested data are not associated with time chunk {} of this "
-                                     "AggregateLightCurve.".format(time_chunk_id))
+            raise NotAssociatedError(
+                f"The requested data are not associated with time chunk {time_chunk_id} of this AggregateLightCurve."
+            )
         return matches
 
-    def get_data(self, inst: str = None, telescope: str = None, date_time: bool = False, fracexp_corr: bool = False,
-                 interval_start: Union[Quantity, Time, datetime] = None,
-                 interval_end: Union[Quantity, Time, datetime] = None,
-                 over_run: bool = True) -> Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray], np.ndarray]:
+    def get_data(
+        self,
+        inst: str = None,
+        telescope: str = None,
+        date_time: bool = False,
+        fracexp_corr: bool = False,
+        interval_start: Quantity | Time | datetime = None,
+        interval_end: Quantity | Time | datetime = None,
+        over_run: bool = True,
+    ) -> tuple[Quantity, Quantity, TimeDelta | np.ndarray, np.ndarray]:
         """
         A get method to retrieve count-rate, count-rate error, timing, and time chunk data for a particular
         instrument of a particular telescope from this AggregateLightCurve.
@@ -1655,10 +1821,14 @@ class AggregateLightCurve(BaseAggregateProduct):
         # Concatenate the count rate data and error into one quantity each and return everything
         return cr_data, cr_err_data, t_data, tc_data
 
-    def get_src_gtis(self, inst: str = None, telescope: str = None,
-                 interval_start: Union[Quantity, Time, datetime] = None,
-                 interval_end: Union[Quantity, Time, datetime] = None,
-                 over_run: bool = True) -> Tuple[Quantity, np.ndarray]:
+    def get_src_gtis(
+        self,
+        inst: str = None,
+        telescope: str = None,
+        interval_start: Quantity | Time | datetime = None,
+        interval_end: Quantity | Time | datetime = None,
+        over_run: bool = True,
+    ) -> tuple[Quantity, np.ndarray]:
         """
         A get method to retrieve the good time intervals (GTIs) for the source light curves
         of a particular instrument of a particular telescope from this AggregateLightCurve.
@@ -1684,12 +1854,16 @@ class AggregateLightCurve(BaseAggregateProduct):
             indicating which time chunk each GTI belongs in. Data are in the correct temporal order.
         :rtype: Tuple[Quantity, np.ndarray]
         """
-        return self._get_gtis('src', inst, telescope, interval_start, interval_end, over_run)
+        return self._get_gtis("src", inst, telescope, interval_start, interval_end, over_run)
 
-    def get_bck_gtis(self, inst: str = None, telescope: str = None,
-                 interval_start: Union[Quantity, Time, datetime] = None,
-                 interval_end: Union[Quantity, Time, datetime] = None,
-                 over_run: bool = True) -> Tuple[Quantity, np.ndarray]:
+    def get_bck_gtis(
+        self,
+        inst: str = None,
+        telescope: str = None,
+        interval_start: Quantity | Time | datetime = None,
+        interval_end: Quantity | Time | datetime = None,
+        over_run: bool = True,
+    ) -> tuple[Quantity, np.ndarray]:
         """
         A get method to retrieve the good time intervals (GTIs) for the background light curves
         of a particular instrument of a particular telescope from this AggregateLightCurve.
@@ -1715,11 +1889,14 @@ class AggregateLightCurve(BaseAggregateProduct):
             indicating which time chunk each GTI belongs in. Data are in the correct temporal order.
         :rtype: Tuple[Quantity, np.ndarray]
         """
-        return self._get_gtis('bck', inst, telescope, interval_start, interval_end, over_run)
+        return self._get_gtis("bck", inst, telescope, interval_start, interval_end, over_run)
 
-    def time_chunk_ids_within_interval(self, interval_start: Union[Quantity, Time, datetime] = None,
-                                       interval_end: Union[Quantity, Time, datetime] = None,
-                                       over_run: bool = True) -> np.ndarray:
+    def time_chunk_ids_within_interval(
+        self,
+        interval_start: Quantity | Time | datetime = None,
+        interval_end: Quantity | Time | datetime = None,
+        over_run: bool = True,
+    ) -> np.ndarray:
         """
         Fetches the IDs of time chunks that fall within a specified interval. The interval can be defined
         either as a duration offset from a reference time (`Quantity`) or as absolute timestamps (`Time` or
@@ -1740,7 +1917,6 @@ class AggregateLightCurve(BaseAggregateProduct):
         :raises TypeError: If the provided interval types are not one of the accepted formats or if their
             types are mismatched.
         """
-
         # Convert any Astropy Time objects to a standard Python datetime
         if isinstance(interval_start, Time):
             interval_start = interval_start.to_datetime()
@@ -1764,19 +1940,25 @@ class AggregateLightCurve(BaseAggregateProduct):
         #  as a time from reference time, and the end as a datetime). We wish to avoid dealing with
         #  limits in different formats, so raise an error if this is the case.
         # Also check the object types passed to ensure they haven't done anything really silly like passed a string
-        if (not isinstance(interval_start, (Quantity, Time, datetime)) or
-                not isinstance(interval_end, (Quantity, Time, datetime))):
-            raise TypeError("The 'interval_start' and 'interval_end' arguments must be one of the following; "
-                            "None, an astropy Quantity, an astropy Time, or an Python datetime.")
+        if not isinstance(interval_start, (Quantity, Time, datetime)) or not isinstance(
+            interval_end, (Quantity, Time, datetime)
+        ):
+            raise TypeError(
+                "The 'interval_start' and 'interval_end' arguments must be one of the following; "
+                "None, an astropy Quantity, an astropy Time, or an Python datetime."
+            )
         elif type(interval_start) != type(interval_end):
-            raise TypeError("The 'interval_start' ({bf}) and 'interval_end' ({ef}) arguments must be of "
-                            "the same type.".format(bf=type(interval_start), ef=type(interval_end)))
+            raise TypeError(
+                f"The 'interval_start' ({type(interval_start)}) and 'interval_end' ({type(interval_end)}) arguments must be of "
+                "the same type."
+            )
 
         # Validity check on the interval, obviously can't have the start time being at the same time or after
         #  the end of the interval
         if interval_start >= interval_end:
-            raise ValueError("Time passed to 'interval_start' argument must be before the time "
-                             "passed to 'interval_end'.")
+            raise ValueError(
+                "Time passed to 'interval_start' argument must be before the time passed to 'interval_end'."
+            )
 
         # Now we've done all our validation checks on the inputs, we will fetch the 'correct' format of time chunk
         #  bounds (i.e. seconds from reference time, or datetime) for the input interval limits
@@ -1794,11 +1976,15 @@ class AggregateLightCurve(BaseAggregateProduct):
         #  validity check to ensure that the user didn't pass intervals outside
         #  the time window of this AggregateLightCurve
         if interval_start < ch_starts[0]:
-            raise ValueError("The value of 'interval_start' ({ins}) is before the start ({wis}) of the time window "
-                             "covered by this AggregateLightCurve.".format(ins=interval_start, wis=ch_starts[0]))
+            raise ValueError(
+                f"The value of 'interval_start' ({interval_start}) is before the start ({ch_starts[0]}) of the time window "
+                "covered by this AggregateLightCurve."
+            )
         if interval_end > ch_ends[-1]:
-            raise ValueError("The value of 'interval_end' ({ine}) is after the end ({wie}) of the time window "
-                             "covered by this AggregateLightCurve.".format(ine=interval_end, wie=ch_ends[-1]))
+            raise ValueError(
+                f"The value of 'interval_end' ({interval_end}) is after the end ({ch_ends[-1]}) of the time window "
+                "covered by this AggregateLightCurve."
+            )
 
         # The user can choose between two slightly different matching criteria - if
         #  'over_run' is False then the time chunks they want us to return have to
@@ -1807,15 +1993,13 @@ class AggregateLightCurve(BaseAggregateProduct):
         #  outside the interval will be included in the return, so long as some part
         #  of them is within the user's interval
         if not over_run:
-            ch_filter = ((ch_starts >= interval_start) &
-                         (ch_ends <= interval_end))
+            ch_filter = (ch_starts >= interval_start) & (ch_ends <= interval_end)
         else:
-            ch_filter = (((ch_starts >= interval_start) &
-                            (ch_starts <= interval_end)) |
-                           ((ch_ends >= interval_start) &
-                            (ch_ends <= interval_end)) |
-                           ((ch_starts <= interval_start) &
-                            (ch_ends >= interval_end)))
+            ch_filter = (
+                ((ch_starts >= interval_start) & (ch_starts <= interval_end))
+                | ((ch_ends >= interval_start) & (ch_ends <= interval_end))
+                | ((ch_starts <= interval_start) & (ch_ends >= interval_end))
+            )
 
         # Apply the newly created filter to the time chunk IDs property, which will give us the IDs of the
         #  time chunks that match the user's criteria.
@@ -1824,8 +2008,12 @@ class AggregateLightCurve(BaseAggregateProduct):
         # Now we return them
         return rel_ch_ids
 
-    def obs_ids_within_interval(self, interval_start: Union[Quantity, Time, datetime] = None,
-                                interval_end: Union[Quantity, Time, datetime] = None, over_run: bool = True) -> dict:
+    def obs_ids_within_interval(
+        self,
+        interval_start: Quantity | Time | datetime = None,
+        interval_end: Quantity | Time | datetime = None,
+        over_run: bool = True,
+    ) -> dict:
         """
         Fetches the ObsIDs of data associated with time chunks that fall within a specified interval. The interval
         can be defined either as a duration offset from a reference time (`Quantity`) or as absolute
@@ -1843,7 +2031,6 @@ class AggregateLightCurve(BaseAggregateProduct):
             specified interval.
         :rtype: dict
         """
-
         # First run the class method that will take the interval information and return the relevant time chunk IDs
         rel_ch_ids = self.time_chunk_ids_within_interval(interval_start, interval_end, over_run)
 
@@ -1890,16 +2077,16 @@ class AggregateLightCurve(BaseAggregateProduct):
         gti_durations = rel_gti[:, 1] - rel_gti[:, 0]
 
         # Sum GTI durations for each time chunk using bincount
-        total_gti_per_chunk = np.bincount(chunk_indices, weights=gti_durations,
-                                          minlength=self.num_time_chunks)
+        total_gti_per_chunk = np.bincount(chunk_indices, weights=gti_durations, minlength=self.num_time_chunks)
 
         # Calculate fractions (avoid division by zero)
         fractions = total_gti_per_chunk / self.time_chunk_lengths
 
         return fractions
 
-    def check_times_within_gti(self, times: Quantity, src_gti: bool = True, inst: str = None,
-                               telescope: str = None) -> np.ndarray:
+    def check_times_within_gti(
+        self, times: Quantity, src_gti: bool = True, inst: str = None, telescope: str = None
+    ) -> np.ndarray:
         """
         Check whether given times are within the good-time-intervals (GTIs) of any component light curve
         within this AggregateLightCurve that matches the specified instrument and telescope.
@@ -1926,11 +2113,12 @@ class AggregateLightCurve(BaseAggregateProduct):
         telescope, inst = self._validate_tel_inst(telescope, inst)
 
         if isinstance(times, Time):
-            times = (times - self.ref_times[telescope]).to('s')
-        elif ((not isinstance(times, Quantity) and (isinstance(times, np.ndarray) and
-                                                   all([isinstance(en, datetime) for en in times])))
-              or isinstance(times, datetime)):
-            times = (Time(times) - self.ref_times[telescope]).to('s')
+            times = (times - self.ref_times[telescope]).to("s")
+        elif (
+            not isinstance(times, Quantity)
+            and (isinstance(times, np.ndarray) and all([isinstance(en, datetime) for en in times]))
+        ) or isinstance(times, datetime):
+            times = (Time(times) - self.ref_times[telescope]).to("s")
         elif not isinstance(times, Quantity) and isinstance(times, np.ndarray):
             raise TypeError("If an array is passed to the 'times' argument, every element must be of type 'datetime'.")
 
@@ -1951,13 +2139,25 @@ class AggregateLightCurve(BaseAggregateProduct):
 
         return time_within
 
-
-    def get_view(self, fig: Figure, inst: str = None, custom_title: str = None, label_font_size: int = 18,
-                 title_font_size: int = 20, inst_cmap: str = 'viridis', y_lims: Quantity = None,
-                 time_chunk_ids: Union[int, List[int]] = None, yscale: str = 'linear', fracexp_corr: bool = False,
-                 show_legend: bool = True, alpha: float = 0.8, interval_start: Union[Quantity, Time, datetime] = None,
-                 interval_end: Union[Quantity, Time, datetime] = None, over_run: bool = True,
-                 one_tick_per_chunk: Union[bool, List[bool], np.ndarray] = False) -> Tuple[dict, Figure]:
+    def get_view(
+        self,
+        fig: Figure,
+        inst: str = None,
+        custom_title: str = None,
+        label_font_size: int = 18,
+        title_font_size: int = 20,
+        inst_cmap: str = "viridis",
+        y_lims: Quantity = None,
+        time_chunk_ids: int | list[int] = None,
+        yscale: str = "linear",
+        fracexp_corr: bool = False,
+        show_legend: bool = True,
+        alpha: float = 0.8,
+        interval_start: Quantity | Time | datetime = None,
+        interval_end: Quantity | Time | datetime = None,
+        over_run: bool = True,
+        one_tick_per_chunk: bool | list[bool] | np.ndarray = False,
+    ) -> tuple[dict, Figure]:
         """
         A get method for a populated visualisation of the light curves present in this AggregateLightCurve.
 
@@ -2005,8 +2205,11 @@ class AggregateLightCurve(BaseAggregateProduct):
 
             # Warn the user that we overrode the time_chunk_ids variable with the interval start and end arguments
             if time_chunks_overridden:
-                warn("Both 'time_chunk_ids' and 'interval_start'/'interval_end' arguments were passed. The interval "
-                     "arguments have overridden the 'time_chunk_ids' argument.", stacklevel=2)
+                warn(
+                    "Both 'time_chunk_ids' and 'interval_start'/'interval_end' arguments were passed. The interval "
+                    "arguments have overridden the 'time_chunk_ids' argument.",
+                    stacklevel=2,
+                )
 
         # We check the input for the time_chunk_ids argument first, because not only does it determine the data that
         #  we plot, but it determines how we set up the figure
@@ -2040,14 +2243,19 @@ class AggregateLightCurve(BaseAggregateProduct):
             all_rel_lcs = self.all_lightcurves
             time_chunk_ids = self.time_chunk_ids
 
+        # Normalise one_tick_per_chunk into a list of booleans with one entry per plotted time chunk; if a single
+        #  boolean is supplied it is broadcast across all chunks, whereas a list/array is validated for boolean
+        #  elements and matching length
         if isinstance(one_tick_per_chunk, (bool, np.bool_)):
             one_tick_per_chunk = [bool(one_tick_per_chunk)] * len(time_chunk_ids)
         elif isinstance(one_tick_per_chunk, (list, np.ndarray)):
             if any([not isinstance(val, (bool, np.bool_)) for val in one_tick_per_chunk]):
                 raise TypeError("All entries in 'one_tick_per_chunk' must be boolean values.")
             if len(one_tick_per_chunk) != len(time_chunk_ids):
-                raise ValueError("The length of 'one_tick_per_chunk' ({}) must match the number of plotted time "
-                                 "chunks ({}).".format(len(one_tick_per_chunk), len(time_chunk_ids)))
+                raise ValueError(
+                    f"The length of 'one_tick_per_chunk' ({len(one_tick_per_chunk)}) must match the number of plotted "
+                    f"time chunks ({len(time_chunk_ids)})."
+                )
             one_tick_per_chunk = [bool(val) for val in one_tick_per_chunk]
         else:
             raise TypeError("The 'one_tick_per_chunk' argument must be either a boolean, or a list/array of booleans.")
@@ -2056,18 +2264,25 @@ class AggregateLightCurve(BaseAggregateProduct):
         buffer_frac = 0.008
         # This calculates the total time length of all time chunks - note that we are selecting those specified by the
         #  time_chunk_ids array, which by default is all time chunks, but can be set by the user
-        chunk_len = (self.datetime_chunks[:, 1] - self.datetime_chunks[:, 0])
+        chunk_len = self.datetime_chunks[:, 1] - self.datetime_chunks[:, 0]
         chunk_len = np.array([float(cl.total_seconds()) for cl in chunk_len])[time_chunk_ids]
 
         # Then finds what fraction of the total coverage each time chunk covers, taking into account the buffer (again
         #  this is for those time chunks specified by the time chunk id argument, with the default being all chunks)
-        chunk_frac = chunk_len / (chunk_len.sum() + buffer_frac*len(chunk_len)-1)
+        chunk_frac = chunk_len / (chunk_len.sum() + buffer_frac * len(chunk_len) - 1)
 
         # Proportion of vertical to horizontal extent of the slanted line that breaks the separate axes
         break_slant = 1.3
         # Set properties of the break lines
-        break_kwargs = dict(marker=[(-1, -break_slant), (1, break_slant)], markersize=12,
-                            linestyle="none", color='k', mec='k', mew=1, clip_on=False)
+        break_kwargs = dict(
+            marker=[(-1, -break_slant), (1, break_slant)],
+            markersize=12,
+            linestyle="none",
+            color="k",
+            mec="k",
+            mew=1,
+            clip_on=False,
+        )
 
         # To store the to-be-setup axes in
         axes_dict = {}
@@ -2089,20 +2304,34 @@ class AggregateLightCurve(BaseAggregateProduct):
                 axes_dict[tc_id_ind] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1])
                 # Set up a y-label - other axes won't have this because they share the y-axis and we only want to
                 #  label the first one
-                y_lab = "Count-rate [{}]".format(self.all_lightcurves[0].count_rate.unit.to_string('latex'))
+                y_lab = "Count-rate [{}]".format(self.all_lightcurves[0].count_rate.unit.to_string("latex"))
                 axes_dict[tc_id_ind].set_ylabel(y_lab, fontsize=label_font_size)
 
                 # We set the upper and lower y-axis limits based on the maximum and minimum count rates across all
                 #  the lightcurves that are to be plotted, as the y-axis is shared - if the user hasn't specified
                 #  their own y-axis limits
                 if y_lims is None and not fracexp_corr:
-                    low_lim = min([np.nanmin(lc.count_rate-lc.count_rate_err) for lc in all_rel_lcs]).value*0.95
-                    upp_lim = max([np.nanmax(lc.count_rate+lc.count_rate_err) for lc in all_rel_lcs]).value*1.05
+                    low_lim = min([np.nanmin(lc.count_rate - lc.count_rate_err) for lc in all_rel_lcs]).value * 0.95
+                    upp_lim = max([np.nanmax(lc.count_rate + lc.count_rate_err) for lc in all_rel_lcs]).value * 1.05
                 elif y_lims is None and fracexp_corr:
-                    low_lim = min([np.nanmin(lc.count_rate/lc.frac_exp - lc.count_rate_err/lc.frac_exp)
-                                   for lc in all_rel_lcs]).value * 0.95
-                    upp_lim = max([np.nanmax(lc.count_rate/lc.frac_exp + lc.count_rate_err/lc.frac_exp)
-                                   for lc in all_rel_lcs]).value * 1.05
+                    low_lim = (
+                        min(
+                            [
+                                np.nanmin(lc.count_rate / lc.frac_exp - lc.count_rate_err / lc.frac_exp)
+                                for lc in all_rel_lcs
+                            ]
+                        ).value
+                        * 0.95
+                    )
+                    upp_lim = (
+                        max(
+                            [
+                                np.nanmax(lc.count_rate / lc.frac_exp + lc.count_rate_err / lc.frac_exp)
+                                for lc in all_rel_lcs
+                            ]
+                        ).value
+                        * 1.05
+                    )
                 else:
                     # The user has specified axis limits, so we make sure to convert them to the y-axis unit
                     low_lim, upp_lim = y_lims.to(self.all_lightcurves[0].count_rate.unit).value
@@ -2116,7 +2345,7 @@ class AggregateLightCurve(BaseAggregateProduct):
                     axes_dict[tc_id_ind].plot([1, 1], [1, 0], transform=axes_dict[tc_id_ind].transAxes, **break_kwargs)
 
                 # We make sure the ticks look how we want them
-                axes_dict[tc_id_ind].tick_params(direction='in', which='both', right=False, left=True, top=True)
+                axes_dict[tc_id_ind].tick_params(direction="in", which="both", right=False, left=True, top=True)
 
             # In this case we are at a time chunk that is not the first, and not the last
             elif tc_id_ind != (len(time_chunk_ids) - 1):
@@ -2127,8 +2356,9 @@ class AggregateLightCurve(BaseAggregateProduct):
                 axes_dict[tc_id_ind].spines.right.set_visible(False)
                 # We make sure to setup the ticks as we want them - making sure that the y-axis is not labelled for
                 #  this one, and that the left and right ticks are turned off
-                axes_dict[tc_id_ind].tick_params(direction='in', which='both', right=False, left=False, top=True,
-                                                 labelleft=False)
+                axes_dict[tc_id_ind].tick_params(
+                    direction="in", which="both", right=False, left=False, top=True, labelleft=False
+                )
                 # This is what sets up the break lines on the left and right hand sides of the x-axis, at the top
                 #  and bottom
                 axes_dict[tc_id_ind].plot([1, 1], [1, 0], transform=axes_dict[tc_id_ind].transAxes, **break_kwargs)
@@ -2141,12 +2371,13 @@ class AggregateLightCurve(BaseAggregateProduct):
                 axes_dict[tc_id_ind].spines.right.set_visible(True)
                 axes_dict[tc_id_ind].spines.left.set_visible(False)
                 # And we make sure to add the tick setup and ensure that the final break lines on the left are drawn
-                axes_dict[tc_id_ind].tick_params(direction='in', which='both', right=True, left=False, top=True,
-                                                 labelleft=False)
+                axes_dict[tc_id_ind].tick_params(
+                    direction="in", which="both", right=True, left=False, top=True, labelleft=False
+                )
                 axes_dict[tc_id_ind].plot([0, 0], [0, 1], transform=axes_dict[tc_id_ind].transAxes, **break_kwargs)
 
             # Iterate the cumulative position
-            cumu_x_pos += (rel_frac+buffer_frac)
+            cumu_x_pos += rel_frac + buffer_frac
             # And turn on minor ticks, because I prefer how that looks
             axes_dict[tc_id_ind].minorticks_on()
             # Set the y-scale to the specified type (default is linear, but the user can override that)
@@ -2156,7 +2387,7 @@ class AggregateLightCurve(BaseAggregateProduct):
             axes_dict[tc_id_ind].set_xlim(self.datetime_chunks[tc_id, 0], self.datetime_chunks[tc_id, 1])
 
         # Create a single x-axis label for all axes, it looks ugly and is unnecessary to have one for each
-        fig.text(0.5, -0.04, "Time", ha='center', fontsize=label_font_size)
+        fig.text(0.5, -0.04, "Time", ha="center", fontsize=label_font_size)
 
         # Fetching the colormap object specified by the user - this is what we draw colours from for each instrument
         #  involved in this AggregateLightCurve. We want them all to be different (of course), but we also want
@@ -2164,12 +2395,16 @@ class AggregateLightCurve(BaseAggregateProduct):
         rel_cmap = plt.get_cmap(inst_cmap)
         # This goes through all the instruments for all the ObsIDs for all the telescopes, constructing a list of
         #  unique instrument names
-        uniq_insts = sorted(list(set([i for tel in self.instruments for oi in self.instruments[tel]
-                                      for i in self.instruments[tel][oi]])))
+        uniq_insts = sorted(
+            list(
+                set([i for tel in self.instruments for oi in self.instruments[tel] for i in self.instruments[tel][oi]])
+            )
+        )
         # Then we simply loop through the instruments, normalising their index in the list by the total number (we want
         #  to feed values between zero and one into the colormap), and get the colours out
-        inst_colours = {inst: rel_cmap(inst_ind / max(1, len(uniq_insts)-1))
-                        for inst_ind, inst in enumerate(uniq_insts)}
+        inst_colours = {
+            inst: rel_cmap(inst_ind / max(1, len(uniq_insts) - 1)) for inst_ind, inst in enumerate(uniq_insts)
+        }
 
         # Now we need to populate our carefully set up axes with DATA
         for tc_id_ind, tc_id in enumerate(time_chunk_ids):
@@ -2179,15 +2414,16 @@ class AggregateLightCurve(BaseAggregateProduct):
                 #  sets up the x-axis tick labels, even if there are no data for the requested instrument (if the
                 #  user has even requested a specific instrument) - makes the plot look nice
                 if one_tick_per_chunk[tc_id_ind]:
-                    mid_dt = self.datetime_chunks[tc_id, 0] + (
-                        self.datetime_chunks[tc_id, 1] - self.datetime_chunks[tc_id, 0]
-                    ) / 2
+                    mid_dt = (
+                        self.datetime_chunks[tc_id, 0]
+                        + (self.datetime_chunks[tc_id, 1] - self.datetime_chunks[tc_id, 0]) / 2
+                    )
                     ax.set_xticks([mid_dt])
                 # The labels will have hour, minute, date, month (shortened word so as not to be ambigious with
                 #  american date system), and year
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Hh-%Mm %d-%b-%Y'))
-                for label in ax.get_xticklabels(which='major'):
-                    label.set(y=label.get_position()[1] - 0.03, rotation=40, horizontalalignment='right')
+                ax.xaxis.set_major_formatter(mdates.DateFormatter("%Hh-%Mm %d-%b-%Y"))
+                for label in ax.get_xticklabels(which="major"):
+                    label.set(y=label.get_position()[1] - 0.03, rotation=40, horizontalalignment="right")
 
                 # This is what _might_ trigger the NotAssociatedError
                 rel_lcs = self.get_lightcurves(tc_id, inst=inst)
@@ -2200,41 +2436,68 @@ class AggregateLightCurve(BaseAggregateProduct):
 
             # Now we cycle through the light curves for the current time chunk and add them to the plot
             for rel_lc in rel_lcs:
-                ident = "{t} {o}-{i}".format(t=rel_lc.pretty_telescope_name, o=rel_lc.obs_id,
-                                             i=rel_lc.instrument)
+                ident = f"{rel_lc.pretty_telescope_name} {rel_lc.obs_id}-{rel_lc.instrument}"
                 if fracexp_corr:
                     plt_cr = rel_lc.count_rate.value / rel_lc.frac_exp
                     plt_cr_err = rel_lc.count_rate_err.value / rel_lc.frac_exp
                 else:
                     plt_cr = rel_lc.count_rate.value
                     plt_cr_err = rel_lc.count_rate_err.value
-                ax.errorbar(rel_lc.datetime, plt_cr, yerr=plt_cr_err, capsize=2, label=ident, fmt='x',
-                            color=inst_colours[rel_lc.instrument], alpha=alpha)
+                ax.errorbar(
+                    rel_lc.datetime,
+                    plt_cr,
+                    yerr=plt_cr_err,
+                    capsize=2,
+                    label=ident,
+                    fmt="x",
+                    color=inst_colours[rel_lc.instrument],
+                    alpha=alpha,
+                )
 
             if show_legend:
-                ax.legend(loc='best')
+                ax.legend(loc="best")
 
         # Check if the user has defined a custom title, and if not then we build one and add it to the plot
         if custom_title is not None:
             fig.suptitle(custom_title, fontsize=title_font_size, y=1.05)
         elif self.src_name is not None:
-            fig.suptitle("{s} {l}-{u}keV Aggregate Lightcurve".format(s=self.src_name,
-                                                                      l=self.energy_bounds[0].to('keV').value,
-                                                                      u=self.energy_bounds[1].to('keV').value),
-                         fontsize=title_font_size, y=1.05)
+            fig.suptitle(
+                "{s} {l}-{u}keV Aggregate Lightcurve".format(
+                    s=self.src_name, l=self.energy_bounds[0].to("keV").value, u=self.energy_bounds[1].to("keV").value
+                ),
+                fontsize=title_font_size,
+                y=1.05,
+            )
         else:
-            fig.suptitle("{l}-{u}keV Aggregate Lightcurve".format(l=self.energy_bounds[0].to('keV').value,
-                                                                  u=self.energy_bounds[1].to('keV').value),
-                         fontsize=title_font_size, y=1.05)
+            fig.suptitle(
+                "{l}-{u}keV Aggregate Lightcurve".format(
+                    l=self.energy_bounds[0].to("keV").value, u=self.energy_bounds[1].to("keV").value
+                ),
+                fontsize=title_font_size,
+                y=1.05,
+            )
 
         return axes_dict, fig
 
-    def view(self, figsize: tuple = (14, 6), inst: str = None, custom_title: str = None, label_font_size: int = 15,
-             title_font_size: int = 18, inst_cmap: str = 'viridis', y_lims: Quantity = None,
-             time_chunk_ids: Union[int, List[int]] = None, yscale: str = 'linear', fracexp_corr: bool = False,
-             show_legend: bool = True, alpha: float = 0.8, interval_start: Union[Quantity, Time, datetime] = None,
-             interval_end: Union[Quantity, Time, datetime] = None, over_run: bool = True,
-             one_tick_per_chunk: Union[bool, List[bool], np.ndarray] = False):
+    def view(
+        self,
+        figsize: tuple = (14, 6),
+        inst: str = None,
+        custom_title: str = None,
+        label_font_size: int = 15,
+        title_font_size: int = 18,
+        inst_cmap: str = "viridis",
+        y_lims: Quantity = None,
+        time_chunk_ids: int | list[int] = None,
+        yscale: str = "linear",
+        fracexp_corr: bool = False,
+        show_legend: bool = True,
+        alpha: float = 0.8,
+        interval_start: Quantity | Time | datetime = None,
+        interval_end: Quantity | Time | datetime = None,
+        over_run: bool = True,
+        one_tick_per_chunk: bool | list[bool] | np.ndarray = False,
+    ) -> None:
         """
         This method creates a combined visualisation of all the light curves associated with this object (apart from
         when you specify a single instrument, then it uses all the light curves from that instrument). The data are
@@ -2276,9 +2539,24 @@ class AggregateLightCurve(BaseAggregateProduct):
         # Create figure object
         fig = plt.figure(figsize=figsize)
 
-        ax_dict, fig = self.get_view(fig, inst, custom_title, label_font_size, title_font_size, inst_cmap, y_lims,
-                                     time_chunk_ids, yscale, fracexp_corr, show_legend, alpha, interval_start,
-                                     interval_end, over_run, one_tick_per_chunk)
+        ax_dict, fig = self.get_view(
+            fig,
+            inst,
+            custom_title,
+            label_font_size,
+            title_font_size,
+            inst_cmap,
+            y_lims,
+            time_chunk_ids,
+            yscale,
+            fracexp_corr,
+            show_legend,
+            alpha,
+            interval_start,
+            interval_end,
+            over_run,
+            one_tick_per_chunk,
+        )
 
         # plt.tight_layout()
         # Display the plot

@@ -261,9 +261,9 @@ class BaseSource:
             self._name = name.replace(" ", "").replace("_", "-")
             if len(self._name) == 0 or not all(c.isascii() and (c.isalnum() or c in "+-.") for c in self._name):
                 raise ValueError(
-                    f"The source name '{name}' contains disallowed characters (such as brackets or special "
-                    f"characters). Only ASCII alphanumeric characters, spaces, underscores, '+', '-', and '.' "
-                    f"are permitted."
+                    f"The source name '{name}' contains disallowed characters (such as brackets, em-dashes/en-dashes, "
+                    f"or other special characters). Only ASCII alphanumeric characters, spaces, underscores, '+', "
+                    f"'-', and '.' are permitted."
                 )
         else:
             self._name = coord_to_name(self.ra_dec)
@@ -667,9 +667,7 @@ class BaseSource:
         # Peaks don't really have any meaning for the BaseSource class, but we initialize the variable here anyway.
         self._use_peak: bool = True
         # Here we set up storage structures for peak coordinates - though they may never be filled.
-        self._peaks: dict[str, dict[str, dict | None]] = {
-            tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes
-        }
+        self._peaks: dict[str, dict[str, Any]] = {tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes}
         self._peaks_near_edge: dict[str, dict[str, dict | None]] = {
             tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes
         }
@@ -796,31 +794,42 @@ class BaseSource:
             {telescope: {obs_id: {instrument: {'OBS_MODE': ..., 'DATAMODE': ..., 'SUBMODE': ...}}}}.
         :rtype: dict
         """
+        # These are the three standard FITS header keywords across X-ray missions that describe the observation,
+        #  data, and instrument sub-modes
         mode_keys = ("OBS_MODE", "DATAMODE", "SUBMODE")
         modes: dict[str, dict[str, dict[str, dict[str, str | None]]]] = {}
+
+        # Iterate through every telescope, ObsID, and instrument associated with this source
         for tel in self.instruments:
             modes[tel] = {}
             for obs_id in self.instruments[tel]:
                 modes[tel][obs_id] = {}
                 for inst in self.instruments[tel][obs_id]:
+                    # Initialise all three mode keys to None in case an event list or specific header keyword is absent
                     inst_modes: dict[str, str | None] = dict.fromkeys(mode_keys, None)
+                    # Retrieve the associated EventList product; for missions where instrument event lists are stored
+                    #  combined (such as eROSITA), look up the 'combined' instrument key
                     evts = self.get_products(
                         "events",
                         obs_id=obs_id,
                         inst="combined" if COMBINED_INSTS[tel] else inst,
                         telescope=tel,
                     )
-                    if len(evts) > 0:
+                    if len(evts) > 0 and isinstance(evts[0], EventList):
                         evt = evts[0]
+                        # First check the primary FITS header of the event list for each mode keyword
                         hdr = evt.header
                         for k in mode_keys:
                             if k in hdr:
                                 inst_modes[k] = hdr[k]
+                        # If any mode keywords were not found in the primary header, fall back to the EVENTS table
+                        #  HDU header
                         if any(inst_modes[k] is None for k in mode_keys):
                             evt_hdr = evt.event_header
                             for k in mode_keys:
                                 if inst_modes[k] is None and k in evt_hdr:
                                     inst_modes[k] = evt_hdr[k]
+                        # Clear any cached event data from memory once the headers have been read
                         del evt.data
                     modes[tel][obs_id][inst] = inst_modes
         return modes
@@ -864,7 +873,7 @@ class BaseSource:
         return deepcopy(self._regions)
 
     @property
-    def interloper_regions(self) -> dict[str, list[Region]]:
+    def interloper_regions(self) -> dict[str, Any]:
         """
         Property getter for the interloper regions associated with this particular source, flattened across ObsIDs
         for each telescope.
@@ -5107,6 +5116,9 @@ class BaseSource:
             m_prod for m_prod in filt_matched_prods if (m_prod.central_coord == self.default_coord).all()
         ]
 
+        # Spectra can be grouped either by minimum signal-to-noise or by minimum counts (not both simultaneously);
+        #  when min_sn is specified, clear min_counts to None so it matches how AnnularSpectra stores grouping settings,
+        #  and cast the non-None grouping parameters to their expected numeric types
         if min_sn is not None:
             min_counts = None
         over_sample = int(over_sample) if over_sample is not None else None
@@ -5689,10 +5701,7 @@ class BaseSource:
 
         inter_regs = self.interloper_regions[telescope]
         crossover = np.array(
-            [
-                region.intersection(r).to_pixel(im.radec_wcs).to_mask().data.sum() != 0
-                for r in inter_regs
-            ]
+            [region.intersection(r).to_pixel(im.radec_wcs).to_mask().data.sum() != 0 for r in inter_regs]
         )
 
         # TODO Should this really return None?
