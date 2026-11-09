@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 9:50 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/9/26, 12:24 PM. Copyright (c) The Contributors.
 """
 This module implements global XSPEC spectral fitting functions for XGA sources and samples, including both
 dedicated convenience functions for common models (e.g. single_temp_apec, power_law) and the generic
@@ -1860,7 +1860,8 @@ def general_model_fit(
     par_lookup = {p["par_key"]: p for p in flat_pars}
     valid_par_keys = list(par_lookup.keys())
 
-    # Validate user-supplied parameter override dictionaries (start_pars, freeze_pars, link_pars)
+    # Validate user-supplied parameter override dictionaries (start_pars, freeze_pars, link_pars), ensuring each is a
+    #  dictionary whose keys correspond to valid disambiguated parameter names in the parsed XSPEC model
     if start_pars is not None:
         if not isinstance(start_pars, dict):
             raise TypeError("'start_pars' must be a dictionary mapping parameter names to starting values, or None.")
@@ -1880,6 +1881,7 @@ def general_model_fit(
                 f"Unrecognised parameter key(s) in 'freeze_pars' for model '{clean_model}': "
                 f"{', '.join(unknown_freeze)}. Valid parameter keys are: {', '.join(valid_par_keys)}."
             )
+        # Every freeze override value must be a boolean (True to freeze the parameter, False to thaw it)
         for k, v in freeze_pars.items():
             if not isinstance(v, (bool, np.bool_)):
                 raise TypeError(f"Freeze setting for parameter '{k}' in 'freeze_pars' must be a boolean.")
@@ -1893,6 +1895,7 @@ def general_model_fit(
                 f"Unrecognised parameter key(s) in 'link_pars' for model '{clean_model}': "
                 f"{', '.join(unknown_link)}. Valid parameter keys are: {', '.join(valid_par_keys)}."
             )
+        # Every link override value must be a boolean (True to tie the parameter across spectra, False to untie it)
         for k, v in link_pars.items():
             if not isinstance(v, (bool, np.bool_)):
                 raise TypeError(f"Link setting for parameter '{k}' in 'link_pars' must be a boolean.")
@@ -1905,15 +1908,20 @@ def general_model_fit(
         resolved_nh_indices = auto_nh_to_zero
     elif isinstance(nh_to_zero, list):
         resolved_nh_indices = []
+        # Each list entry can be either a disambiguated parameter key string (e.g. 'nH' or 'nH_1') or a 1-based
+        #  integer XSPEC parameter index; validate and convert all entries to 1-based integer indices for TCL
         for entry in nh_to_zero:
             if isinstance(entry, str):
+                # Look up the parameter name in the model's parsed parameter dictionary to get its 1-based index
                 if entry not in par_lookup:
                     raise ValueError(
                         f"Parameter '{entry}' in 'nh_to_zero' is not in model '{clean_model}'. "
                         f"Valid parameter keys are: {', '.join(valid_par_keys)}."
                     )
                 resolved_nh_indices.append(par_lookup[entry]["par_idx"])
+            # Note: bool is a subclass of int in Python, so we explicitly exclude booleans here
             elif isinstance(entry, (int, np.integer)) and not isinstance(entry, bool):
+                # Validate that the 1-based integer index falls within the total number of parameters in the model
                 idx_val = int(entry)
                 if idx_val < 1 or idx_val > len(flat_pars):
                     raise ValueError(
@@ -2040,6 +2048,8 @@ def general_model_fit(
                             f"If a non-scalar Quantity is passed in 'start_pars' for '{par_key}', it must have one "
                             f"entry for each source ({len(raw_val)} supplied for {len(sources)} sources)."
                         )
+                    # Convert each source's Quantity element to XSPEC's native unit, check its hard limits, and store
+                    #  both the raw float (for .xcm script generation) and the Quantity (for fit_conf key generation)
                     for s_idx in range(len(sources)):
                         conv_v = _convert_par_val_to_xspec(raw_val[s_idx], p_meta, par_key)
                         _validate_par_hard_limits(conv_v, p_meta, par_key)
@@ -2048,7 +2058,8 @@ def general_model_fit(
                             Quantity(conv_v, p_unit) if p_unit != u.Unit("") else conv_v
                         )
                 else:
-                    # Scalar Quantity: convert once and broadcast across all sources
+                    # Scalar Quantity: convert and validate once, then broadcast both the raw float and the normalised
+                    #  Quantity across every source in the sample
                     conv_v = _convert_par_val_to_xspec(raw_val, p_meta, par_key)
                     _validate_par_hard_limits(conv_v, p_meta, par_key)
                     fc_val: float | Quantity = Quantity(conv_v, p_unit) if p_unit != u.Unit("") else conv_v
@@ -2062,6 +2073,7 @@ def general_model_fit(
                         f"If a list or array is passed in 'start_pars' for '{par_key}', it must have one "
                         f"entry for each source ({len(raw_val)} supplied for {len(sources)} sources)."
                     )
+                # Convert and validate each element individually for its corresponding source
                 for s_idx in range(len(sources)):
                     elem_val = raw_val[s_idx]
                     conv_v = _convert_par_val_to_xspec(elem_val, p_meta, par_key)
@@ -2071,7 +2083,7 @@ def general_model_fit(
                         Quantity(conv_v, p_unit) if p_unit != u.Unit("") else conv_v
                     )
             else:
-                # Scalar float/int: convert once and broadcast across all sources
+                # Scalar float/int: convert and validate once, then broadcast across all sources
                 conv_v = _convert_par_val_to_xspec(raw_val, p_meta, par_key)
                 _validate_par_hard_limits(conv_v, p_meta, par_key)
                 fc_val_scalar: float | Quantity = Quantity(conv_v, p_unit) if p_unit != u.Unit("") else conv_v

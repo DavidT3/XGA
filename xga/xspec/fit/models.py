@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 9:50 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/9/26, 12:22 PM. Copyright (c) The Contributors.
 """Validation, tokenisation, and parameter inspection utilities for XSPEC model expressions."""
 
 import os
@@ -84,16 +84,19 @@ def _xspec_unit_to_astropy(raw_unit: str) -> tuple[Unit, bool]:
     :return: A tuple of (astropy Unit object, boolean indicating whether the unit was recognised).
     :rtype: Tuple[Unit, bool]
     """
+    # Strip surrounding whitespace and check our curated lookup table of non-standard XSPEC unit notations first
     cleaned = raw_unit.strip()
     if cleaned in _XSPEC_UNIT_MAP:
         return Unit(_XSPEC_UNIT_MAP[cleaned]), True
 
     # Strip any trailing parenthetical qualifiers (e.g. 'keV(-th)' or future annotations of that form) before
-    #  asking astropy to parse the unit string.
+    #  checking the lookup table again or asking astropy to parse the unit string.
     stripped_parens = re.sub(r"\([^)]*\)$", "", cleaned).strip()
     if stripped_parens in _XSPEC_UNIT_MAP:
         return Unit(_XSPEC_UNIT_MAP[stripped_parens]), True
 
+    # If the unit wasn't in our explicit map, try parsing both the raw and parenthesis-stripped forms directly
+    #  with Astropy's Unit parser (which handles standard units like 'keV', 'cm^-2', 's', 'Hz', 'deg', etc.).
     for candidate in (cleaned, stripped_parens):
         if not candidate:
             continue
@@ -102,6 +105,8 @@ def _xspec_unit_to_astropy(raw_unit: str) -> tuple[Unit, bool]:
         except ValueError:
             continue
 
+    # Fall back to a dimensionless unit and mark the unit as unrecognised so callers know the raw model.dat string
+    #  used XSPEC-specific notation (such as 'R_g', 'L_Edd', or 'Rsun') rather than a physical unit Astropy knows.
     return Unit(""), False
 
 
@@ -126,15 +131,19 @@ def _parse_xspec_model_dat(model_dat_path: str) -> tuple[dict[str, dict], dict[s
     model_pars: dict[str, list[str]] = {}
     model_units: dict[str, list[Unit]] = {}
 
+    # Return empty lookup dicts gracefully if HEASoft/XSPEC is not installed or model.dat does not exist
     if not os.path.exists(model_dat_path):
         return xspec_models, model_pars, model_units
 
+    # Read all non-empty lines from model.dat, stripping leading/trailing whitespace so we can step through
+    #  each model header and its fixed number of subsequent parameter definition lines by index.
     with open(model_dat_path, encoding="utf-8", errors="replace") as model_file:
         lines = [line.strip() for line in model_file if line.strip()]
 
     line_idx = 0
     num_lines = len(lines)
     while line_idx < num_lines:
+        # Use shlex.split so quoted unit strings (such as " " or "km/s") are kept as single tokens
         hdr_tokens = shlex.split(lines[line_idx])
         # A valid model header line in model.dat has at least 6 tokens:
         #  <model_name> <num_pars> <lo_energy> <hi_energy> <func_name> <model_type> [flags...]
@@ -142,11 +151,14 @@ def _parse_xspec_model_dat(model_dat_path: str) -> tuple[dict[str, dict], dict[s
             line_idx += 1
             continue
 
+        # Extract the canonical XSPEC component name, its lowercase lookup key, the number of explicit parameter
+        #  lines that immediately follow this header in model.dat, and the component type ('add', 'mul', 'con', 'acn')
         xspec_name = hdr_tokens[0]
         model_key = xspec_name.lower()
         num_pars = int(hdr_tokens[1])
         model_type = hdr_tokens[5].lower()
 
+        # Iterate over the num_pars lines immediately following the header line to parse each parameter's definition
         pars_meta: list[dict] = []
         for par_offset in range(1, num_pars + 1):
             if line_idx + par_offset >= num_lines:
@@ -167,7 +179,7 @@ def _parse_xspec_model_dat(model_dat_path: str) -> tuple[dict[str, dict], dict[s
             if is_switch:
                 # Most switch lines are 2 tokens ('$switch 1'), though a few include an empty unit string column
                 #  before the default integer value (e.g. '$lflag " " 1.'), so the default value is always the final
-                #  token on the line.
+                #  token on the line. Switch parameters are dimensionless, have no min/max bounds, and start frozen.
                 default_val = float(par_tokens[-1]) if len(par_tokens) > 1 else 1.0
                 pars_meta.append(
                     {
@@ -186,6 +198,8 @@ def _parse_xspec_model_dat(model_dat_path: str) -> tuple[dict[str, dict], dict[s
                     }
                 )
             elif is_scale and len(par_tokens) < 8:
+                # Short scale/pivot parameter lines have the format '*<name> <unit> <default>' without min/max limit
+                #  columns. They may carry a physical unit (e.g. 'keV'), have no fit bounds, and are always frozen.
                 raw_unit = par_tokens[1].strip() if len(par_tokens) > 1 else ""
                 par_unit, unit_rec = _xspec_unit_to_astropy(raw_unit)
                 default_val = float(par_tokens[2]) if len(par_tokens) > 2 else 1.0
@@ -254,6 +268,7 @@ def _parse_xspec_model_dat(model_dat_path: str) -> tuple[dict[str, dict], dict[s
                 }
             )
 
+        # Store the full component metadata as well as the flat parameter-name and unit lists for fast lookup
         xspec_models[model_key] = {
             "xspec_name": xspec_name,
             "model_type": model_type,
@@ -262,6 +277,7 @@ def _parse_xspec_model_dat(model_dat_path: str) -> tuple[dict[str, dict], dict[s
         model_pars[model_key] = [p["name"] for p in pars_meta]
         model_units[model_key] = [p["unit"] for p in pars_meta]
 
+        # Advance past the header line and all of its explicit parameter lines to the next model block
         line_idx += num_pars + 1
 
     return xspec_models, model_pars, model_units
@@ -426,6 +442,8 @@ def validate_and_parse_model(
     if "".join(tokens) != clean_model:
         raise ValueError(f"Model expression '{model}' could not be cleanly tokenised.")
 
+    # Walk through the token stream to validate parenthesis nesting depth and ensure binary operators ('*' and '+')
+    #  only appear between complete component/sub-expression operands
     depth = 0
     prev_tok: str | None = None
     for tok in tokens:
@@ -439,20 +457,23 @@ def validate_and_parse_model(
                 )
             depth += 1
         elif tok == ")":
+            # Closing parenthesis must match an open group and follow a component name or nested ')'
             depth -= 1
             if depth < 0:
                 raise ValueError(f"Unbalanced closing parenthesis ')' in model expression '{model}'.")
             if prev_tok in ("(", "*", "+"):
                 raise ValueError(f"Empty or incomplete parenthesised group in model expression '{model}'.")
         elif tok in ("*", "+"):
+            # Binary operators cannot appear at the start of the expression or immediately after '(' or another operator
             if prev_tok is None or prev_tok in ("(", "*", "+"):
                 raise ValueError(f"Invalid placement of operator '{tok}' in model expression '{model}'.")
         else:
-            # Component name token
+            # Component name token: must either start the expression or follow '(' or a binary operator
             if prev_tok is not None and prev_tok not in ("(", "*", "+"):
                 raise ValueError(f"Missing operator before component '{tok}' in model expression '{model}'.")
         prev_tok = tok
 
+    # Verify that all opened parentheses were closed and that the expression does not end with a trailing operator
     if depth != 0:
         raise ValueError(f"Unbalanced opening parenthesis '(' in model expression '{model}'.")
     if prev_tok in ("*", "+", "("):
@@ -590,6 +611,9 @@ def validate_and_parse_model(
             )
             par_idx += 1
 
+    # If the model includes redshifted or multiple multiplicative absorption components, warn the user about which
+    #  nH parameter (if any) will automatically receive source.nH and which absorption parameters will be zeroed
+    #  when calculating unabsorbed luminosities
     if extra_abs_nh_keys:
         gal_msg = (
             f"Only '{galactic_nh_assigned_key}' will default to source.nH (and be frozen)"
@@ -762,13 +786,14 @@ def custom_xspec_fit(model: str, norm_scale: bool = True) -> Callable[..., BaseS
     default_link_map: dict[str, bool] = {}
     doc_param_lines: list[str] = []
 
-    # 1. Add start_<par> parameters
+    # 1. Add start_<par> parameters to the synthesised signature, default lookup map, and docstring lines
     for p in user_pars:
         pk = p["par_key"]
         comp = p["component"]
         unit_obj: Unit = p["unit"]
         raw_unit: str = p["raw_unit"]
 
+        # Describe soft and hard bounds for the docstring (switch/scale parameters do not have fit limits)
         if p["hard_min"] is not None and p["hard_max"] is not None:
             lims_desc = (
                 f"soft limits [{p['soft_min']}, {p['soft_max']}], hard limits [{p['hard_min']}, {p['hard_max']}]"
@@ -776,6 +801,8 @@ def custom_xspec_fit(model: str, norm_scale: bool = True) -> Callable[..., BaseS
         else:
             lims_desc = "fixed/switch parameter"
 
+        # Galactic nH and cosmological redshift default to None so general_model_fit automatically substitutes
+        #  source.nH and source.redshift unless the caller explicitly passes an override
         if p["is_galactic_nh"]:
             def_val: Quantity | float | None = None
             ann: Any = float | int | Quantity | list | np.ndarray | None
@@ -792,6 +819,7 @@ def custom_xspec_fit(model: str, norm_scale: bool = True) -> Callable[..., BaseS
                 f"parameter. Default is None, which automatically substitutes source.redshift "
                 f"(model.dat default is {p['default']}, {lims_desc})."
             )
+        # Parameters with a recognised physical unit in model.dat default to an Astropy Quantity in that unit
         elif unit_obj != Unit(""):
             def_val = Quantity(p["default"], unit_obj)
             ann = Quantity | float | int | list | np.ndarray
@@ -800,6 +828,7 @@ def custom_xspec_fit(model: str, norm_scale: bool = True) -> Callable[..., BaseS
                 f"parameter in units convertible to {unit_obj} (default is Quantity({p['default']}, '{unit_obj}'), "
                 f"{lims_desc})."
             )
+        # Dimensionless parameters (or parameters with unrecognised XSPEC unit notation) default to plain floats
         else:
             def_val = float(p["default"])
             ann = float | int | list | np.ndarray
