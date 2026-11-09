@@ -2309,26 +2309,57 @@ class AggregateLightCurve(BaseAggregateProduct):
 
                 # We set the upper and lower y-axis limits based on the maximum and minimum count rates across all
                 #  the lightcurves that are to be plotted, as the y-axis is shared - if the user hasn't specified
-                #  their own y-axis limits
+                #  their own y-axis limits. NaN entries in count_rate_err (which eSASS srctool produces for low-count
+                #  bins) are replaced with zero so bins with finite count_rate still contribute to the y-axis bounds.
                 if y_lims is None and not fracexp_corr:
-                    low_lim = min([np.nanmin(lc.count_rate - lc.count_rate_err) for lc in all_rel_lcs]).value * 0.95
-                    upp_lim = max([np.nanmax(lc.count_rate + lc.count_rate_err) for lc in all_rel_lcs]).value * 1.05
-                elif y_lims is None and fracexp_corr:
                     low_lim = (
-                        min(
-                            [
-                                np.nanmin(lc.count_rate / lc.frac_exp - lc.count_rate_err / lc.frac_exp)
-                                for lc in all_rel_lcs
-                            ]
+                        np.nanmin(
+                            Quantity(
+                                [
+                                    np.nanmin(lc.count_rate - np.nan_to_num(lc.count_rate_err, nan=0.0))
+                                    for lc in all_rel_lcs
+                                ]
+                            )
                         ).value
                         * 0.95
                     )
                     upp_lim = (
-                        max(
-                            [
-                                np.nanmax(lc.count_rate / lc.frac_exp + lc.count_rate_err / lc.frac_exp)
-                                for lc in all_rel_lcs
-                            ]
+                        np.nanmax(
+                            Quantity(
+                                [
+                                    np.nanmax(lc.count_rate + np.nan_to_num(lc.count_rate_err, nan=0.0))
+                                    for lc in all_rel_lcs
+                                ]
+                            )
+                        ).value
+                        * 1.05
+                    )
+                elif y_lims is None and fracexp_corr:
+                    low_lim = (
+                        np.nanmin(
+                            Quantity(
+                                [
+                                    np.nanmin(
+                                        lc.count_rate / lc.frac_exp
+                                        - np.nan_to_num(lc.count_rate_err, nan=0.0) / lc.frac_exp
+                                    )
+                                    for lc in all_rel_lcs
+                                ]
+                            )
+                        ).value
+                        * 0.95
+                    )
+                    upp_lim = (
+                        np.nanmax(
+                            Quantity(
+                                [
+                                    np.nanmax(
+                                        lc.count_rate / lc.frac_exp
+                                        + np.nan_to_num(lc.count_rate_err, nan=0.0) / lc.frac_exp
+                                    )
+                                    for lc in all_rel_lcs
+                                ]
+                            )
                         ).value
                         * 1.05
                     )
