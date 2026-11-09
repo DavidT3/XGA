@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/27/26, 4:40 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 3:56 PM. Copyright (c) The Contributors.
 """This module defines XGA source classes representing specific extended astrophysical sources (e.g. GalaxyCluster)."""
 
 from typing import overload
@@ -647,13 +647,15 @@ class GalaxyCluster(ExtendedSource):
         over_sample: float | None = None,
         stacked_spectra: bool = False,
         fit_conf: str | dict | None = None,
-    ) -> Quantity | dict[str, Quantity]:
+        with_units: bool = False,
+    ) -> dict | np.ndarray | Quantity:
         """
         Important method that will retrieve fit results from the source object. Either for a specific
         parameter of a given region-model combination, or for all of them. If a specific parameter is requested,
         all matching values from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
-        column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
-        of such numpy arrays, with the keys corresponding to parameter names.
+        column 1 is err-, and column 2 is err+), or an equivalent Astropy Quantity if ``with_units=True``. If no
+        parameter is specified, the return will be a dictionary of such numpy arrays (or Quantities), with the
+        keys corresponding to parameter names.
 
         If no model name is supplied, but only one model was fit to the spectrum of interest, then that model
         will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
@@ -683,7 +685,10 @@ class GalaxyCluster(ExtendedSource):
         :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
             and values being the changed values (only values changed-from-default need be included) or a full string
             representation of the fit configuration that is being requested.
+        :param bool with_units: Whether the returned parameter array(s) should be converted to Astropy Quantity
+            objects with their corresponding XSPEC model parameter units attached. Default is False.
         :return: The requested result value, and uncertainties.
+        :rtype: Union[dict, np.ndarray, Quantity]
         """
         return super().get_results(
             outer_radius,
@@ -697,6 +702,7 @@ class GalaxyCluster(ExtendedSource):
             over_sample,
             stacked_spectra,
             fit_conf,
+            with_units,
         )
 
     @overload
