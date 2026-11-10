@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 4:13 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/10/26, 9:57 AM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -104,11 +104,11 @@ class Image(BaseProduct):
         lo_en: Quantity,
         hi_en: Quantity,
         regs: str | list[SkyRegion | PixelRegion] | np.ndarray | dict = "",
-        matched_regs: SkyRegion | PixelRegion | dict = None,
+        matched_regs: SkyRegion | PixelRegion | dict | None = None,
         smoothed: bool = False,
-        smoothed_info: dict | Kernel = None,
-        obs_inst_combs: list[list] = None,
-        telescope: str = None,
+        smoothed_info: dict | Kernel | None = None,
+        obs_inst_combs: list[list] | None = None,
+        telescope: str | None = None,
         allow_negative_vals: bool = False,
         check_exists: bool = True,
     ):
@@ -474,8 +474,8 @@ class Image(BaseProduct):
 
     def _process_regions(
         self,
-        path: str = None,
-        reg_objs: list[PixelRegion | SkyRegion] | np.ndarray | dict = None,
+        path: str | None = None,
+        reg_objs: list[PixelRegion | SkyRegion] | np.ndarray | dict | None = None,
     ) -> dict:
         """
         This internal function just takes the path to a region file and processes it into a form that
@@ -1466,7 +1466,8 @@ class Image(BaseProduct):
         :param Axes ax: The matplotlib axes on which to show the image.
         :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
             the coordinates. Up to two cross-hairs can be plotted, as any more can be visually confusing. If
-            passing two, each row of a quantity is considered to be a separate coordinate pair.
+            passing two, each row of a quantity is considered to be a separate coordinate pair, with the first
+            coordinate pair plotted using solid lines and the second plotted using dashed lines.
         :param np.ndarray mask: Allows the user to pass a numpy mask and view the masked
             data if they so choose.
         :param np.ndarray chosen_points: A numpy array of a chosen point cluster from a hierarchical peak finder.
@@ -1763,7 +1764,8 @@ class Image(BaseProduct):
 
         :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
             the coordinates. Up to two cross-hairs can be plotted, as any more can be visually confusing. If
-            passing two, each row of a quantity is considered to be a separate coordinate pair.
+            passing two, each row of a quantity is considered to be a separate coordinate pair, with the first
+            coordinate pair plotted using solid lines and the second plotted using dashed lines.
         :param np.ndarray mask: Allows the user to pass a numpy mask and view the masked
             data if they so choose.
         :param np.ndarray chosen_points: A numpy array of a chosen point cluster from a hierarchical peak finder.
@@ -1871,7 +1873,8 @@ class Image(BaseProduct):
         :param str save_path: The path (including file name) where you wish to save the view.
         :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
             the coordinates. Up to two cross-hairs can be plotted, as any more can be visually confusing. If
-            passing two, each row of a quantity is considered to be a separate coordinate pair.
+            passing two, each row of a quantity is considered to be a separate coordinate pair, with the first
+            coordinate pair plotted using solid lines and the second plotted using dashed lines.
         :param np.ndarray mask: Allows the user to pass a numpy mask and view the masked
             data if they so choose.
         :param np.ndarray chosen_points: A numpy array of a chosen point cluster from a hierarchical peak finder.
@@ -1956,10 +1959,10 @@ class Image(BaseProduct):
         self,
         figsize: tuple = (7, 7),
         cmap: str = "gnuplot2",
-        reg_save_path: str = None,
-        cross_hair: Quantity = None,
-        radial_bins_pix: Quantity = Quantity(np.array([]), "pix"),
-        back_bin_pix: Quantity = None,
+        reg_save_path: str | None = None,
+        cross_hair: Quantity | None = None,
+        radial_bins_pix: Quantity | np.ndarray = Quantity(np.array([]), "pix"),
+        back_bin_pix: Quantity | np.ndarray | None = None,
     ) -> None:
         """
         This allows for displaying, interacting with, editing, and adding new regions to an image. These can
@@ -1975,12 +1978,17 @@ class Image(BaseProduct):
             None, in which case saving will be disabled.
         :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
             the coordinates. Up to two cross-hairs can be plotted, as any more can be visually confusing. If
-            passing two, each row of a quantity is considered to be a separate coordinate pair.
-        :param Quantity radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
-            only be triggered if a cross_hair coordinate is also specified and contains only one coordinate.
-        :param Quantity back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
-            the background value for a given profile, will only be triggered if a cross_hair coordinate is
-            also specified and contains only one coordinate.
+            passing two, each row of a quantity is considered to be a separate coordinate pair, with the first
+            coordinate pair plotted using solid lines and the second plotted using dashed lines.
+        :param Quantity/np.ndarray radial_bins_pix: Radii (in units of pixels or angular units convertible to
+            degrees) of annuli to plot on top of the image,
+            will only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
+            of the annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
+        :param Quantity/np.ndarray back_bin_pix: The inner and outer radii (in pixel or angular units convertible
+            to degrees) of the annulus used to
+            measure the background value for a given profile, will only be triggered if a cross_hair coordinate is also
+            specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
+            specified, the first will be used as the centre.
         """
         # TODO UPDATE THE DOCSTRING WHEN I HAVE INTEGRATED THIS WITH THE REST OF XGA
         view_inst = self._InteractiveView(self, figsize, cmap, reg_save_path, cross_hair, radial_bins_pix, back_bin_pix)
@@ -1990,9 +1998,9 @@ class Image(BaseProduct):
         self,
         figsize: tuple = (7, 7),
         cmap: str = "gnuplot2",
-        cross_hair: Quantity = None,
-        radial_bins_pix: Quantity = Quantity(np.array([]), "pix"),
-        back_bin_pix: Quantity = None,
+        cross_hair: Quantity | None = None,
+        radial_bins_pix: Quantity | np.ndarray = Quantity(np.array([]), "pix"),
+        back_bin_pix: Quantity | np.ndarray | None = None,
     ) -> None:
         """
         This allows for displaying regions on an image. It also allows for the dynamic adjustment of which regions
@@ -2002,12 +2010,17 @@ class Image(BaseProduct):
         :param str cmap: The colour map to use for displaying the image. Default is gnuplot2.
         :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
             the coordinates. Up to two cross-hairs can be plotted, as any more can be visually confusing. If
-            passing two, each row of a quantity is considered to be a separate coordinate pair.
-        :param Quantity radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
-            only be triggered if a cross_hair coordinate is also specified and contains only one coordinate.
-        :param Quantity back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
-            the background value for a given profile, will only be triggered if a cross_hair coordinate is
-            also specified and contains only one coordinate.
+            passing two, each row of a quantity is considered to be a separate coordinate pair, with the first
+            coordinate pair plotted using solid lines and the second plotted using dashed lines.
+        :param Quantity/np.ndarray radial_bins_pix: Radii (in units of pixels or angular units convertible to
+            degrees) of annuli to plot on top of the image,
+            will only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
+            of the annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
+        :param Quantity/np.ndarray back_bin_pix: The inner and outer radii (in pixel or angular units convertible
+            to degrees) of the annulus used to
+            measure the background value for a given profile, will only be triggered if a cross_hair coordinate is also
+            specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
+            specified, the first will be used as the centre.
         """
         view_inst = self._InteractiveView(self, figsize, cmap, None, cross_hair, radial_bins_pix, back_bin_pix)
         view_inst.dynamic_view()
@@ -2024,10 +2037,10 @@ class Image(BaseProduct):
             phot_prod,
             figsize: tuple = (7, 7),
             cmap: str = "gnuplot2",
-            reg_save_path: str = None,
-            cross_hair: Quantity = None,
-            radial_bins_pix: Quantity = Quantity(np.array([]), "pix"),
-            back_bin_pix: Quantity = None,
+            reg_save_path: str | None = None,
+            cross_hair: Quantity | None = None,
+            radial_bins_pix: Quantity | np.ndarray = Quantity(np.array([]), "pix"),
+            back_bin_pix: Quantity | np.ndarray | None = None,
         ):
             """
             The init of the _InteractiveView class, which enables dynamic viewing of XGA photometric products.
@@ -2040,12 +2053,18 @@ class Image(BaseProduct):
                 None, in which case saving will be disabled.
             :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
                 the coordinates. Up to two cross-hairs can be plotted, as any more can be visually confusing. If
-                passing two, each row of a quantity is considered to be a separate coordinate pair.
-            :param Quantity radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
-                only be triggered if a cross_hair coordinate is also specified and contains only one coordinate.
-            :param Quantity back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
-                the background value for a given profile, will only be triggered if a cross_hair coordinate is
-                also specified and contains only one coordinate.
+                passing two, each row of a quantity is considered to be a separate coordinate pair, with the first
+                coordinate pair plotted using solid lines and the second plotted using dashed lines.
+            :param Quantity/np.ndarray radial_bins_pix: Radii (in units of pixels or angular units convertible to
+                degrees) of annuli to plot on top of the image,
+                will only be triggered if a cross_hair coordinate is also specified, as this acts as the central
+                coordinate of the annuli. If two cross-hair coordinates are specified, the first will be used as the
+                centre.
+            :param Quantity/np.ndarray back_bin_pix: The inner and outer radii (in pixel or angular units convertible
+                to degrees) of the annulus used to
+                measure the background value for a given profile, will only be triggered if a cross_hair coordinate is
+                also specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
+                specified, the first will be used as the centre.
             """
             # Just saving a reference to the photometric object that declared this instance of this class, and
             #  then making a copy of whatever regions are associated with it
@@ -3139,8 +3158,8 @@ class ExpMap(Image):
         gen_cmd: str,
         lo_en: Quantity,
         hi_en: Quantity,
-        obs_inst_combs: list[list] = None,
-        telescope: str = None,
+        obs_inst_combs: list[list] | None = None,
+        telescope: str | None = None,
         check_exists: bool = True,
     ):
         """
@@ -3846,8 +3865,8 @@ class RateMap(Image):
         self,
         source_mask: np.ndarray,
         back_mask: np.ndarray,
-        x_slice_lims: list[int] = None,
-        y_slice_lims: list[int] = None,
+        x_slice_lims: list[int] | None = None,
+        y_slice_lims: list[int] | None = None,
     ) -> Quantity:
         """
         This method uses a user-supplied source and background mask (alongside knowledge of the sensor layout
@@ -4081,7 +4100,7 @@ class PSF(Image):
         stdout_str: str,
         stderr_str: str,
         gen_cmd: str,
-        telescope: str = None,
+        telescope: str | None = None,
         check_exists: bool = True,
     ):
         """
@@ -4251,7 +4270,7 @@ class PSFGrid(BaseAggregateProduct):
         stdout_str: str,
         stderr_str: str,
         gen_cmd: str,
-        telescope: str = None,
+        telescope: str | None = None,
     ):
         """
         The init of the PSFGrid class - a subclass of BaseAggregateProduct that wraps a set of PSFs that have been

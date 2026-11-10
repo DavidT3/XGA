@@ -43,12 +43,13 @@ Alternatively you could use the 'editable' option so that any changes you pull f
     cd XGA
     python -m pip install --editable .
 
-We also provide a Conda lock file in the conda_envs directory (see `conda-lock GitHub README <https://github.com/conda/conda-lock/README.md>`_ on how to install conda-lock), which can be used to create an Anaconda environment with the required dependencies (excepting PyAbel, which has to be installed through pip at this time):
+If using Conda or Mamba, you can create a fresh environment and then install XGA (and its dependencies) via ``pip``:
 
 .. code-block::
-    conda-lock install -n <YOUR ENVIRONMENT NAME GOES HERE>
+
+    conda create -n <YOUR ENVIRONMENT NAME GOES HERE> python=3.12
     conda activate <YOUR ENVIRONMENT NAME GOES HERE>
-    pip install pyabel==0.9
+    pip install xga
 
 .. important::
     For Python 3.10 and earlier, the optional dependency `contextlib-chdir <https://pypi.org/project/contextlib-chdir/>`_ must be installed.

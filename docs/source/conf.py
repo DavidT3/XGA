@@ -1,5 +1,7 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/26/26, 11:29 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/10/26, 11:07 AM. Copyright (c) The Contributors.
+
+"""The configuration file for XGA's documentation - this controls how Sphinx behaves and builds for readthedocs."""
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -15,12 +17,13 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../..'))
+
+sys.path.insert(0, os.path.abspath("../.."))
 
 # -- Extra Setup for XGA -----------------------------------------------------
 
 # This is where XGA stores the configuration file when it generates it initially
-config_path = os.environ.get('XDG_CONFIG_HOME', os.path.join(os.path.expanduser('~'), '.config', 'xga'))
+config_path = os.environ.get("XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config", "xga"))
 
 # Generates the directory structure
 # If this is running on a local machine, then this directory may already exist with populated
@@ -29,28 +32,29 @@ if not os.path.exists(config_path):
     os.makedirs(config_path)
 
     # This is the absolute path of where the config file should live
-    config_file_path = os.path.join(config_path, 'xga.cfg')
-    census_file_path = os.path.join(config_path, 'census.csv')
+    config_file_path = os.path.join(config_path, "xga.cfg")
+    census_file_path = os.path.join(config_path, "census.csv")
     # Finds the current working directory
     current_path = os.getcwd()
     # As this file lives in the docs/source folder, we go two levels up for the absolute path the XGA repo folder
-    xga_path = '/'.join(current_path.split('/')[:-2])
+    xga_path = "/".join(current_path.split("/")[:-2])
 
 # -- Project information -----------------------------------------------------
 
-project = 'X-ray: Generate and Analyse (XGA)'
-copyright = '2026, The Contributors'
-author = 'David J Turner, XGA Team'
+project = "X-ray: Generate and Analyse (XGA)"
+copyright = "2026, The Contributors"
+author = "David J Turner, XGA Team"
 
 # The full version, including alpha/beta/rc tags
 try:
     from importlib.metadata import version as get_version
+
     release = get_version("xga")
     # The short X.Y version
-    version = '.'.join(release.split('.')[:2])
+    version = ".".join(release.split(".")[:2])
 except Exception:
-    version = '0.0.0'
-    release = '0.0.0'
+    version = "0.0.0"
+    release = "0.0.0"
 
 
 # -- General configuration ---------------------------------------------------
@@ -58,39 +62,41 @@ except Exception:
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.autodoc',
-              'sphinx.ext.doctest',
-              'sphinx.ext.intersphinx',
-              'sphinx.ext.todo',
-              'sphinx.ext.coverage',
-              'sphinx.ext.ifconfig',
-              'sphinx.ext.viewcode',
-              'sphinx.ext.autosummary',
-              'sphinx.ext.graphviz',
-              'sphinx.ext.autosectionlabel',
-              'sphinx.ext.napoleon',
-              'nbsphinx',
-              'sphinx.ext.inheritance_diagram',
-              'sphinx.ext.autosummary',
-              'sphinx.ext.mathjax',
-              'sphinx_rtd_theme']
+extensions = [
+    "sphinx.ext.autodoc",
+    "sphinx.ext.doctest",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.todo",
+    "sphinx.ext.coverage",
+    "sphinx.ext.ifconfig",
+    "sphinx.ext.viewcode",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.graphviz",
+    "sphinx.ext.autosectionlabel",
+    "sphinx.ext.napoleon",
+    "nbsphinx",
+    "sphinx.ext.inheritance_diagram",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.mathjax",
+    "sphinx_rtd_theme",
+]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ["_templates"]
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = ['_build', '**.ipynb_checkpoints']
+exclude_patterns = ["_build", "**.ipynb_checkpoints"]
 
-# This should turn off including typehints in the function signatures in autodoc. That information is already in 
+# This should turn off including typehints in the function signatures in autodoc. That information is already in
 #  the docstring and can look extremely confusing
-autodoc_typehints = 'none'
+autodoc_typehints = "none"
 # This will make sure the classes aren't sorted in alphabetical order
-autodoc_member_order = 'bysource'
+autodoc_member_order = "bysource"
 
 # This should make nbsphinx highlight notebooks better
-highlight_language = 'ipython3'
+highlight_language = "ipython3"
 
 
 # -- Options for HTML output -------------------------------------------------
@@ -98,19 +104,15 @@ highlight_language = 'ipython3'
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_rtd_theme'
+html_theme = "sphinx_rtd_theme"
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = ["_static"]
 
 html_logo = "_static/long_xga_logo.png"
 html_theme_options = {
-    'logo_only': True,
-    'display_version': False,
+    "logo_only": True,
+    "display_version": False,
 }
-
-
-autodoc_mock_imports = ["fitsio", 'regions', 'corner', 'emcee', 'abel']
-
