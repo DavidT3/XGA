@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/10/26, 9:14 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/10/26, 11:07 AM. Copyright (c) The Contributors.
 
 """The configuration file for XGA's documentation - this controls how Sphinx behaves and builds for readthedocs."""
 
@@ -116,6 +116,3 @@ html_theme_options = {
     "logo_only": True,
     "display_version": False,
 }
-
-
-# autodoc_mock_imports = ["fitsio", 'regions', 'corner', 'emcee', 'abel']
