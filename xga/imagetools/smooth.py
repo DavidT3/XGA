@@ -346,7 +346,7 @@ def adaptive_smooth(
         widths = np.geomspace(min_size, max_size, num_widths)
         # We also need a boolean array for the csmooth-like approach to flag which pixels have already met the 
         #   target SNR
-        target_met = np.zeros_like(img_pad)
+        target_not_met = np.full_like(cropped_im, True)
 
     # ====== Caches ====== 
     # Stores the "best difference" between kernel SNR and target SNR at each pixel. In 'asmooth', this is the 
@@ -388,7 +388,7 @@ def adaptive_smooth(
             denom_square = convolve_fft(den_base, kernel**2, mask=mask, normalize_kernel=False, boundary=boundary,
                                         fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
                                         normalization_zero_tol=normalization_zero_tol)
-            norm = convolve_fft(weight_pad, kernel, mask=mask, normalize_kernel=norm_kernel, boundary=boundary,
+            norm = convolve_fft(cropped_weight, kernel, mask=mask, normalize_kernel=norm_kernel, boundary=boundary,
                                 fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
                                 normalization_zero_tol=normalization_zero_tol)
         else:
@@ -398,7 +398,7 @@ def adaptive_smooth(
             denom_square = convolve(den_base, kernel**2, mask=mask, normalize_kernel=False, boundary=boundary,
                                     fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
                                     normalization_zero_tol=normalization_zero_tol)
-            norm = convolve(weight_pad, kernel, mask=mask, normalize_kernel=norm_kernel, boundary=boundary,
+            norm = convolve(cropped_weight, kernel, mask=mask, normalize_kernel=norm_kernel, boundary=boundary,
                             fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
                             normalization_zero_tol=normalization_zero_tol)
         denom = np.sqrt(denom_square)
@@ -411,10 +411,10 @@ def adaptive_smooth(
         if method == "csmooth":
             if width != widths[-1]:
                 # Get an array of new pixels that meet the target SNR with a finite result if it is not the last kernel
-                pixels_meeting_target = (snr >= target_snr) & ~target_met & np.isfinite(snr)
+                pixels_meeting_target = (snr >= target_snr) & (target_not_met == True) & np.isfinite(snr)
             else:
                 # Otherwise, use the largest kernel for all pixels that have not yet met the target SNR.
-                pixels_meeting_target = ~target_met
+                pixels_meeting_target = target_not_met == True
 
             # Update the final image, and other holding arrays (e.g. kernel_sizes)
             final_image[pixels_meeting_target] = num[pixels_meeting_target] / norm[pixels_meeting_target]
@@ -422,7 +422,7 @@ def adaptive_smooth(
             final_snrs[pixels_meeting_target] = snr[pixels_meeting_target]
 
             # Update the target_met array to mark which pixels have met their goal.
-            target_met[pixels_meeting_target] = True
+            target_not_met[pixels_meeting_target] = False
 
         # Now handle for the asmooth case (taking the kernel with width closest to the target SNR)
         else:
