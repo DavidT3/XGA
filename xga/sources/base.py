@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 3:15 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 4:33 PM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
@@ -456,9 +456,18 @@ class BaseSource:
         # NOTE that this attribute has changed considerably since the pre-multi mission version of XGA, as the
         #  instruments attribute has been consolidated into it - plus there is an extra level for telescope names.
         #  Because _initial_products already populates individual instrument keys for COMBINED_INSTS telescopes on
-        #  all surviving ObsIDs, we can uniformly extract every non-'combined' key present in self._products[t][o].
+        #  all surviving ObsIDs, we can extract every non-'combined' key present in self._products[t][o], while
+        #  retaining a defensive non-empty dict check for non-COMBINED_INSTS telescopes (where each instrument entry
+        #  must contain at least its event list).
         self._obs = {
-            t: {o: [i for i in self._products[t][o] if i != "combined"] for o in self._products[t]}
+            t: {
+                o: [
+                    i
+                    for i in self._products[t][o]
+                    if i != "combined" and (COMBINED_INSTS[t] or len(self._products[t][o][i]) != 0)
+                ]
+                for o in self._products[t]
+            }
             for t in self._products
         }
 
@@ -1449,37 +1458,40 @@ class BaseSource:
                 # Attitude file is a special type of data product, we shouldn't ever deal with it directly so it
                 #  doesn't have a product object. It also isn't guaranteed to be a separate thing for all
                 #  telescopes, so we do check that the configuration file actually has an entry for it.
-                if "attitude_file" in rel_sec and (
-                    "combined" not in obs_dict[tel][obs_id] or "attitude" not in obs_dict[tel][obs_id]["combined"]
-                ):
-                    att_path = rel_sec["attitude_file"].format(obs_id=obs_id)
-                    is_att_remote = split_protocol(att_path)[0] is not None
-                    att_prod = MissionAttitude(
-                        att_path,
-                        obs_id,
-                        "combined",
-                        "",
-                        "",
-                        "",
-                        telescope=tel,
-                        check_exists=False if is_att_remote else True,
-                    )
+                # Track whether an attitude file defined on this iteration is shared across the whole ObsID
+                #  ("attitude_file", stored under "combined") or specific to one instrument ("{inst}_attitude_file")
+                shared_att = False
+                if "attitude_file" in rel_sec:
+                    shared_att = True
+                    if "combined" not in obs_dict[tel][obs_id] or "attitude" not in obs_dict[tel][obs_id]["combined"]:
+                        att_path = rel_sec["attitude_file"].format(obs_id=obs_id)
+                        is_att_remote = split_protocol(att_path)[0] is not None
+                        att_prod = MissionAttitude(
+                            att_path,
+                            obs_id,
+                            "combined",
+                            "",
+                            "",
+                            "",
+                            telescope=tel,
+                            check_exists=False if is_att_remote else True,
+                        )
 
-                    # If it is remote but doesn't exist locally, we add it to the download queue
-                    if is_att_remote and not os.path.exists(att_path):
-                        to_download.append(att_prod)
-                        # Remote files are downloaded into a specific subdirectory of the telescope directory
-                        save_dir = os.path.join(OUTPUT, tel, "remote-data-download", obs_id) + os.sep
-                        to_download_save_paths.append(save_dir)
+                        # If it is remote but doesn't exist locally, we add it to the download queue
+                        if is_att_remote and not os.path.exists(att_path):
+                            to_download.append(att_prod)
+                            # Remote files are downloaded into a specific subdirectory of the telescope directory
+                            save_dir = os.path.join(OUTPUT, tel, "remote-data-download", obs_id) + os.sep
+                            to_download_save_paths.append(save_dir)
 
-                    # Makes sure there is a combined entry if there wasn't already
-                    obs_dict[tel][obs_id].setdefault("combined", {})
-                    obs_dict[tel][obs_id]["combined"]["attitude"] = att_prod
+                        # Makes sure there is a combined entry if there wasn't already
+                        obs_dict[tel][obs_id].setdefault("combined", {})
+                        obs_dict[tel][obs_id]["combined"]["attitude"] = att_prod
+                    else:
+                        att_prod = obs_dict[tel][obs_id]["combined"]["attitude"]
                 # Here we deal with a hypothetical case where different instruments have different attitude files
                 #  (though this isn't something we've actually come across yet)
                 elif f"{inst}_attitude_file" in rel_sec:
-                    obs_dict[tel][obs_id].setdefault(inst, {})
-
                     temp_pth = rel_sec[f"{inst}_attitude_file"]
                     att_path = temp_pth.format(obs_id=obs_id)
                     is_att_remote = split_protocol(att_path)[0] is not None
@@ -1493,10 +1505,17 @@ class BaseSource:
                         # Remote files are downloaded into a specific subdirectory of the telescope directory
                         save_dir = os.path.join(OUTPUT, tel, "remote-data-download", obs_id) + os.sep
                         to_download_save_paths.append(save_dir)
-
-                    obs_dict[tel][obs_id][inst]["attitude"] = att_prod
                 else:
                     att_prod = None
+
+                # If a local attitude file is missing or unusable, stop processing before loading badpix/mask/default
+                #  products: discard the whole ObsID if the attitude file is shared, or just this instrument otherwise
+                if att_prod is not None and not att_prod.usable:
+                    if shared_att:
+                        del obs_dict[tel][obs_id]
+                    else:
+                        obs_dict[tel][obs_id].pop(inst, None)
+                    continue
 
                 # Some missions require a path to the badpixel file to be passed in whenever their backend-software
                 #  product generation functions are called, and some just access that information from an event
@@ -1515,6 +1534,10 @@ class BaseSource:
                         # Remote files are downloaded into a specific subdirectory of the telescope directory
                         save_dir = os.path.join(OUTPUT, tel, "remote-data-download", obs_id) + os.sep
                         to_download_save_paths.append(save_dir)
+
+                    if not badpix_prod.usable and not is_bp_remote:
+                        obs_dict[tel][obs_id].pop(inst, None)
+                        continue
                 else:
                     badpix_prod = None
 
@@ -1541,44 +1564,47 @@ class BaseSource:
                         # Remote files are downloaded into a specific subdirectory of the telescope directory
                         save_dir = os.path.join(OUTPUT, tel, "remote-data-download", obs_id) + os.sep
                         to_download_save_paths.append(save_dir)
+
+                    if not mask_prod.usable and not is_mask_remote:
+                        obs_dict[tel][obs_id].pop(inst, None)
+                        continue
                 else:
                     mask_prod = None
 
-                # If we've gotten to this part of the method we know that the EventList exists and is usable, so
-                #  to proceed to populating the obs_dict we check that the attitude file (if one is meant to
-                #  exist for this telescope) actually exists.
-                if (att_prod is not None and att_prod.usable) or att_prod is None:
-                    # Start off with the events list going in - make sure there is an inst entry first
-                    obs_dict[tel][obs_id].setdefault(inst, {})
-                    obs_dict[tel][obs_id][inst]["events"] = evt_list
+                # If we've gotten to this part of the method we know that the EventList and any required local
+                #  housekeeping files (attitude, badpix, maskfile) exist and are usable (or are queued for remote
+                #  download and will be validated in the post-download loop below), so we can populate obs_dict.
+                obs_dict[tel][obs_id].setdefault(inst, {})
+                obs_dict[tel][obs_id][inst]["events"] = evt_list
 
-                    if load_products:
-                        # Dictionary updated with derived product names
-                        map_ret = map(read_default_products, en_comb)
-                        obs_dict[tel][obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
+                if load_products:
+                    # Dictionary updated with derived product names (only adding energy-bound dictionaries that
+                    #  actually contain at least one pre-generated product)
+                    map_ret = map(read_default_products, en_comb)
+                    obs_dict[tel][obs_id][inst].update(
+                        {gen_return[0]: gen_return[1] for gen_return in map_ret if len(gen_return[1]) != 0}
+                    )
 
-                    # Now we'll do a couple of housekeeping files
-                    if badpix_prod is not None:
-                        obs_dict[tel][obs_id][inst]["badpix"] = badpix_prod
-                    if mask_prod is not None:
-                        obs_dict[tel][obs_id][inst]["maskfile"] = mask_prod
+                # Store any per-instrument housekeeping files (shared ObsID-level attitude was already stored
+                #  under the "combined" key above)
+                if not shared_att and att_prod is not None:
+                    obs_dict[tel][obs_id][inst]["attitude"] = att_prod
+                if badpix_prod is not None:
+                    obs_dict[tel][obs_id][inst]["badpix"] = badpix_prod
+                if mask_prod is not None:
+                    obs_dict[tel][obs_id][inst]["maskfile"] = mask_prod
 
-                    # The path to the region file, as specified in the configuration file, is added to the returned
-                    #  dictionary if it exists - we'll make a copy in _load_regions because the BaseSource init
-                    #  hasn't created the directory at this stage.
-                    # If the load_regions argument is False, then we aren't going to load regions even if the
-                    #  file path does exist - this can be useful for NullSource declarations, which don't care
-                    #  about regions
-                    if load_regions and os.path.exists(reg_file):
-                        # Regions dictionary updated with path to local region file, if it exists
-                        reg_dict[tel][obs_id] = reg_file
-                    else:
-                        reg_dict[tel][obs_id] = None
-
-                # Don't want to include the ObsID if there isn't an attitude file when there
-                #  is meant to be one
-                elif att_prod is not None and not att_prod.usable:
-                    del obs_dict[tel][obs_id]
+                # The path to the region file, as specified in the configuration file, is added to the returned
+                #  dictionary if it exists - we'll make a copy in _load_regions because the BaseSource init
+                #  hasn't created the directory at this stage.
+                # If the load_regions argument is False, then we aren't going to load regions even if the
+                #  file path does exist - this can be useful for NullSource declarations, which don't care
+                #  about regions
+                if load_regions and os.path.exists(reg_file):
+                    # Regions dictionary updated with path to local region file, if it exists
+                    reg_dict[tel][obs_id] = reg_file
+                else:
+                    reg_dict[tel][obs_id] = None
 
             # Cleans any observations that don't have at least one instrument associated with them
             obs_dict[tel] = {o: v for o, v in obs_dict[tel].items() if len(v) != 0}
@@ -1622,12 +1648,21 @@ class BaseSource:
                                 #  "combined" entry for COMBINED_INSTS telescopes whose single event list lives
                                 #  under "combined") cannot be used even if pre-generated images/expmaps exist
                                 invalidate_inst = True
-                        # Nested dictionary entries (e.g. energy-bound keyed "image" and "expmap" dicts): remove
-                        #  only the specific energy-bound product that failed usability validation
+                        # Nested dictionary entries (e.g. energy-bound keyed dicts such as "bound_0.5-2.0" holding
+                        #  pre-generated "image", "expmap", and "ratemap" products): remove only the specific
+                        #  sub-product that failed usability validation
                         elif isinstance(prod, dict):
-                            for bound_key in list(prod):
-                                if not prod[bound_key].usable:
-                                    del obs_dict[tel][obs_id][inst][prod_type][bound_key]
+                            for sub_prod_type in list(prod):
+                                if not prod[sub_prod_type].usable:
+                                    del obs_dict[tel][obs_id][inst][prod_type][sub_prod_type]
+                            # A RateMap is constructed with check_exists=False before remote downloads run, so its
+                            #  own .usable flag remains True even if its underlying image or expmap failed to
+                            #  download and was removed above; drop the ratemap if either component is now missing
+                            if "ratemap" in prod and ("image" not in prod or "expmap" not in prod):
+                                del obs_dict[tel][obs_id][inst][prod_type]["ratemap"]
+                            # If no valid products remain for this energy bound, remove the empty bound_<lo>-<hi> key
+                            if len(obs_dict[tel][obs_id][inst][prod_type]) == 0:
+                                del obs_dict[tel][obs_id][inst][prod_type]
 
                     # If a foundational file for this instrument failed, wipe any remaining products (such as
                     #  images or exposure maps) so the instrument entry is completely empty
