@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 11:07 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 12:56 PM. Copyright (c) The Contributors.
 
 from typing import Literal
 
@@ -333,7 +333,7 @@ def adaptive_smooth(
     if method not in ["csmooth", "asmooth"]:
         raise ValueError(
             f"Smoohting method '{method}' is not a valid adaptive smoothing method. Please use 'asmooth' "
-            "for XMM-SAS like smoothing, or 'csmooth' for Ciao-like smoothing."
+            "for XMM-SAS like smoothing, or 'csmooth' for CIAO-like smoothing."
         )
 
     # Now we figure out what exactly needs to be smoothed.
