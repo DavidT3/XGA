@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 3:25 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 5:51 PM. Copyright (c) The Contributors.
 
 """Tests for BaseSource observation assignment, observation mode inspection, and existing product loading."""
 
@@ -13,6 +13,7 @@ from astropy.units import Quantity
 from xga.exceptions import NoProductAvailableError
 from xga.generate.esass import evtool_image, srctool_spectrum
 from xga.products.events import EventList
+from xga.products.housekeeping import MissionAttitude
 from xga.products.phot import Image
 from xga.products.spec import Spectrum
 from xga.sources.base import BaseSource
@@ -345,6 +346,120 @@ class TestBaseSource(unittest.TestCase):
         self.assertEqual(xmm_only_src.telescopes, ["xmm"])
         self.assertNotIn("erass", xmm_only_src.obs_ids)
         self.assertNotIn("erass", xmm_only_src.instruments)
+
+        # 4. Shared ObsID-level attitude failure on a non-COMBINED_INSTS telescope: simulate a missing/corrupt
+        #    shared attitude file for XMM ObsID "0401040101". Because XMM defines "attitude_file" at the ObsID level
+        #    (shared across pn, mos1, and mos2 and stored under the "combined" key), _initial_products must drop the
+        #    entire "0401040101" ObsID on the first instrument ("pn") and skip the remaining instruments for that
+        #    ObsID without raising a KeyError, while leaving the other XMM ObsIDs and all eRASS tiles intact.
+        def fail_single_xmm_att(
+            path: str,
+            obs_id: str,
+            instrument: str,
+            stdout_str: str = "",
+            stderr_str: str = "",
+            gen_cmd: str = "",
+            telescope: str | None = None,
+            check_exists: bool = True,
+        ) -> MissionAttitude:
+            att = MissionAttitude(
+                path,
+                obs_id=obs_id,
+                instrument=instrument,
+                stdout_str=stdout_str,
+                stderr_str=stderr_str,
+                gen_cmd=gen_cmd,
+                telescope=telescope,
+                check_exists=check_exists,
+            )
+            if telescope == "xmm" and obs_id == "0401040101":
+                att._usable = False
+            return att
+
+        # Patch MissionAttitude within xga.sources.base so only XMM ObsID 0401040101's shared attitude file fails
+        with (
+            patch("xga.sources.base.MissionAttitude", side_effect=fail_single_xmm_att),
+            warnings.catch_warnings(record=True) as caught,
+        ):
+            warnings.simplefilter("always")
+            att_fail_src = BaseSource(
+                ra_val,
+                dec_val,
+                redshift=z_val,
+                name=name_val,
+                search_distance={"erass": Quantity(3.6, "deg")},
+                load_products=False,
+            )
+
+        # Verify that the warning reports all three instruments of 0401040101 as removed, and that 0401040101 is
+        #  completely absent from obs_ids["xmm"] and instruments["xmm"] while the other XMM ObsIDs remain
+        removed_warns = [str(w.message) for w in caught if removed_prefix in str(w.message)]
+        self.assertEqual(len(removed_warns), 1)
+        self.assertIn("xmm: 0401040101(pn, mos1, mos2)", removed_warns[0])
+        self.assertNotIn("erass:", removed_warns[0])
+        self.assertEqual(set(att_fail_src.obs_ids["xmm"]), EXPECTED_XMM_OBS - {"0401040101"})
+        self.assertNotIn("0401040101", att_fail_src.instruments["xmm"])
+
+        # 5. Single-instrument failure on a non-COMBINED_INSTS telescope + empty energy-bound dict filtering:
+        #    simulate a missing/corrupt event list for only XMM ObsID "0401040101" instrument "mos1" with
+        #    load_products=True. Because each XMM camera has its own event list, only "mos1" should be dropped and
+        #    warned while "pn" and "mos2" (which also reuse the shared ObsID-level attitude file loaded on "pn")
+        #    survive. Additionally, because the test archive has no pre-generated default images/expmaps in its
+        #    processed_data directories, read_default_products returns empty dicts for each energy bound, which
+        #    _initial_products must filter out rather than leaving empty "bound_<lo>-<hi>" keys in _products.
+        def fail_single_xmm_inst_evt(
+            path: str,
+            obs_id: str,
+            instrument: str,
+            stdout_str: str = "",
+            stderr_str: str = "",
+            gen_cmd: str = "",
+            telescope: str | None = None,
+            check_exists: bool = True,
+        ) -> EventList:
+            evt = EventList(
+                path,
+                obs_id=obs_id,
+                instrument=instrument,
+                stdout_str=stdout_str,
+                stderr_str=stderr_str,
+                gen_cmd=gen_cmd,
+                telescope=telescope,
+                check_exists=check_exists,
+            )
+            if telescope == "xmm" and obs_id == "0401040101" and instrument == "mos1":
+                evt._usable = False
+            return evt
+
+        # Patch EventList within xga.sources.base and run with load_products=True to exercise read_default_products
+        with (
+            patch("xga.sources.base.EventList", side_effect=fail_single_xmm_inst_evt),
+            warnings.catch_warnings(record=True) as caught,
+        ):
+            warnings.simplefilter("always")
+            inst_fail_src = BaseSource(
+                ra_val,
+                dec_val,
+                redshift=z_val,
+                name=name_val,
+                search_distance={"erass": Quantity(3.6, "deg")},
+                load_products=True,
+            )
+
+        # Verify that only 0401040101(mos1) is reported in the removal warning, that 0401040101 itself remains in
+        #  obs_ids["xmm"] with ["pn", "mos2"] as its surviving instruments, and that no empty bound_<lo>-<hi>
+        #  dictionaries were added anywhere in _products
+        removed_warns = [str(w.message) for w in caught if removed_prefix in str(w.message)]
+        self.assertEqual(len(removed_warns), 1)
+        self.assertIn("xmm: 0401040101(mos1)", removed_warns[0])
+        self.assertIn("0401040101", inst_fail_src.obs_ids["xmm"])
+        self.assertEqual(inst_fail_src.instruments["xmm"]["0401040101"], ["pn", "mos2"])
+        for tel_prods in inst_fail_src._products.values():
+            for obs_prods in tel_prods.values():
+                for inst_prods in obs_prods.values():
+                    for prod_key, prod_val in inst_prods.items():
+                        if prod_key.startswith("bound_"):
+                            self.assertGreater(len(prod_val), 0)
 
 
 if __name__ == "__main__":
