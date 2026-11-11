@@ -334,7 +334,7 @@ def adaptive_smooth(
     if method not in ["csmooth", "asmooth"]:
         raise ValueError(
             f"Smoohting method '{method}' is not a valid adaptive smoothing method. Please use 'asmooth' "
-            "for XMM-SAS like smoothing, or 'csmooth' for Ciao-like smoothing."
+            "for XMM-SAS like smoothing, or 'csmooth' for CIAO-like smoothing."
         )
 
     # Now we figure out what exactly needs to be smoothed.
