@@ -1,5 +1,9 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 1:46 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 2:06 PM. Copyright (c) The Contributors.
+
+"""XGA submodule that implements methods to create sets of spatially resolved density measurements (e.g. profiles)
+for extended X-ray sources.
+"""
 
 from warnings import warn
 
@@ -52,16 +56,16 @@ def _dens_setup(
     hi_en: Quantity,
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: int | float = None,
-    over_sample: float = None,
-    obs_id: dict[str, str] | dict[str, list] = None,
-    inst: dict[str, str] | dict[str, list] = None,
-    conv_temp: Quantity | dict[str, Quantity] = None,
-    conv_outer_radius: Quantity = "r500",
+    min_sn: int | float | None = None,
+    over_sample: float | None = None,
+    obs_id: dict[str, str] | dict[str, list] | None = None,
+    inst: dict[str, str] | dict[str, list] | None = None,
+    conv_temp: Quantity | dict[str, Quantity] | None = None,
+    conv_outer_radius: Quantity | str = "r500",
     conv_inner_radius: str | Quantity = Quantity(0, "arcsec"),
     num_cores: int = NUM_CORES,
     stacked_spectra: bool = False,
-    telescope: str | list[str] = None,
+    telescope: str | list[str] | None = None,
     timeout: Quantity = Quantity(300, "s"),
 ) -> tuple[
     ClusterSample | list,
@@ -222,7 +226,7 @@ def _dens_setup(
             "If a value is supplied for 'obs_id', then a value must be supplied for 'inst' as well, and vice versa."
         )
 
-    if not all([type(src) == GalaxyCluster for src in sources]):
+    if not all([type(src) is GalaxyCluster for src in sources]):
         raise TypeError("Only GalaxyCluster sources can be passed to the density profile methods.")
 
     # Triggers an exception if the abundance table name passed isn't recognized
@@ -235,10 +239,10 @@ def _dens_setup(
     # ratio associated.
     try:
         e_to_p_ratio = NHC[abund_table]
-    except KeyError:
+    except KeyError as err:
         raise NotImplementedError(
             "That is an acceptable abundance table, but I haven't added the conversion factor to the dictionary yet"
-        )
+        ) from err
 
     # Setting up the temperatures used for the calculation of the emissivity-to-density conversion factor
     if conv_temp is not None:
@@ -410,8 +414,8 @@ def _run_sb(
     psf_iter: int,
     pix_step: int,
     min_snr: float,
-    obs_id: str = None,
-    inst: str = None,
+    obs_id: str | None = None,
+    inst: str | None = None,
 ) -> SurfaceBrightness1D:
     """
     An internal function for the Surface Brightness based density functions, which just quickly
@@ -472,12 +476,12 @@ def _run_sb(
             int_mask = src.get_interloper_mask(telescope=telescope, obs_id=obs_id)
             comb = False
 
-    except NoProductAvailableError:
+    except NoProductAvailableError as err:
         raise NoProductAvailableError(
             "The RateMap required to measure the density profile has not "
             "been generated yet, possibly because you haven't generated "
             "PSF corrected image yet."
-        )
+        ) from err
 
     if use_peak:
         centre = src.peak
@@ -552,18 +556,18 @@ def inv_abel_fitted_model(
     num_samples: int = 10000,
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: int | float = None,
-    over_sample: float = None,
-    obs_id: dict[str, str] | dict[str, list] = None,
-    inst: dict[str, str] | dict[str, list] = None,
-    conv_temp: Quantity | dict[str, Quantity] = None,
-    conv_outer_radius: Quantity = "r500",
+    min_sn: int | float | None = None,
+    over_sample: float | None = None,
+    obs_id: dict[str, str] | dict[str, list] | None = None,
+    inst: dict[str, str] | dict[str, list] | None = None,
+    conv_temp: Quantity | dict[str, Quantity] | None = None,
+    conv_outer_radius: Quantity | str = "r500",
     conv_inner_radius: Quantity = Quantity(0, "arcsec"),
-    inv_abel_method: str = None,
+    inv_abel_method: str | None = None,
     num_cores: int = NUM_CORES,
     show_warn: bool = True,
     stacked_spectra: bool = False,
-    telescope: str | list[str] = None,
+    telescope: str | list[str] | None = None,
     timeout: Quantity = Quantity(300, "s"),
 ) -> dict[str, list[GasDensity3D | None]]:
     """
@@ -639,9 +643,9 @@ def inv_abel_fitted_model(
         measure temperatures for the conversion factor calculation, default is 'r500'. An astropy
         quantity may also be passed, with either a single value or an entry for each cluster being
         analysed.
-    :param str/Quantity conv_inner_radius: The inner radius of spectra from which to measure temperatures for the conversion
-        factor calculation. Default is 0 arcseconds, producing a core-included circular spectrum. Supports either
-        a single value or an entry for each cluster being analysed.
+    :param str/Quantity conv_inner_radius: The inner radius of spectra from which to measure temperatures for the
+        conversion factor calculation. Default is 0 arcseconds, producing a core-included circular spectrum. Supports
+        either a single value or an entry for each cluster being analysed.
     :param str inv_abel_method: The method which should be used for the inverse abel transform of
         model which is fitted to the surface brightness profile. This overrides the default method
         for the model, which is either 'analytical' for models with an analytical solution to the
@@ -685,7 +689,7 @@ def inv_abel_fitted_model(
 
     # Calls the handy spectrum region setup function to make a predictable set of outer radius
     # values
-    out_rads = region_setup(sources, outer_radius, Quantity(0, "arcsec"), False, "")[-1]
+    out_rads = region_setup(sources, outer_radius, Quantity(0, "arcsec"), False, "", num_cores=num_cores)[-1]
 
     # Need to sort out the type of model input that the user chose, and make sure its ready to be
     #  passed into the fit method of the surface brightness profile(s)
@@ -891,16 +895,16 @@ def inv_abel_data(
     num_samples: int = 10000,
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: int | float = None,
-    over_sample: float = None,
-    obs_id: str | list = None,
-    inst: str | list = None,
-    conv_temp: Quantity = None,
+    min_sn: int | float | None = None,
+    over_sample: float | None = None,
+    obs_id: str | list | None = None,
+    inst: str | list | None = None,
+    conv_temp: Quantity | None = None,
     conv_outer_radius: Quantity = "r500",
     conv_inner_radius: Quantity = Quantity(0, "arcsec"),
     num_cores: int = NUM_CORES,
     stacked_spectra: bool = False,
-    telescope: str | list[str] = None,
+    telescope: str | list[str] | None = None,
     timeout: Quantity = Quantity(300, "s"),
 ) -> dict[str, list[GasDensity3D | None]]:
     """
@@ -999,9 +1003,9 @@ def inv_abel_data(
     :param str/Quantity conv_outer_radius: The outer radius within which to generate spectra and measure temperatures
         for the conversion factor calculation, default is 'r500'. An astropy quantity may also be passed, with either
         a single value or an entry for each cluster being analysed.
-    :param str/Quantity conv_inner_radius: The inner radius of spectra from which to measure temperatures for the conversion
-        factor calculation. Default is 0 arcseconds, producing a core-included circular spectrum. Supports either
-        a single value or an entry for each cluster being analysed.
+    :param str/Quantity conv_inner_radius: The inner radius of spectra from which to measure temperatures for the
+        conversion factor calculation. Default is 0 arcseconds, producing a core-included circular spectrum. Supports
+        either a single value or an entry for each cluster being analysed.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
@@ -1041,7 +1045,7 @@ def inv_abel_data(
     )
 
     # Calls the handy spectrum region setup function to make a predictable set of outer radius values
-    out_rads = region_setup(sources, outer_radius, Quantity(0, "arcsec"), False, "")[-1]
+    out_rads = region_setup(sources, outer_radius, Quantity(0, "arcsec"), False, "", num_cores=num_cores)[-1]
 
     # Before we properly get started, we just check that the user has passed an 'allowed' inverse-Abel transform
     if inv_abel_method not in ALLOWED_INV_ABEL:
@@ -1281,8 +1285,8 @@ def ann_spectra_apec_norm(
     exp_corr: bool = True,
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: int | float = None,
-    over_sample: float = None,
+    min_sn: int | float | None = None,
+    over_sample: float | None = None,
     one_rmf: bool = True,
     freeze_met: bool = True,
     abund_table: str = "angr",
@@ -1292,7 +1296,7 @@ def ann_spectra_apec_norm(
     sigma: int = 1,
     num_cores: int = NUM_CORES,
     stacked_spectra: bool = False,
-    telescope: str | list[str] = None,
+    telescope: str | list[str] | None = None,
 ) -> list[GasDensity3D]:
     """
     A method of measuring density profiles using XSPEC fits of a set of Annular Spectra. First

@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 1:42 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 2:06 PM. Copyright (c) The Contributors.
 
 import os
 from random import randint
@@ -237,7 +237,7 @@ def _pregen_spectra(
     # This is the spectrum region preparation function, and I'm calling it here because it will return properly
     #  formatted arrays for the inner and outer radii (note: region_setup itself raises NotImplementedError if
     #  outer_radius == 'region')
-    inn_rad_vals, out_rad_vals = region_setup(sources, outer_radius, inner_radius, True, "")[1:]
+    inn_rad_vals, out_rad_vals = region_setup(sources, outer_radius, inner_radius, True, "", num_cores=num_cores)[1:]
 
     # Single BaseSource instances are wrapped into a single-element list so that downstream indexing
     #  and iteration can uniformly treat sources as a sequence alongside BaseSample/list inputs.

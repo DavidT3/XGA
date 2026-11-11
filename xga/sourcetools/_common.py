@@ -1,23 +1,22 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 11:46 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 2:06 PM. Copyright (c) The Contributors.
 
-from typing import Union, List, Tuple
 from warnings import warn
 
 from astropy.units import Quantity
 
-from .misc import model_check
 from .. import NUM_CORES
 from ..exceptions import ModelNotAssociatedError, NotAssociatedError
 from ..generate.sas._common import region_setup
 from ..imagetools.psf import rl_psf
 from ..models import BaseModel1D
-from ..samples import ClusterSample, BaseSample
+from ..samples import BaseSample, ClusterSample
 from ..sources import BaseSource, GalaxyCluster
 from ..xspec import single_temp_apec
+from .misc import model_check
 
 
-def _get_all_telescopes(sources: Union[BaseSource, BaseSample, List[BaseSource]]) -> List[str]:
+def _get_all_telescopes(sources: BaseSource | BaseSample | list[BaseSource]) -> list[str]:
     """
     Returns a list of all the telescopes associated with at least one source. For most functions within
     xga.sourcetools, the initial sources argument may be a list, so the 'telescopes' attribute can't be
@@ -41,10 +40,21 @@ def _get_all_telescopes(sources: Union[BaseSource, BaseSample, List[BaseSource]]
     return all_telescopes
 
 
-def _setup_global(sources: Union[BaseSource, List[BaseSource], BaseSample], outer_radius: Union[str, Quantity],
-                  global_radius: Union[str, Quantity], abund_table: str, group_spec: bool,
-                  min_counts: int, min_sn: Union[int, float], over_sample: float, num_cores: int, psf_bins: int,
-                  stacked_spectra: bool, telescope: Union[str, List[str]], global_temp_success_check: bool = False) -> Tuple[Union[BaseSource, List[BaseSource], BaseSample], Union[Quantity, List[Quantity]], dict]:
+def _setup_global(
+    sources: BaseSource | list[BaseSource] | BaseSample,
+    outer_radius: str | Quantity,
+    global_radius: str | Quantity,
+    abund_table: str,
+    group_spec: bool,
+    min_counts: int,
+    min_sn: int | float,
+    over_sample: float,
+    num_cores: int,
+    psf_bins: int,
+    stacked_spectra: bool,
+    telescope: str | list[str],
+    global_temp_success_check: bool = False,
+) -> tuple[BaseSource | list[BaseSource] | BaseSample, Quantity | list[Quantity], dict]:
     """
     Internal function to see if a source/sources have a measured global temperature, single_temp_apec
     is run before the check is done. It also runs the region_setup() method to fetch the outer radii
@@ -91,9 +101,8 @@ def _setup_global(sources: Union[BaseSource, List[BaseSource], BaseSample], oute
         has a global temperature or not (all entries will be set to True if global_temp_success_check=False).
     :rtype: Tuple[Union[BaseSource, List[BaseSource], BaseSample], Union[Quantity, List[Quantity]], dict]
     """
-
-    out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
-    global_out_rads = region_setup(sources, global_radius, Quantity(0, 'arcsec'), False, '')[-1]
+    out_rads = region_setup(sources, outer_radius, Quantity(0, "arcsec"), False, "", num_cores=num_cores)[-1]
+    global_out_rads = region_setup(sources, global_radius, Quantity(0, "arcsec"), False, "", num_cores=num_cores)[-1]
 
     # If the user didn't specify a particular telescope, or telescopes, from which we are to
     #  produce temperature profiles, we fetch all associated with at least one source
@@ -110,21 +119,30 @@ def _setup_global(sources: Union[BaseSource, List[BaseSource], BaseSample], oute
         sources = [sources]
 
     # If XMM is associated with at least one source, we'll run PSF correction
-    if 'xmm' in src_telescopes:
+    if "xmm" in src_telescopes:
         # We also want to make sure that everything has a PSF corrected image, using all the default settings
-        rl_psf(sources, bins=psf_bins)
+        rl_psf(sources, bins=psf_bins, num_cores=num_cores)
 
     # If the global_temp_success_check argument is True, we need to generate and fit the global spectra, as we will
     #  need to determine whether there are successful global temperature measurements available.
     if global_temp_success_check:
-        single_temp_apec(sources, global_radius, abund_table=abund_table, group_spec=group_spec, min_counts=min_counts,
-                         min_sn=min_sn, over_sample=over_sample, num_cores=num_cores, stacked_spectra=stacked_spectra,
-                         telescope=telescope)
+        single_temp_apec(
+            sources,
+            global_radius,
+            abund_table=abund_table,
+            group_spec=group_spec,
+            min_counts=min_counts,
+            min_sn=min_sn,
+            over_sample=over_sample,
+            num_cores=num_cores,
+            stacked_spectra=stacked_spectra,
+            telescope=telescope,
+        )
 
     # We want to return a dictionary of telescope keys and values that are a list of len(sources) where
     # each element in the list is a boolean indicated whether a glob temp has been measured
     # ie. has_glob_temp = {'xmm' : [True, True, False], 'erosita' : [True, True, True]}
-    has_glob_temp = {key : [] for key in src_telescopes}
+    has_glob_temp = {key: [] for key in src_telescopes}
     for src_ind, src in enumerate(sources):
         # We cycle over the telescopes in the Sample and not the Source, so that every list in
         # has_glob_temp is the same length
@@ -139,19 +157,35 @@ def _setup_global(sources: Union[BaseSource, List[BaseSource], BaseSample], oute
             # Otherwise, we check whether the fits were successful
             else:
                 try:
-                    if tel in ['erosita', 'erass'] and len(src.obs_ids[tel]) > 1:
+                    if tel in ["erosita", "erass"] and len(src.obs_ids[tel]) > 1:
                         # A temporary temperature variable
-                        src.get_temperature(global_out_rads[src_ind], tel, "constant*tbabs*apec",
-                                            group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                            over_sample=over_sample, stacked_spectra=stacked_spectra)
+                        src.get_temperature(
+                            global_out_rads[src_ind],
+                            tel,
+                            "constant*tbabs*apec",
+                            group_spec=group_spec,
+                            min_counts=min_counts,
+                            min_sn=min_sn,
+                            over_sample=over_sample,
+                            stacked_spectra=stacked_spectra,
+                        )
                     else:
-                        src.get_temperature(global_out_rads[src_ind], tel, 'constant*tbabs*apec',
-                                            group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                            over_sample=over_sample)
+                        src.get_temperature(
+                            global_out_rads[src_ind],
+                            tel,
+                            "constant*tbabs*apec",
+                            group_spec=group_spec,
+                            min_counts=min_counts,
+                            min_sn=min_sn,
+                            over_sample=over_sample,
+                        )
                     has_glob_temp[tel].append(True)
                 except ModelNotAssociatedError:
-                    warn("The global temperature fit for {} has failed, which means a temperature profile from annular "
-                         "spectra is unlikely to be possible, and we will not attempt it.".format(src.name), stacklevel=2)
+                    warn(
+                        f"The global temperature fit for {src.name} has failed, which means a temperature "
+                        f"profile from annular spectra is unlikely to be possible, and we will not attempt it.",
+                        stacklevel=2,
+                    )
                     has_glob_temp[tel].append(False)
                 # If the telescope is not associated with this source, a NotAssociatedError will be raised
                 except NotAssociatedError:
@@ -160,23 +194,41 @@ def _setup_global(sources: Union[BaseSource, List[BaseSource], BaseSample], oute
     return sources, out_rads, has_glob_temp
 
 
-def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity],
-                                    sb_model: Union[str, List[str], BaseModel1D, List[BaseModel1D]],
-                                    dens_model: Union[str, List[str], BaseModel1D, List[BaseModel1D]],
-                                    temp_model: Union[str, List[str], BaseModel1D, List[BaseModel1D]],
-                                    global_radius: Quantity, fit_method: str = "mcmc", num_walkers: int = 20,
-                                    num_steps: int = 20000, sb_pix_step: int = 1, sb_min_snr: Union[int, float] = 0.0,
-                                    inv_abel_method: str = None, temp_annulus_method: str = 'min_snr',
-                                    temp_min_snr: Union[int, float] = 30, temp_min_cnt: Union[int, Quantity] = Quantity(1000, 'ct'),
-                                    temp_min_width: Quantity = Quantity(20, 'arcsec'), temp_use_combined: bool = True,
-                                    temp_use_worst: bool = False, freeze_met: bool = True, abund_table: str = "angr",
-                                    temp_lo_en: Quantity = Quantity(0.3, 'keV'),
-                                    temp_hi_en: Quantity = Quantity(7.9, 'keV'), group_spec: bool = True,
-                                    spec_min_counts: int = 5, spec_min_sn: Union[int, float] = None, over_sample: float = None,
-                                    one_rmf: bool = True, num_cores: int = NUM_CORES, show_warn: bool = True,
-                                    psf_bins: int = 4, stacked_spectra: bool = False,
-                                    telescope: Union[str, List[str]] = None, global_temp_success_check: bool = False) \
-        -> Tuple[Union[BaseSource, List[BaseSource], BaseSample], dict, dict, dict, dict, List[str]]:
+def _setup_inv_abel_dens_onion_temp(
+    sources: GalaxyCluster | ClusterSample,
+    outer_radius: str | Quantity,
+    sb_model: str | list[str] | BaseModel1D | list[BaseModel1D],
+    dens_model: str | list[str] | BaseModel1D | list[BaseModel1D],
+    temp_model: str | list[str] | BaseModel1D | list[BaseModel1D],
+    global_radius: Quantity,
+    fit_method: str = "mcmc",
+    num_walkers: int = 20,
+    num_steps: int = 20000,
+    sb_pix_step: int = 1,
+    sb_min_snr: int | float = 0.0,
+    inv_abel_method: str | None = None,
+    temp_annulus_method: str = "min_snr",
+    temp_min_snr: int | float = 30,
+    temp_min_cnt: int | Quantity = Quantity(1000, "ct"),
+    temp_min_width: Quantity = Quantity(20, "arcsec"),
+    temp_use_combined: bool = True,
+    temp_use_worst: bool = False,
+    freeze_met: bool = True,
+    abund_table: str = "angr",
+    temp_lo_en: Quantity = Quantity(0.3, "keV"),
+    temp_hi_en: Quantity = Quantity(7.9, "keV"),
+    group_spec: bool = True,
+    spec_min_counts: int = 5,
+    spec_min_sn: int | float | None = None,
+    over_sample: float | None = None,
+    one_rmf: bool = True,
+    num_cores: int = NUM_CORES,
+    show_warn: bool = True,
+    psf_bins: int = 4,
+    stacked_spectra: bool = False,
+    telescope: str | list[str] | None = None,
+    global_temp_success_check: bool = False,
+) -> tuple[BaseSource | list[BaseSource] | BaseSample, dict, dict, dict, dict, list[str]]:
     """
     Internal function to run the common setup functions that are needed for mass, entropy, and pressure profile
     measurements.
@@ -265,7 +317,6 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
         source strings as keys and temperature models as values. The sixth is the list of telescopes we're working on.
     :rtype: Tuple[Union[BaseSource, List[BaseSource], BaseSample], dict, dict, dict, dict, List[str]]
     """
-
     # If the user didn't specify a particular telescope, or telescopes, from which we are to
     #  produce temperature profiles, we fetch all associated with at least one source
     if telescope is None:
@@ -275,9 +326,21 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
     else:
         src_telescopes = telescope
 
-    sources, outer_rads, has_glob_temp = _setup_global(sources, outer_radius, global_radius, abund_table, group_spec,
-                                                       spec_min_counts, spec_min_sn, over_sample, num_cores, psf_bins,
-                                                       stacked_spectra, src_telescopes, global_temp_success_check)
+    sources, outer_rads, has_glob_temp = _setup_global(
+        sources,
+        outer_radius,
+        global_radius,
+        abund_table,
+        group_spec,
+        spec_min_counts,
+        spec_min_sn,
+        over_sample,
+        num_cores,
+        psf_bins,
+        stacked_spectra,
+        src_telescopes,
+        global_temp_success_check,
+    )
 
     rads_dict = {str(sources[r_ind]): r for r_ind, r in enumerate(outer_rads)}
 
@@ -317,19 +380,35 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
 
     # I know this looks nasty, but I had to do this to avoid a circular import error
     from ..sourcetools.temperature import onion_deproj_temp_prof
+
     # Attempt to measure their 3D temperature profiles
-    temp_profs = onion_deproj_temp_prof(cut_sources, cut_rads, temp_annulus_method, temp_min_snr, temp_min_cnt,
-                                        temp_min_width, temp_use_combined, temp_use_worst, min_counts=spec_min_counts,
-                                        min_sn=spec_min_sn, over_sample=over_sample, one_rmf=one_rmf,
-                                        freeze_met=freeze_met, abund_table=abund_table, temp_lo_en=temp_lo_en,
-                                        temp_hi_en=temp_hi_en, num_cores=num_cores, stacked_spectra=stacked_spectra,
-                                        telescope=src_telescopes)
+    temp_profs = onion_deproj_temp_prof(
+        cut_sources,
+        cut_rads,
+        temp_annulus_method,
+        temp_min_snr,
+        temp_min_cnt,
+        temp_min_width,
+        temp_use_combined,
+        temp_use_worst,
+        min_counts=spec_min_counts,
+        min_sn=spec_min_sn,
+        over_sample=over_sample,
+        one_rmf=one_rmf,
+        freeze_met=freeze_met,
+        abund_table=abund_table,
+        temp_lo_en=temp_lo_en,
+        temp_hi_en=temp_hi_en,
+        num_cores=num_cores,
+        stacked_spectra=stacked_spectra,
+        telescope=src_telescopes,
+    )
 
     # We are reorganising this temp_profs output so it is easier to cycle through in later functions
     # temp_prof_dict will have sources as keys, then a dictionary value, this dictionary has
     # telescope keys with values that are the profile object, ie. {src1: {'xmm' : Profile}}
     temp_prof_dict = {}
-    for p_ind, p in enumerate(cut_sources):
+    for p_ind, _p in enumerate(cut_sources):
         # this is the nested dict that will have telescope keys and profile object values
         src_dict = {}
         for tel in temp_profs:
@@ -337,13 +416,12 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
             src_dict[tel] = temp_profs[tel][p_ind]
         temp_prof_dict[str(cut_sources[p_ind])] = src_dict
 
-
     # Now we take only the sources that have successful 3D temperature profiles.
     # We do the temperature profile stuff first because its more difficult, and why should we waste
     # time on a density profile if the temperature profile cannot even be measured.
     # We keep sources that have at least one successfully measured profile from any of the associated telescopes.
     cut_cut_sources = []
-    for p_ind, p in enumerate(cut_sources):
+    for p_ind, _p in enumerate(cut_sources):
         # the string of the source objects is the key in temp_prof_dict
         src_key = str(cut_sources[p_ind])
         # storing the profile objects for every telescope in this list
@@ -363,20 +441,36 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
 
     # We also need to setup the sb model list for our cut sample
     sb_models_cut = [sb_model_dict[str(src)] for src in cut_cut_sources]
-     # I know this looks nasty, but I had to do this to avoid a circular import error
+    # I know this looks nasty, but I had to do this to avoid a circular import error
     from ..sourcetools.density import inv_abel_fitted_model
-    dens_profs = inv_abel_fitted_model(cut_cut_sources, sb_models_cut, fit_method, cut_cut_rads, pix_step=sb_pix_step,
-                                       min_snr=sb_min_snr, abund_table=abund_table, psf_bins=psf_bins,
-                                       num_walkers=num_walkers, num_steps=num_steps, group_spec=group_spec,
-                                       min_counts=spec_min_counts, min_sn=spec_min_sn, over_sample=over_sample,
-                                       conv_outer_radius=global_radius, inv_abel_method=inv_abel_method,
-                                       num_cores=num_cores, show_warn=show_warn, stacked_spectra=stacked_spectra,
-                                       telescope=src_telescopes)
+
+    dens_profs = inv_abel_fitted_model(
+        cut_cut_sources,
+        sb_models_cut,
+        fit_method,
+        cut_cut_rads,
+        pix_step=sb_pix_step,
+        min_snr=sb_min_snr,
+        abund_table=abund_table,
+        psf_bins=psf_bins,
+        num_walkers=num_walkers,
+        num_steps=num_steps,
+        group_spec=group_spec,
+        min_counts=spec_min_counts,
+        min_sn=spec_min_sn,
+        over_sample=over_sample,
+        conv_outer_radius=global_radius,
+        inv_abel_method=inv_abel_method,
+        num_cores=num_cores,
+        show_warn=show_warn,
+        stacked_spectra=stacked_spectra,
+        telescope=src_telescopes,
+    )
 
     # Once again reformatting this output to lookup density profiles based on source
     # so dens_prof_dict will be of the form: {src_key : {'xmm': prof, 'erosita': prof} etc.}
     dens_prof_dict = {}
-    for p_ind, p in enumerate(cut_cut_sources):
+    for p_ind, _p in enumerate(cut_cut_sources):
         # this is the nested dict that will have telescope keys and profile object values
         src_dict = {}
         for tel in dens_profs:
@@ -385,4 +479,3 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
         dens_prof_dict[str(cut_cut_sources[p_ind])] = src_dict
 
     return sources, dens_prof_dict, temp_prof_dict, dens_model_dict, temp_model_dict, src_telescopes
-

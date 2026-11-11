@@ -1,5 +1,7 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 1:46 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 2:06 PM. Copyright (c) The Contributors.
+
+"""XGA submodule that implements methods of correcting for and modeling PSF effects."""
 
 import os
 from multiprocessing.dummy import Pool
@@ -212,7 +214,7 @@ def rl_psf(
                 # The starting array full of 0.5 values is what is used in the skimage implementation
                 storage = [[np.full(full_im_data.shape, 0.5)] for i in range(len(psf_grid))]
                 # Iterating over the steps
-                for i in range(iterations):
+                for _i in range(iterations):
                     # Sets up a multiprocessing pool
                     with Pool(num_cores) as pool:
                         # This is what is triggered when each rl_step call is done
@@ -228,7 +230,7 @@ def rl_psf(
 
                         # Starts a deconvolution function for each spatial PSF, adding them to the
                         #  multiprocessing pool
-                        for psf_ind, psf in enumerate(psf_grid):
+                        for psf_ind, _psf in enumerate(psf_grid):
                             pool.apply_async(
                                 rl_step,
                                 callback=callback,
@@ -246,7 +248,7 @@ def rl_psf(
                 # Every iteration has its resultant image stored in here, earliest at index 0, final at index -1
                 final_form = np.zeros((im.shape[0], im.shape[1], iterations))
                 # Iterate over the PSFs generated at different points
-                for psf_ind, psf in enumerate(psf_grid):
+                for psf_ind, _psf in enumerate(psf_grid):
                     del storage[psf_ind][0]  # You may remember this was just the initial array of 0.5 as per skimage
                     # Change from an N, 512, 512 (for XGA images) to 512, 512, N array (makes more sense to my brain).
                     deconv_steps = np.moveaxis(np.array(storage[psf_ind]), 0, 2)
@@ -274,13 +276,13 @@ def rl_psf(
 
                 # Define file names for the whole datacube (all iteration steps), and the final image (just the last).
                 datacube_name = (
-                    f"{obs_id}_{inst}_{bins}bin_{iterations}iter_{psf_model}mod_rlalgo_{lo_en.value}-{hi_en.value}keVpsfcorr_datacube."
-                    "fits"
+                    f"{obs_id}_{inst}_{bins}bin_{iterations}iter_{psf_model}mod_rlalgo_{lo_en.value}-"
+                    f"{hi_en.value}keVpsfcorr_datacube.fits"
                 )
                 # Define this one because emosaic can't deal with fits datacubes, and thats what I use to combine images.
                 im_name = (
-                    f"{obs_id}_{inst}_{bins}bin_{iterations}iter_{psf_model}mod_rlalgo_{lo_en.value}-{hi_en.value}keVpsfcorr_img."
-                    "fits"
+                    f"{obs_id}_{inst}_{bins}bin_{iterations}iter_{psf_model}mod_rlalgo_{lo_en.value}-"
+                    f"{hi_en.value}keVpsfcorr_img.fits"
                 )
 
                 # Use the super handy fitsio write function to create the new fits datacube, and final image.
@@ -334,4 +336,5 @@ def rl_psf(
         psf_bins=bins,
         psf_algo="rl",
         psf_iter=iterations,
+        num_cores=num_cores,
     )
