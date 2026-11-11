@@ -1,34 +1,41 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 1:28 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 1:49 PM. Copyright (c) The Contributors.
 
 import os
-from copy import deepcopy, copy
+from copy import copy, deepcopy
 from random import randint
-from typing import Union, List
 from warnings import warn
 
 import numpy as np
 from astropy.units import Quantity
 
-from ._common import EROSITA_EXTMAP_LO_EN, EROSITA_EXTMAP_HI_EN, T_STEP_POINT, T_STEP_SURVEY
-from .misc import evtool_combine_evts
-from .phot import evtool_image
-from .run import esass_call
-from ..common import get_annular_esass_region
-from ..sas._common import region_setup
-from ... import OUTPUT, NUM_CORES, ESASS_VERSION
-from ...exceptions import eSASSInputInvalid, NoProductAvailableError, \
-    TelescopeNotAssociatedError
+from ... import ESASS_VERSION, NUM_CORES, OUTPUT
+from ...exceptions import NoProductAvailableError, TelescopeNotAssociatedError, eSASSInputInvalid
 from ...products.events import EventList
 from ...samples.base import BaseSample
 from ...sources import BaseSource, ExtendedSource, GalaxyCluster
+from ..common import get_annular_esass_region
+from ..sas._common import region_setup
+from ._common import EROSITA_EXTMAP_HI_EN, EROSITA_EXTMAP_LO_EN, T_STEP_POINT, T_STEP_SURVEY
+from .misc import evtool_combine_evts
+from .phot import evtool_image
+from .run import esass_call
 
 
-def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-               inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True, min_counts: int = 5,
-               min_sn: float = None, num_cores: int = NUM_CORES, disable_progress: bool = False,
-               combine_tm: bool = True, combine_obs: bool = True, force_gen: bool = False,
-               telescope: str = None):
+def _spec_cmds(
+    sources: BaseSource | BaseSample,
+    outer_radius: str | Quantity,
+    inner_radius: str | Quantity = Quantity(0, "arcsec"),
+    group_spec: bool = True,
+    min_counts: int = 5,
+    min_sn: float = None,
+    num_cores: int = NUM_CORES,
+    disable_progress: bool = False,
+    combine_tm: bool = True,
+    combine_obs: bool = True,
+    force_gen: bool = False,
+    telescope: str = None,
+):
     """
     An internal function to generate all the commands necessary to produce a srctool spectrum, but is not
     decorated by the esass_call function, so the commands aren't immediately run. This means it can be used for
@@ -77,13 +84,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             paths, and a list of extra information dictionaries.
         :rtype: Tuple[List[str], List[str], List[str]]
         """
-
         # Then we have to account for the two different modes this function can be used in - generating spectra
         #  for individual telescope models, or generating a single stacked spectrum for all telescope modules
         if combine_tm:
-            inst_names = ['combined']
-            inst_nums = ['"' + ' '.join([tm[-1] for tm in list(source.num_inst_obs[cur_evt_list.telescope].keys())]) + '"']
-            inst_srctool_id = ['0']
+            inst_names = ["combined"]
+            inst_nums = [
+                '"' + " ".join([tm[-1] for tm in list(source.num_inst_obs[cur_evt_list.telescope].keys())]) + '"'
+            ]
+            inst_srctool_id = ["0"]
         else:
             inst_names = deepcopy(list(source.num_inst_obs[cur_evt_list.telescope].keys()))
             inst_nums = [tm[-1] for tm in list(source.num_inst_obs[cur_evt_list.telescope].keys())]
@@ -111,24 +119,28 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             try:
                 if use_combine_obs and (len(source.obs_ids[cur_evt_list.telescope]) > 1):
-                    check_sp = source.get_combined_spectra(outer_radii[s_ind],
-                                                           inst,
-                                                           inner_radii[s_ind],
-                                                           group_spec,
-                                                           min_counts,
-                                                           min_sn,
-                                                           telescope=cur_evt_list.telescope)
+                    check_sp = source.get_combined_spectra(
+                        outer_radii[s_ind],
+                        inst,
+                        inner_radii[s_ind],
+                        group_spec,
+                        min_counts,
+                        min_sn,
+                        telescope=cur_evt_list.telescope,
+                    )
 
                 else:
                     # Got to check if this spectrum already exists
-                    check_sp = source.get_spectra(outer_radii[s_ind],
-                                                  cur_evt_list.obs_id,
-                                                  inst,
-                                                  inner_radii[s_ind],
-                                                  group_spec,
-                                                  min_counts,
-                                                  min_sn,
-                                                  telescope=cur_evt_list.telescope)
+                    check_sp = source.get_spectra(
+                        outer_radii[s_ind],
+                        cur_evt_list.obs_id,
+                        inst,
+                        inner_radii[s_ind],
+                        group_spec,
+                        min_counts,
+                        min_sn,
+                        telescope=cur_evt_list.telescope,
+                    )
                 exists = True
 
             except NoProductAvailableError:
@@ -140,28 +152,29 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # eROSITA observations have the potential to be in pointed or survey/scan modes - we change the time step
             #  based on that. We suspect that the time step is almost irrelevant for pointed mode observations, as
             #  the pointing of the spacecraft won't be changing appreciably
-            if cur_evt_list.header['OBS_MODE'] == 'POINTING':
+            if cur_evt_list.header["OBS_MODE"] == "POINTING":
                 t_step = t_step_point
-            elif cur_evt_list.header['OBS_MODE'] in ['SURVEY', 'SCAN']:
+            elif cur_evt_list.header["OBS_MODE"] in ["SURVEY", "SCAN"]:
                 t_step = t_step_survey
             else:
-                warn("XGA does not recognise the eROSITA OBS_MODE '{om}' - the timestep is defaulting to the "
-                     "survey mode value ({ts})".format(om=cur_evt_list.header['OBS_MODE'], ts=t_step_survey),
-                     stacklevel=2)
+                warn(
+                    "XGA does not recognise the eROSITA OBS_MODE '{om}' - the timestep is defaulting to the "
+                    "survey mode value ({ts})".format(om=cur_evt_list.header["OBS_MODE"], ts=t_step_survey),
+                    stacklevel=2,
+                )
                 t_step = t_step_survey
 
             # The following code will set up the path and file names for output files,
             #  with the first step involving the creation of temporary directories.
             # First, we define the path to the directory where our generated products
             #  are going to live at the end of the process.
-            final_dest_dir = os.path.join(OUTPUT, cur_evt_list.telescope,
-                                          cur_evt_list.obs_id)
+            final_dest_dir = os.path.join(OUTPUT, cur_evt_list.telescope, cur_evt_list.obs_id)
 
             # Generate a random number to use as a unique addition to the working
             #  directory name - ensures there won't be any clashes
             rand_ident = randint(0, 100_000_000)
             # This is the name of the working directory for the generation process
-            ddir_name = "temp_srctool_{i}_{r}".format(i=inst, r=rand_ident)
+            ddir_name = f"temp_srctool_{inst}_{rand_ident}"
             # And the full path
             dest_dir = os.path.join(final_dest_dir, ddir_name)
 
@@ -175,16 +188,32 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             os.symlink(cur_evt_list.path, os.path.join(dest_dir, evt_symlink_name))
 
             # This constructs the eSASS strings/region files
-            reg = get_annular_esass_region(source, src_inn_rad, src_out_rad, cur_evt_list.obs_id, er_miss,
-                                           interloper_regions=interloper_regions, central_coord=source.default_coord,
-                                           rand_ident=rand_ident, out_root_path=final_dest_dir)
-            b_reg = get_annular_esass_region(source, bck_inn_rad, bck_out_rad, cur_evt_list.obs_id, er_miss,
-                                             interloper_regions=back_inter_reg, central_coord=source.default_coord,
-                                             bkg_reg=True, rand_ident=rand_ident, out_root_path=final_dest_dir)
+            reg = get_annular_esass_region(
+                source,
+                src_inn_rad,
+                src_out_rad,
+                cur_evt_list.obs_id,
+                er_miss,
+                interloper_regions=interloper_regions,
+                central_coord=source.default_coord,
+                rand_ident=rand_ident,
+                out_root_path=final_dest_dir,
+            )
+            b_reg = get_annular_esass_region(
+                source,
+                bck_inn_rad,
+                bck_out_rad,
+                cur_evt_list.obs_id,
+                er_miss,
+                interloper_regions=back_inter_reg,
+                central_coord=source.default_coord,
+                bkg_reg=True,
+                rand_ident=rand_ident,
+                out_root_path=final_dest_dir,
+            )
 
             # Set up a string describing the central coordinate in addition to the regions
-            coord_str = "icrs;{ra},{dec}".format(ra=source.default_coord[0].value,
-                                                 dec=source.default_coord[1].value)
+            coord_str = f"icrs;{source.default_coord[0].value},{source.default_coord[1].value}"
 
             # TODO implement the detector map
             # This creates a detection map for the source and background region
@@ -192,11 +221,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # Setting up file names that include the extra variables
             if group_spec and min_counts is not None:
-                extra_file_name = "_mincnt{c}".format(c=min_counts)
+                extra_file_name = f"_mincnt{min_counts}"
             elif group_spec and min_sn is not None:
-                extra_file_name = "_minsn{s}".format(s=min_sn)
+                extra_file_name = f"_minsn{min_sn}"
             else:
-                extra_file_name = ''
+                extra_file_name = ""
 
             # Cannot control the naming of spectra from srctool. However, we will
             #  define our desired output file names here and move the files output by
@@ -204,11 +233,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # The names of output files will be different depending on if they
             #  are from a combined event list.
             if use_combine_obs and (len(source.obs_ids[cur_evt_list.telescope]) > 1):
-                prefix = str(rand_ident) + '_{i}_{n}_'.format(i=inst, n=source.name)
+                prefix = str(rand_ident) + f"_{inst}_{source.name}_"
             else:
-                prefix = "{o}_{i}_{n}_".format(o=cur_evt_list.obs_id,
-                                               i=inst,
-                                               n=source.name)
+                prefix = f"{cur_evt_list.obs_id}_{inst}_{source.name}_"
 
             # Format for the name of the spectrum file
             spec_str = prefix + "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_spec.fits"
@@ -216,24 +243,28 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Naming the non-grouped spectra
             no_grp_spec_str = "ra{ra}_dec{dec}_ri{ri}_ro{ro}{ex}_spec_not_grouped.fits"
             no_grp_spec_str = prefix + no_grp_spec_str
-            no_grp_spec = no_grp_spec_str.format(ra=source.default_coord[0].value,
-                                                 dec=source.default_coord[1].value,
-                                                 ri=src_inn_rad.value,
-                                                 ro=src_out_rad.value,
-                                                 ex=extra_file_name)
+            no_grp_spec = no_grp_spec_str.format(
+                ra=source.default_coord[0].value,
+                dec=source.default_coord[1].value,
+                ri=src_inn_rad.value,
+                ro=src_out_rad.value,
+                ex=extra_file_name,
+            )
 
             # Creating the XGA formatted names we'll move srctool outputs to
-            spec = spec_str.format(ra=source.default_coord[0].value,
-                                   dec=source.default_coord[1].value,
-                                   ri=src_inn_rad.value,
-                                   ro=src_out_rad.value,
-                                   ex=extra_file_name,
-                                   gr=group_spec)
+            spec = spec_str.format(
+                ra=source.default_coord[0].value,
+                dec=source.default_coord[1].value,
+                ri=src_inn_rad.value,
+                ro=src_out_rad.value,
+                ex=extra_file_name,
+                gr=group_spec,
+            )
 
             # The RMF and ARF files can be named by replacing the '_spec.fits' part of
             #  the grouped spectrum file name with '.rmf' and '.arf' respectively.
-            rmf = spec.replace("_spec.fits", '.rmf')
-            arf = spec.replace("_spec.fits", '.arf')
+            rmf = spec.replace("_spec.fits", ".rmf")
+            arf = spec.replace("_spec.fits", ".arf")
 
             # The background spectrum file name can also be constructed by replacing
             #  part of the source spectrum file name. This is possible because the
@@ -248,14 +279,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # Defining the grouping keywords
             if group_spec and min_counts is not None:
-                group_type = 'min'
+                group_type = "min"
                 group_scale = min_counts
             elif group_spec and min_sn is not None:
-                group_type = 'snmin'
+                group_type = "snmin"
                 group_scale = min_sn
             else:
-                group_type = ''
-                group_scale = ''
+                group_type = ""
+                group_scale = ""
 
             # Fills out the srctool command to make the main and background spectra
             # WE NOTE THAT, BECAUSE WE CREATE EVENT LIST SYMLINKS TO SOLVE ISSUE #1400, THE EVENT LIST PATHS
@@ -269,18 +300,22 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                     # WE CURRENTLY ALWAYS USE THE COMBINED OBS COMBINED INST IMAGE AS
                     #  THE EXTENT MAP (inst="combined"), EVEN IF WE ARE MAKING SPECTRA
                     #  THAT HAVE OBS COMBINED AND TMs SEPARATE.
-                    im = source.get_combined_images(lo_en=EROSITA_EXTMAP_LO_EN,
-                                                    hi_en=EROSITA_EXTMAP_HI_EN,
-                                                    telescope=evt_list.telescope,
-                                                    inst="combined")
+                    im = source.get_combined_images(
+                        lo_en=EROSITA_EXTMAP_LO_EN,
+                        hi_en=EROSITA_EXTMAP_HI_EN,
+                        telescope=evt_list.telescope,
+                        inst="combined",
+                    )
                 else:
                     # We only need the image path for extended source generation
                     # ALSO ALWAYS USED COMBINED FOR INST HERE, SEE THE NOTE ABOVE
-                    im = source.get_images(cur_evt_list.obs_id,
-                                           lo_en=EROSITA_EXTMAP_LO_EN,
-                                           hi_en=EROSITA_EXTMAP_HI_EN,
-                                           telescope=evt_list.telescope,
-                                           inst="combined")
+                    im = source.get_images(
+                        cur_evt_list.obs_id,
+                        lo_en=EROSITA_EXTMAP_LO_EN,
+                        hi_en=EROSITA_EXTMAP_HI_EN,
+                        telescope=evt_list.telescope,
+                        inst="combined",
+                    )
 
                 # As with the paths to the event lists, it is possible that the image
                 #  file names will be too long for eSASS' srctool to handle. To
@@ -289,38 +324,41 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 os.symlink(im.path, os.path.join(dest_dir, im_symlink_name))
 
                 # Fill out the spectrum generation (srctool) command specific to extended sources
-                s_cmd_str = ext_sp_cmd.format(d=dest_dir,
-                                              ef=os.path.basename(cur_evt_list.path),
-                                              sc=coord_str,
-                                              reg=reg,
-                                              i=inst_no,
-                                              wi=cur_inst_srctool_id,
-                                              ts=t_step,
-                                              em=os.path.basename(im.path),
-                                              et=ext_type)
+                s_cmd_str = ext_sp_cmd.format(
+                    d=dest_dir,
+                    ef=os.path.basename(cur_evt_list.path),
+                    sc=coord_str,
+                    reg=reg,
+                    i=inst_no,
+                    wi=cur_inst_srctool_id,
+                    ts=t_step,
+                    em=os.path.basename(im.path),
+                    et=ext_type,
+                )
 
             else:
                 # We have a slightly different command for extended and point sources
-                s_cmd_str = pnt_sp_cmd.format(d=dest_dir,
-                                              ef=os.path.basename(cur_evt_list.path),
-                                              sc=coord_str,
-                                              reg=reg,
-                                              i=inst_no,
-                                              wi=cur_inst_srctool_id,
-                                              ts=t_step)
+                s_cmd_str = pnt_sp_cmd.format(
+                    d=dest_dir,
+                    ef=os.path.basename(cur_evt_list.path),
+                    sc=coord_str,
+                    reg=reg,
+                    i=inst_no,
+                    wi=cur_inst_srctool_id,
+                    ts=t_step,
+                )
 
             # TODO FIGURE OUT WHAT TO DO ABOUT THE TIMESTEP
-            sb_cmd_str = back_sp_cmd.format(ef=os.path.basename(cur_evt_list.path),
-                                            sc=coord_str,
-                                            breg=b_reg,
-                                            i=inst_no,
-                                            wi=cur_inst_srctool_id,
-                                            ts=t_step * 4)
+            sb_cmd_str = back_sp_cmd.format(
+                ef=os.path.basename(cur_evt_list.path),
+                sc=coord_str,
+                breg=b_reg,
+                i=inst_no,
+                wi=cur_inst_srctool_id,
+                ts=t_step * 4,
+            )
             # Filling out the grouping command
-            grp_cmd_str = grp_cmd.format(infi=no_grp_spec,
-                                         of=spec,
-                                         gt=group_type,
-                                         gs=group_scale)
+            grp_cmd_str = grp_cmd.format(infi=no_grp_spec, of=spec, gt=group_type, gs=group_scale)
 
             # The instrument ID we need to rename the output files in this case
             rename_srctool_id = inst_srctool_id[inst_ind]
@@ -328,25 +366,15 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             #  Start with grouped spectra, because that is an optional output and has
             #  to have an if-else
             if group_spec:
-                rename_spec = rename_cmd.format(i_no=rename_srctool_id,
-                                                type='SourceSpec',
-                                                nn=no_grp_spec)
+                rename_spec = rename_cmd.format(i_no=rename_srctool_id, type="SourceSpec", nn=no_grp_spec)
             else:
-                rename_spec = rename_cmd.format(i_no=rename_srctool_id,
-                                                type='SourceSpec',
-                                                nn=spec)
+                rename_spec = rename_cmd.format(i_no=rename_srctool_id, type="SourceSpec", nn=spec)
             # Then set up the rename commands for everything else!
-            rename_rmf = rename_cmd.format(i_no=rename_srctool_id, type='RMF', nn=rmf)
-            rename_arf = rename_cmd.format(i_no=rename_srctool_id, type='ARF', nn=arf)
-            rename_b_spec = rename_cmd.format(i_no=rename_srctool_id,
-                                              type='SourceSpec',
-                                              nn=b_spec)
-            rename_b_rmf = rename_cmd.format(i_no=rename_srctool_id,
-                                             type='RMF',
-                                             nn=b_rmf)
-            rename_b_arf = rename_cmd.format(i_no=rename_srctool_id,
-                                             type='ARF',
-                                             nn=b_arf)
+            rename_rmf = rename_cmd.format(i_no=rename_srctool_id, type="RMF", nn=rmf)
+            rename_arf = rename_cmd.format(i_no=rename_srctool_id, type="ARF", nn=arf)
+            rename_b_spec = rename_cmd.format(i_no=rename_srctool_id, type="SourceSpec", nn=b_spec)
+            rename_b_rmf = rename_cmd.format(i_no=rename_srctool_id, type="RMF", nn=b_rmf)
+            rename_b_arf = rename_cmd.format(i_no=rename_srctool_id, type="ARF", nn=b_arf)
 
             # TODO I think all of this needs to made clearer, and each command should have a ; on the end by
             #  default perhaps - or at least it should be consistent
@@ -361,12 +389,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # This currently ensures that there is a ';' divider between these two chunks of commands - hopefully
             #  we'll neaten it up at some point
-            cmd_str += ';'
+            cmd_str += ";"
 
             # Removing the 'merged spectra' output of srctool, for the background spectra in this case
             if combine_tm:
-                cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf,
-                                     remove_all_but_merged_cmd])
+                cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf, remove_all_but_merged_cmd])
             else:
                 cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf, remove_merged_cmd])
 
@@ -380,10 +407,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # Adds symlink-removal commands - we don't want to be moving them along
             #  with every else in the temporary working directory
-            cmd_str += "; rm {esym}".format(esym=evt_symlink_name)
+            cmd_str += f"; rm {evt_symlink_name}"
             # Image symlink will only be present if the source is extended
             if extended_src:
-                cmd_str += "; rm {esym}".format(esym=im_symlink_name)
+                cmd_str += f"; rm {im_symlink_name}"
 
             # Depending on the eSASS version, we may have built up a ';;' somewhere in the command string,
             #  which is very bad - this is introduced because some versions of eSASS have a null string
@@ -392,46 +419,46 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             cmd_str = cmd_str.replace(";;", ";")
 
             # Adds clean up commands to move all generated files and remove the temporary directory
-            cmd_str += "; find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {{}} ../ \\;; cd ..; rm -r {d}".format(
-                d=dest_dir
-            )
+            cmd_str += f"; find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {{}} ../ \\;; cd ..; rm -r {dest_dir}"
             # If temporary region files were made, they will be here
-            if os.path.exists(os.path.join(final_dest_dir, 'temp_regs_{i}'.format(i=rand_ident))):
+            if os.path.exists(os.path.join(final_dest_dir, f"temp_regs_{rand_ident}")):
                 # Removing this directory
-                cmd_str += ";rm -r temp_regs_{i}".format(i=rand_ident)
+                cmd_str += f";rm -r temp_regs_{rand_ident}"
 
             # Adds the full command to set of commands originating from the currently
             #  passed event list
             cur_cmds.append(cmd_str)
             # Same for the final output paths, and extra info dictionary
             cur_fin_paths.append(os.path.join(final_dest_dir, spec))
-            cur_ex_info.append({"inner_radius": src_inn_rad,
-                                "outer_radius": src_out_rad,
-                                "rmf_path": os.path.join(final_dest_dir, rmf),
-                                "arf_path": os.path.join(final_dest_dir, arf),
-                                "b_spec_path": os.path.join(final_dest_dir, b_spec),
-                                "b_rmf_path": os.path.join(final_dest_dir, b_rmf),
-                                "b_arf_path": os.path.join(final_dest_dir, b_arf),
-                                "obs_id": cur_evt_list.obs_id,
-                                "instrument": inst,
-                                "central_coord": source.default_coord,
-                                "grouped": group_spec,
-                                "min_counts": min_counts,
-                                "min_sn": min_sn,
-                                "over_sample": None,
-                                "from_region": False,
-                                "telescope": cur_evt_list.telescope})
+            cur_ex_info.append(
+                {
+                    "inner_radius": src_inn_rad,
+                    "outer_radius": src_out_rad,
+                    "rmf_path": os.path.join(final_dest_dir, rmf),
+                    "arf_path": os.path.join(final_dest_dir, arf),
+                    "b_spec_path": os.path.join(final_dest_dir, b_spec),
+                    "b_rmf_path": os.path.join(final_dest_dir, b_rmf),
+                    "b_arf_path": os.path.join(final_dest_dir, b_arf),
+                    "obs_id": cur_evt_list.obs_id,
+                    "instrument": inst,
+                    "central_coord": source.default_coord,
+                    "grouped": group_spec,
+                    "min_counts": min_counts,
+                    "min_sn": min_sn,
+                    "over_sample": None,
+                    "from_region": False,
+                    "telescope": cur_evt_list.telescope,
+                }
+            )
         return cur_cmds, cur_fin_paths, cur_ex_info
-
 
     # Early XGA could generate spectra within the detection regions of the source, but
     #  that has been deprecated for quite a while, as it was a bad idea. The generation
     #  of spectra within user-specified regions will be possible, but it will be
     #  implemented differently. The original way was bad because the detection region
     #  could/almost certainly would be different for each observation
-    if outer_radius == 'region':
-        raise ValueError("The string 'region' is no longer a valid option for "
-                         "the 'outer_radius' argument.")
+    if outer_radius == "region":
+        raise ValueError("The string 'region' is no longer a valid option for the 'outer_radius' argument.")
 
     # TODO This will change in a future release, so that the user can control it - see issue #1113. The definitions
     #  are up the top of the function as a reminder
@@ -443,10 +470,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     #  object, then that property contains the telescopes associated with that source, and if it is a Sample object
     #  then 'telescopes' contains the list of unique telescopes that are associated with at least one member source.
     # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
-    if ((not isinstance(sources, list) and ('erosita' not in sources.telescopes and 'erass' not in sources.telescopes)) or
-            (isinstance(sources, list) and ('erosita' not in sources[0].telescopes and 'erass' not in sources[0].telescopes))):
-        raise TelescopeNotAssociatedError("There are no eROSITA data associated with the source/sample, as such "
-                                          "eROSITA spectra cannot be generated.")
+    if (
+        not isinstance(sources, list) and ("erosita" not in sources.telescopes and "erass" not in sources.telescopes)
+    ) or (
+        isinstance(sources, list) and ("erosita" not in sources[0].telescopes and "erass" not in sources[0].telescopes)
+    ):
+        raise TelescopeNotAssociatedError(
+            "There are no eROSITA data associated with the source/sample, as such eROSITA spectra cannot be generated."
+        )
 
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
@@ -459,12 +490,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         evtool_combine_evts(sources, num_cores)
 
     # TODO edit region_setup to be telescope agnostic
-    sources, inner_radii, outer_radii = region_setup(sources,
-                                                     outer_radius,
-                                                     inner_radius,
-                                                     disable_progress,
-                                                     obs_id='',
-                                                     num_cores=NUM_CORES)
+    sources, inner_radii, outer_radii = region_setup(
+        sources, outer_radius, inner_radius, disable_progress, obs_id="", num_cores=num_cores
+    )
 
     # Making sure this value is the expected type
     if min_counts is not None:
@@ -474,20 +502,23 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
     # Checking that the user has passed a grouping argument if group_spec is True
     if all([o is not None for o in [min_counts, min_sn]]):
-        raise eSASSInputInvalid("Only one grouping option can passed, you can't group both by"
-                                " minimum counts AND by minimum signal to noise.")
+        raise eSASSInputInvalid(
+            "Only one grouping option can passed, you can't group both by"
+            " minimum counts AND by minimum signal to noise."
+        )
     # Should also check that the user has passed any sort of grouping argument if they say they want to group
     elif group_spec and all([o is None for o in [min_counts, min_sn]]):
-        raise eSASSInputInvalid("If you set group_spec=True, you must supply a grouping option, either min_counts"
-                                " or min_sn.")
+        raise eSASSInputInvalid(
+            "If you set group_spec=True, you must supply a grouping option, either min_counts or min_sn."
+        )
 
     # Sets up the extra part of the storage key name depending on if grouping is enabled
     if group_spec and min_counts is not None:
-        extra_name = "_mincnt{}".format(min_counts)
+        extra_name = f"_mincnt{min_counts}"
     elif group_spec and min_sn is not None:
-        extra_name = "_minsn{}".format(min_sn)
+        extra_name = f"_minsn{min_sn}"
     else:
-        extra_name = ''
+        extra_name = ""
 
     # eSASS's srctool operates quite differently for extended sources and point sources. We are going to want a
     #  detector map for extended sources to weight the ARF calculation, so here we check the source type
@@ -495,30 +526,36 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         # Set up a boolean value to tell us later on if this is an extended source
         extended_src = True
         # Sets the extent model type to MAP, which means we'll be using an image to encode the emission extent
-        ext_type = 'MAP'
+        ext_type = "MAP"
         # Ensures that the images we intend to use as extent maps have actually been generated
-        evtool_image(sources, EROSITA_EXTMAP_LO_EN, EROSITA_EXTMAP_HI_EN, combine_obs=combine_obs, num_cores=NUM_CORES)
+        evtool_image(sources, EROSITA_EXTMAP_LO_EN, EROSITA_EXTMAP_HI_EN, combine_obs=combine_obs, num_cores=num_cores)
     else:
         # Set up a boolean value to tell us later on if this is a point source
         extended_src = False
-        ext_type = 'POINT'
+        ext_type = "POINT"
 
     # TODO PATTERN AND FLAG SELECTION - REALLY NEED TO INCLUDE THAT
     # Defining the various eSASS commands that need to be populated
     # There will be a different command for extended and point sources
-    ext_sp_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" ' \
-                 'todo="SPEC ARF RMF" srcreg="{reg}" backreg=NONE tstep={ts} ' \
-                 'insts={i} psftype=NONE extmap="{em}" exttype="MAP"'
+    ext_sp_cmd = (
+        'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" '
+        'todo="SPEC ARF RMF" srcreg="{reg}" backreg=NONE tstep={ts} '
+        'insts={i} psftype=NONE extmap="{em}" exttype="MAP"'
+    )
 
     # For extended sources, it is best to make a background spectrum with a separate command
-    back_sp_cmd = 'srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF" ' \
-                  'srcreg="{breg}" backreg=NONE insts={i} ' \
-                  'tstep={ts} psftype=NONE'
+    back_sp_cmd = (
+        'srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF" '
+        'srcreg="{breg}" backreg=NONE insts={i} '
+        "tstep={ts} psftype=NONE"
+    )
 
     # TODO check the point source command in esass with some EDR obs
-    pnt_sp_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" ' \
-                 'todo="SPEC ARF RMF" srcreg="{reg}" exttype="POINT" ' \
-                 'tstep={ts} insts={i} psftype="2D_PSF"'
+    pnt_sp_cmd = (
+        'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" '
+        'todo="SPEC ARF RMF" srcreg="{reg}" exttype="POINT" '
+        'tstep={ts} insts={i} psftype="2D_PSF"'
+    )
 
     # The DR1 version of eSASS has an additional argument that can be passed to specify
     #  which instruments should be written to output files - we want to be able to
@@ -535,12 +572,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     elif ESASS_VERSION == "ESASS4EDR":
         # Command to remove the 'merged' spectra that eSASS4EDR srctool outputs, even when you only
         #  request one instrument
-        remove_merged_cmd = 'rm *srctoolout_0*'
+        remove_merged_cmd = "rm *srctoolout_0*"
         # We also set up a command that will remove all spectra BUT the combined one
         remove_all_but_merged_cmd = "rm *srctoolout_*"
 
     # You can't control the whole names of srctool outputs, so this renames it to the XGA format
-    rename_cmd = 'mv srctoolout_{i_no}??_{type}* {nn}'
+    rename_cmd = "mv srctoolout_{i_no}??_{type}* {nn}"
 
     # TODO SHOULD BE ABLE TO REMOVE THIS CHUNK
     # Commands to remove the merged files from eSASS4DR1. Will depend on instrument number. Insts 1, 2, 3, 4, 6 will use
@@ -556,8 +593,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     #  generated file with a name that only truly applies once grouping has been done.
     # The HEASoft environment variables set here ensure that ftgrouppha doesn't try to access the terminal, which
     #  causes 'device not available' errors
-    grp_cmd = ('export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; '
-               'ftgrouppha infile="{infi}" outfile="{of}" grouptype="{gt}" groupscale="{gs}"; rm {infi}')
+    grp_cmd = (
+        "export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; "
+        'ftgrouppha infile="{infi}" outfile="{of}" grouptype="{gt}" groupscale="{gs}"; rm {infi}'
+    )
 
     stack = False  # This tells the esass_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
@@ -567,7 +606,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     sources_extras = []
     sources_types = []
     for s_ind, source in enumerate(sources):
-
         source: BaseSource
         cmds = []
         final_paths = []
@@ -579,7 +617,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         #  cmds, paths, extra_info, and ptypes to the final output, so that the
         #  cmd_list and input argument 'sources' have the same length, which avoids
         #  bugs occurring in the esass_call wrapper
-        if 'erosita' not in source.telescopes and 'erass' not in source.telescopes:
+        if "erosita" not in source.telescopes and "erass" not in source.telescopes:
             sources_cmds.append(np.array(cmds))
             sources_paths.append(np.array(final_paths))
             # This contains any other information that will be needed to
@@ -590,7 +628,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Now we can continue with the rest of the sources
             continue
 
-        for er_miss in (['erosita', 'erass'] if telescope is None else [telescope]):
+        for er_miss in ["erosita", "erass"] if telescope is None else [telescope]:
             # Skip this iteration if the current skew of eROSITA isn't associated
             #  with the current source
             if er_miss not in source.telescopes:
@@ -611,26 +649,22 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             #  are within the source region defined by the inner and outer radii.
             # This only needs to be run once per source, because it all works in the
             #  RA-Dec system rather than sky or detector pixel coordinates
-            interloper_regions = source.regions_within_radii(src_inn_rad,
-                                                             src_out_rad,
-                                                             er_miss,
-                                                             source.default_coord)
+            interloper_regions = source.regions_within_radii(src_inn_rad, src_out_rad, er_miss, source.default_coord)
 
             # We repeat the exercise for the background region
             bck_inn_rad = outer_radii[s_ind] * source.background_radius_factors[0]
             bck_out_rad = outer_radii[s_ind] * source.background_radius_factors[1]
-            back_inter_reg = source.regions_within_radii(bck_inn_rad,
-                                                         bck_out_rad,
-                                                         er_miss,
-                                                         source.default_coord)
+            back_inter_reg = source.regions_within_radii(bck_inn_rad, bck_out_rad, er_miss, source.default_coord)
 
             # The key under which these spectra will be stored
             spec_stor_name = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}"
-            spec_stor_name = spec_stor_name.format(ra=source.default_coord[0].value,
-                                                   dec=source.default_coord[1].value,
-                                                   ri=src_inn_rad.value,
-                                                   ro=src_out_rad.value,
-                                                   gr=group_spec)
+            spec_stor_name = spec_stor_name.format(
+                ra=source.default_coord[0].value,
+                dec=source.default_coord[1].value,
+                ri=src_inn_rad.value,
+                ro=src_out_rad.value,
+                gr=group_spec,
+            )
 
             # Adds on the extra information about grouping to the storage key
             spec_stor_name += extra_name
@@ -780,10 +814,19 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
 
 @esass_call
-def srctool_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-                     min_counts: int = 5, min_sn: float = None, num_cores: int = NUM_CORES,
-                     disable_progress: bool = False, combine_tm: bool = True, combine_obs: bool = True, force_gen: bool = False):
+def srctool_spectrum(
+    sources: BaseSource | BaseSample,
+    outer_radius: str | Quantity,
+    inner_radius: str | Quantity = Quantity(0, "arcsec"),
+    group_spec: bool = True,
+    min_counts: int = 5,
+    min_sn: float = None,
+    num_cores: int = NUM_CORES,
+    disable_progress: bool = False,
+    combine_tm: bool = True,
+    combine_obs: bool = True,
+    force_gen: bool = False,
+):
     """
     A wrapper for all the eSASS and Heasoft processes necessary to generate an eROSITA spectrum that can be analysed
     in XSPEC. Every observation associated with this source, and every instrument associated with that
@@ -820,16 +863,35 @@ def srctool_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union
     """
     # All the workings of this function are in _spec_cmds so that the annular spectrum set generation function
     #  can also use them
-    return _spec_cmds(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, num_cores, disable_progress,
-                      combine_tm, combine_obs, force_gen=force_gen)
+    return _spec_cmds(
+        sources,
+        outer_radius,
+        inner_radius,
+        group_spec,
+        min_counts,
+        min_sn,
+        num_cores,
+        disable_progress,
+        combine_tm,
+        combine_obs,
+        force_gen=force_gen,
+    )
 
 
 # TODO I feel that I could combine this with the original SAS one, seeing as they essentially call existing
 #  spectrum generation functions with particular arguments
 @esass_call
-def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity], Quantity],
-                       group_spec: bool = True, min_counts: int = 5, min_sn: float = None, num_cores: int = NUM_CORES,
-                       force_regen: bool = False, disable_progress: bool = False, combine_tm: bool = False):
+def esass_spectrum_set(
+    sources: BaseSource | BaseSample,
+    radii: list[Quantity] | Quantity,
+    group_spec: bool = True,
+    min_counts: int = 5,
+    min_sn: float = None,
+    num_cores: int = NUM_CORES,
+    force_regen: bool = False,
+    disable_progress: bool = False,
+    combine_tm: bool = False,
+):
     """
     This function can be used to produce 'sets' of XGA Spectrum objects, generated in concentric circular
     annuli, specifically using data from the eROSITA telescope.
@@ -863,12 +925,14 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
     #  object, then that property contains the telescopes associated with that source, and if it is a Sample object
     #  then 'telescopes' contains the list of unique telescopes that are associated with at least one member source.
     # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
-    if ((not isinstance(sources, list) and (
-            'erosita' not in sources.telescopes and 'erass' not in sources.telescopes)) or
-            (isinstance(sources, list) and (
-                    'erosita' not in sources[0].telescopes and 'erass' not in sources[0].telescopes))):
-        raise TelescopeNotAssociatedError("There are no eROSITA data associated with the source/sample, as such "
-                                          "eROSITA spectra cannot be generated.")
+    if (
+        not isinstance(sources, list) and ("erosita" not in sources.telescopes and "erass" not in sources.telescopes)
+    ) or (
+        isinstance(sources, list) and ("erosita" not in sources[0].telescopes and "erass" not in sources[0].telescopes)
+    ):
+        raise TelescopeNotAssociatedError(
+            "There are no eROSITA data associated with the source/sample, as such eROSITA spectra cannot be generated."
+        )
 
     # If it's a single source I put it into an iterable object (i.e. a list), just for convenience
     if isinstance(sources, BaseSource):
@@ -881,14 +945,18 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
 
     # I just want to make sure that nobody passes anything daft for the radii
     if isinstance(radii, Quantity) and len(sources) != 1:
-        raise TypeError("You may only pass a Quantity for the radii parameter if you are only analysing "
-                        "one source. You are attempting to generate spectrum sets for {0} sources, so please pass "
-                        "a list of {0} non-scalar quantities.".format(len(sources)))
+        raise TypeError(
+            "You may only pass a Quantity for the radii parameter if you are only analysing "
+            f"one source. You are attempting to generate spectrum sets for {len(sources)} sources, so please pass "
+            f"a list of {len(sources)} non-scalar quantities."
+        )
     elif isinstance(radii, Quantity):
         pass
     elif isinstance(radii, (list, np.ndarray)) and len(sources) != len(radii):
-        raise ValueError("The list of quantities passed for the radii parameter must be the same length as the "
-                         "number of sources which you are analysing.")
+        raise ValueError(
+            "The list of quantities passed for the radii parameter must be the same length as the "
+            "number of sources which you are analysing."
+        )
 
     # If we've made it to this point then the radii type is fine, but I want to make sure that radii is a list
     #  of quantities - as expected by the rest of the function
@@ -908,25 +976,40 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
         cur_rad = radii[s_ind]
         src_name = source.name
         if cur_rad.isscalar:
-            raise ValueError("The radii quantity you have passed for {s} only has one value in it, this function is "
-                             "for generating a set of multiple annular spectra, I need at least three "
-                             "entries.".format(s=src_name))
+            raise ValueError(
+                f"The radii quantity you have passed for {src_name} only has one value in it, this function is "
+                "for generating a set of multiple annular spectra, I need at least three "
+                "entries."
+            )
         elif len(cur_rad) < 3:
-            raise ValueError("The radii quantity you have passed for {s} must have at least 3 entries, this "
-                             "would generate a set of 2 annular spectra and is the minimum for this "
-                             "function.".format(s=src_name))
+            raise ValueError(
+                f"The radii quantity you have passed for {src_name} must have at least 3 entries, this "
+                "would generate a set of 2 annular spectra and is the minimum for this "
+                "function."
+            )
 
         # This runs through the radii for this source and makes sure that annulus N+1 is larger than annulus N
-        greater_check = [cur_rad[r_ind] < cur_rad[r_ind+1] for r_ind in range(0, len(cur_rad)-1)]
+        greater_check = [cur_rad[r_ind] < cur_rad[r_ind + 1] for r_ind in range(0, len(cur_rad) - 1)]
         if not all(greater_check):
-            raise ValueError("Not all of the radii passed for {s} are larger than the annulus that "
-                             "precedes them.".format(s=src_name))
+            raise ValueError(
+                f"Not all of the radii passed for {src_name} are larger than the annulus that precedes them."
+            )
 
     # This generates a spectra between the innermost and outmost radii for each source
     innermost_rads = Quantity([r_set[0] for r_set in radii], radii[0].unit)
     outermost_rads = Quantity([r_set[-1] for r_set in radii], radii[0].unit)
-    srctool_spectrum(sources, outermost_rads, innermost_rads, group_spec, min_counts, min_sn, num_cores,
-                     disable_progress, combine_tm, combine_obs=True)
+    srctool_spectrum(
+        sources,
+        outermost_rads,
+        innermost_rads,
+        group_spec,
+        min_counts,
+        min_sn,
+        num_cores,
+        disable_progress,
+        combine_tm,
+        combine_obs=True,
+    )
 
     # I want to be able to generate all the individual annuli in parallel, but I need them to be associated with
     #  the correct annuli, which is why I have to iterate through the sources and radii
@@ -945,10 +1028,10 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
         src_extras = np.array([])
 
         # By this point we know that at least one of the sources has eROSITA data associated (we checked that at the
-        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
         #  bugs occuring in the esass_call wrapper
-        if 'erosita' not in source.telescopes and 'erass' not in source.telescopes:
+        if "erosita" not in source.telescopes and "erass" not in source.telescopes:
             all_cmds.append(np.array(src_cmds))
             all_paths.append(np.array(src_paths))
             # This contains any other information that will be needed to instantiate the class
@@ -964,21 +1047,22 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
 
         # I want to be sure that this configuration doesn't already exist
         if group_spec and min_counts is not None:
-            extra_name = "_mincnt{}".format(min_counts)
+            extra_name = f"_mincnt{min_counts}"
         elif group_spec and min_sn is not None:
-            extra_name = "_minsn{}".format(min_sn)
+            extra_name = f"_minsn{min_sn}"
         else:
-            extra_name = ''
+            extra_name = ""
 
         # Combines the annular radii into a string
-        ann_rad_str = "_".join(source.convert_radius(radii[s_ind], 'deg').value.astype(str))
+        ann_rad_str = "_".join(source.convert_radius(radii[s_ind], "deg").value.astype(str))
         spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
-        spec_storage_name = spec_storage_name.format(ra=source.default_coord[0].value,
-                                                     dec=source.default_coord[1].value, ar=ann_rad_str, gr=group_spec)
+        spec_storage_name = spec_storage_name.format(
+            ra=source.default_coord[0].value, dec=source.default_coord[1].value, ar=ann_rad_str, gr=group_spec
+        )
 
         spec_storage_name += extra_name
 
-        for er_miss in ['erosita', 'erass']:
+        for er_miss in ["erosita", "erass"]:
             if er_miss not in source.telescopes:
                 continue
 
@@ -995,11 +1079,21 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
 
             if generate_spec or force_regen:
                 # Here we run through all the requested annuli for the current source
-                for r_ind in range(len(radii[s_ind])-1):
+                for r_ind in range(len(radii[s_ind]) - 1):
                     # Generate the eSASS commands for the current annulus of the current source, for all observations
-                    spec_cmd_out = _spec_cmds(source, radii[s_ind][r_ind+1], radii[s_ind][r_ind], group_spec, min_counts,
-                                              min_sn, num_cores, disable_progress, combine_tm, combine_obs=True,
-                                              telescope=er_miss)
+                    spec_cmd_out = _spec_cmds(
+                        source,
+                        radii[s_ind][r_ind + 1],
+                        radii[s_ind][r_ind],
+                        group_spec,
+                        min_counts,
+                        min_sn,
+                        num_cores,
+                        disable_progress,
+                        combine_tm,
+                        combine_obs=True,
+                        telescope=er_miss,
+                    )
 
                     # Read out some of the output into variables to be modified
                     interim_paths = spec_cmd_out[5][0]
@@ -1014,10 +1108,9 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
 
                         # Split up the current path, so we only modify the actual file name and not any
                         #  other part of the string
-                        split_p = p.split('/')
+                        split_p = p.split("/")
                         # We add the set and annulus identifiers
-                        new_spec = (split_p[-1].replace("_spec.fits", "_ident{si}_{ai}".format(si=set_id, ai=r_ind))
-                                    + "_spec.fits")
+                        new_spec = split_p[-1].replace("_spec.fits", f"_ident{set_id}_{r_ind}") + "_spec.fits"
                         # Not enough just to change the name passed through XGA, it has to be changed in
                         #  the eSASS commands as well
                         cur_cmd = cur_cmd.replace(split_p[-1], new_spec)
@@ -1029,11 +1122,11 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
                         interim_extras[p_ind].update({"set_ident": set_id, "ann_ident": r_ind})
 
                         # Only need to modify the RMF paths if the universal RMF HASN'T been used
-                        if "universal" not in interim_extras[p_ind]['rmf_path']:
+                        if "universal" not in interim_extras[p_ind]["rmf_path"]:
                             # Much the same process as with the spectrum name
-                            split_r = copy(interim_extras[p_ind]['rmf_path']).split('/')
+                            split_r = copy(interim_extras[p_ind]["rmf_path"]).split("/")
                             # split_br = copy(interim_extras[p_ind]['b_rmf_path']).split('/')
-                            new_rmf = split_r[-1].replace('.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) + ".rmf"
+                            new_rmf = split_r[-1].replace(".rmf", f"_ident{set_id}_{r_ind}") + ".rmf"
                             # new_b_rmf = split_br[-1].replace('_back.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
                             #             + "_back.rmf"
 
@@ -1050,21 +1143,22 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
                             interim_extras[p_ind].update({"rmf_path": "/".join(split_r)})
 
                         # Same process as RMFs but for the ARF, background ARF, and background spec
-                        split_a = copy(interim_extras[p_ind]['arf_path']).split('/')
+                        split_a = copy(interim_extras[p_ind]["arf_path"]).split("/")
                         # split_ba = copy(interim_extras[p_ind]['b_arf_path']).split('/')
-                        split_bs = copy(interim_extras[p_ind]['b_spec_path']).split('/')
+                        split_bs = copy(interim_extras[p_ind]["b_spec_path"]).split("/")
 
-                        new_arf = split_a[-1].replace('.arf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) + ".arf"
+                        new_arf = split_a[-1].replace(".arf", f"_ident{set_id}_{r_ind}") + ".arf"
                         # new_b_arf = split_ba[-1].replace('_back.arf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
                         #             + "_back.arf"
-                        new_b_spec = (split_bs[-1].replace('_backspec.fits', "_ident{si}_{ai}".format(si=set_id, ai=r_ind))
-                                      + "_backspec.fits")
+                        new_b_spec = (
+                            split_bs[-1].replace("_backspec.fits", f"_ident{set_id}_{r_ind}") + "_backspec.fits"
+                        )
 
-                        split_brmf = copy(interim_extras[p_ind]['b_rmf_path']).split('/')
-                        split_barf = copy(interim_extras[p_ind]['b_arf_path']).split('/')
+                        split_brmf = copy(interim_extras[p_ind]["b_rmf_path"]).split("/")
+                        split_barf = copy(interim_extras[p_ind]["b_arf_path"]).split("/")
 
-                        new_b_rmf = split_brmf[-1].replace('_back.rmf', "_ident{si}_{ai}_back.rmf".format(si=set_id, ai=r_ind))
-                        new_b_arf = split_barf[-1].replace('_back.arf', "_ident{si}_{ai}_back.arf".format(si=set_id, ai=r_ind))
+                        new_b_rmf = split_brmf[-1].replace("_back.rmf", f"_ident{set_id}_{r_ind}_back.rmf")
+                        new_b_arf = split_barf[-1].replace("_back.arf", f"_ident{set_id}_{r_ind}_back.arf")
 
                         # New names into the commands
                         cur_cmd = cur_cmd.replace(split_a[-1], new_arf)
@@ -1072,7 +1166,6 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
                         cur_cmd = cur_cmd.replace(split_bs[-1], new_b_spec)
                         cur_cmd = cur_cmd.replace(split_brmf[-1], new_b_rmf)
                         cur_cmd = cur_cmd.replace(split_barf[-1], new_b_arf)
-
 
                         split_a[-1] = new_arf
                         # split_ba[-1] = new_b_arf
@@ -1083,8 +1176,14 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
                         # Update the extra info dictionary some more
                         # interim_extras[p_ind].update({"arf_path": "/".join(split_a), "b_arf_path": "/".join(split_ba),
                         #                               "b_spec_path": "/".join(split_bs)})
-                        interim_extras[p_ind].update({"arf_path": "/".join(split_a), "b_spec_path": "/".join(split_bs),
-                                                      "b_rmf_path": "/".join(split_brmf), "b_arf_path": "/".join(split_barf)})
+                        interim_extras[p_ind].update(
+                            {
+                                "arf_path": "/".join(split_a),
+                                "b_spec_path": "/".join(split_bs),
+                                "b_rmf_path": "/".join(split_brmf),
+                                "b_arf_path": "/".join(split_barf),
+                            }
+                        )
 
                         # Add the new paths and commands to their respective lists
                         new_paths.append("/".join(split_p))
@@ -1093,7 +1192,7 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
                     src_paths = np.concatenate([src_paths, new_paths])
                     # Go through and concatenate things to the source lists defined above
                     src_cmds = np.concatenate([src_cmds, new_cmds])
-                    src_out_types += ['annular spectrum set components'] * len(spec_cmd_out[4][0])
+                    src_out_types += ["annular spectrum set components"] * len(spec_cmd_out[4][0])
                     src_extras = np.concatenate([src_extras, interim_extras])
 
         src_out_types = np.array(src_out_types)
