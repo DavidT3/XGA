@@ -1584,13 +1584,20 @@ class Image(BaseProduct):
         x_lims = None
         y_lims = None
         if zoom_in:
+            # If both the manual zoom arguments are None, but the user wishes to zoom in, we use `data_limits()` 
+            #  to find identify the x and y limits where the image turns to only zero values
             if manual_zoom_xlims is None and manual_zoom_ylims is None:
                 from xga.imagetools import data_limits
-
+                
                 x_lims, y_lims = data_limits(plot_data)
-            else:
+
+            # We allow users to pass the x and y manual zoom limits individually, so we handle them
+            #  in separate if statements
+            if manual_zoom_xlims is not None:
                 x_lims = manual_zoom_xlims
+            if manual_zoom_ylims is not None:
                 y_lims = manual_zoom_ylims
+            
 
         # Select the subset of image pixels used to compute the colourbar normalisation. When zooming in, restrict the
         #  normalisation sample to the zoomed bounding box (clamped to valid array bounds) and, if a mask is active,
@@ -1734,13 +1741,6 @@ class Image(BaseProduct):
                 ax.set_xlim(x_lims)
             if y_lims is not None:
                 ax.set_ylim(y_lims)
-
-        # Here the user has passed manual x-limits, so we apply them
-        if zoom_in and manual_zoom_xlims is not None:
-            ax.set_xlim(manual_zoom_xlims)
-        # Same here but for manual y-limits
-        if zoom_in and manual_zoom_ylims is not None:
-            ax.set_ylim(manual_zoom_ylims)
 
         return ax
 
