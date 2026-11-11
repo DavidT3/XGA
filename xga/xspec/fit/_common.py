@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 1:34 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 1:42 PM. Copyright (c) The Contributors.
 
 import os
 from random import randint
@@ -207,7 +207,7 @@ def _pregen_spectra(
             )
             # Make sure we have Chandra spectra generated, so that we can fit them
             sources = specextract_spectrum(
-                sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, num_cores
+                sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, over_sample, num_cores
             )
             # Override the stacked_spectra value here, because stacking is not supported for Chandra
             real_stacked_spectra[tel] = False
@@ -333,12 +333,12 @@ def _pregen_annular_spectra(
                 cross_arf(
                     sources,
                     radii[tel],
-                    num_cores,
                     group_spec,
                     min_counts,
                     min_sn,
                     over_sample,
                     detmap_bin=cross_arf_detmap_bin,
+                    num_cores=num_cores,
                 )
 
         elif tel in ["erosita", "erass"]:
