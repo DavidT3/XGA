@@ -8,18 +8,18 @@ From the root project directory (i.e. one level up from tests/), run:
 
 ```
 export XGA_CONFIG_DIR=tests/test_data/config/
-python -m unittest discover -s tests -t . 
+python -m unittest discover -s tests -t .
 ```
 
 **Note: You can add `-v` to the end of the above command to see the test names as they are run.**
 
 ## Running specific tests
 
-For example: 
+For example:
 
 ```
 export XGA_CONFIG_DIR=tests/test_data/config/
-python -m unittest -v tests/test_products/test_events.py -k "TestEventListImageGeneration.check_missions_evt_init_image_gen" 
+python -m unittest -v tests/test_products/test_events.py -k "TestEventListImageGeneration.check_missions_evt_init_image_gen"
 ```
 
 ## Running with coverage
@@ -45,5 +45,19 @@ specific test(s) being run, however.
 
 ```
 export XGA_CONFIG_DIR=tests/test_data/config/
-coverage run -m unittest -v tests/test_products/test_events.py -k "TestEventListImageGeneration.check_missions_evt_init_image_gen" 
+coverage run -m unittest -v tests/test_products/test_events.py -k "TestEventListImageGeneration.check_missions_evt_init_image_gen"
+```
+
+## Updating the coverage badge
+
+Make sure to generate an XML coverage report:
+
+```
+coverage xml
+```
+
+Then, run the following `genbadge` command:
+
+```
+genbadge coverage -i coverage.xml --output-file tests/coverage_badge.svg
 ```
