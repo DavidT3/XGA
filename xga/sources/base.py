@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/5/26, 9:20 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 3:15 PM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
@@ -405,34 +405,32 @@ class BaseSource:
         #  actual event list/image/expmap/region files - those initial products are loaded into XGA products
         self._products, region_dict = self._initial_products(obs, load_regions, null_load_products)
 
-        # Now we do ANOTHER check just like the one above, but on the product attribute, as it is possible that
-        #  all those files cannot be found
-        cur_obs_nums = {tel: len(self._products[tel]) for tel in self._products}
-        if sum(cur_obs_nums.values()) == 0:
-            raise NoValidObservationsError(
-                "None of the {t} observations identified for this {s} have valid event "
-                "lists associated with them.".format(s=self.name, t=", ".join(list(obs.keys())))
-            )
-        elif 0 in cur_obs_nums.values():
-            # Cut out any mention of a telescope with no loaded files
-            new_obs = {tel: obs[tel] for tel, num in cur_obs_nums.items() if num != 0}
-            new_prods = {tel: self._products[tel] for tel, num in cur_obs_nums.items() if num != 0}
-            new_regs = {tel: region_dict[tel] for tel, num in cur_obs_nums.items() if num != 0}
-
-        else:
-            new_obs = obs
-            new_prods = self._products
-            new_regs = region_dict
-
-        # Identify any observations or instruments that were removed because their event lists
-        #  could not be read in successfully
+        # Identify any observations or instruments that were removed because their event lists (or required
+        #  housekeeping files) could not be read in successfully. This comparison is performed before pruning
+        #  empty telescope keys from self._products so that a telescope where all observations failed to load
+        #  still has its key present in self._products for the lookup. Note that for COMBINED_INSTS telescopes
+        #  (e.g. eROSITA/eRASS), _initial_products has already populated empty placeholder dicts for each
+        #  individual instrument of every surviving ObsID, so valid observations will not be falsely flagged.
         removed_obs = {
-            t: {o: [i for i in obs[t][o] if o not in new_prods[t] or i not in new_prods[t][o]] for o in obs[t]}
+            t: {
+                o: [i for i in obs[t][o] if o not in self._products[t] or i not in self._products[t][o]] for o in obs[t]
+            }
             for t in obs
         }
         # Clean up the dictionary so it only contains entries that actually have removed instruments
         removed_obs = {t: {o: i for o, i in removed_obs[t].items() if len(i) != 0} for t in removed_obs}
         removed_obs = {t: o for t, o in removed_obs.items() if len(o) != 0}
+
+        # Cut out any mention of a telescope with no loaded observations from both the product and region dicts
+        self._products = {tel: prods for tel, prods in self._products.items() if len(prods) != 0}
+        region_dict = {tel: region_dict[tel] for tel in self._products}
+
+        # Check that at least one observation across the matched telescopes has valid products loaded
+        if len(self._products) == 0:
+            raise NoValidObservationsError(
+                "None of the {t} observations identified for this {s} have valid event "
+                "lists associated with them.".format(s=self.name, t=", ".join(list(obs.keys())))
+            )
 
         # If there are any removed observations/instruments, we raise a warning
         if len(removed_obs) != 0:
@@ -452,32 +450,15 @@ class BaseSource:
             else:
                 self._supp_warn.append(warn_msg)
 
-        # Assign the new, potentially cut down, dictionaries to their original names - this is separated from the
-        #  checking logic above so that we can raise a warning by comparing obs and new_prods before obs
-        #  gets overwritten
-        obs = new_obs
-        self._products = new_prods
-        region_dict = new_regs
-
-        # This is somewhat inelegant, but oh well; it ensures that there are individual instrument entries for each
-        #  ObsID in the products dictionary, for cases where the data are shipped with all instruments combined
-        for tel in self._products:
-            if COMBINED_INSTS[tel]:
-                for oi in obs[tel]:
-                    self._products[tel][oi].update({i: {} for i in obs[tel][oi]})
-
         # We now have the final set of initial observations, so we'll store them in an attribute. They may change, as
         #  other source classes have different cleaning steps, but any observations will be removed through the
         #  'disassociation' mechanism.
         # NOTE that this attribute has changed considerably since the pre-multi mission version of XGA, as the
-        #  instruments attribute has been consolidated into it - plus there is an extra level for telescope names
+        #  instruments attribute has been consolidated into it - plus there is an extra level for telescope names.
+        #  Because _initial_products already populates individual instrument keys for COMBINED_INSTS telescopes on
+        #  all surviving ObsIDs, we can uniformly extract every non-'combined' key present in self._products[t][o].
         self._obs = {
-            t: {
-                o: obs[t][o]
-                if COMBINED_INSTS[t]
-                else [i for i in self._products[t][o] if len(self._products[t][o][i]) != 0 and i != "combined"]
-                for o in self._products[t]
-            }
+            t: {o: [i for i in self._products[t][o] if i != "combined"] for o in self._products[t]}
             for t in self._products
         }
 
@@ -1612,41 +1593,80 @@ class BaseSource:
             #  that would be worth the effort efficiency wise.
             download_products(to_download, to_download_save_paths, disable_progress=self._samp_member)
 
-        # We must re-check if the products we were going to load are usable, as some might have failed to download
+        # We must re-check if the products we were going to load are usable, as some might have been queued for
+        #  remote download (where their usability check was deferred during initial instantiation until after
+        #  download_products ran above) and may have failed to download or turned out to be unreadable/empty.
         for tel in obs_dict:
+            # Snapshot the ObsID keys with list(...) because unusable observations may be deleted in-place
             for obs_id in list(obs_dict[tel]):
-                # A shared (per-ObsID) attitude file is stored under the "combined" pseudo-instrument key;
-                # if it fails, every real instrument for this ObsID is untrustworthy, exactly as for local data.
+                # A shared (per-ObsID) attitude file (e.g. XMM's single attitude file per ObsID) is stored under
+                #  the "combined" pseudo-instrument key; if it fails post-download validation, every real instrument
+                #  for this ObsID is untrustworthy and the entire ObsID must be discarded, matching the local check.
                 shared_att_failed = False
 
+                # Snapshot the instrument keys (including "combined" where present) for safe in-place deletion
                 for inst in list(obs_dict[tel][obs_id]):
+                    # Tracks whether a required foundational file (event list or per-instrument housekeeping file)
+                    #  failed validation, which invalidates all other products for this instrument
                     invalidate_inst = False
                     for prod_type in list(obs_dict[tel][obs_id][inst]):
                         prod = obs_dict[tel][obs_id][inst][prod_type]
+                        # Direct BaseProduct entries: "events", "attitude", "badpix", or "maskfile"
                         if isinstance(prod, BaseProduct) and not prod.usable:
                             del obs_dict[tel][obs_id][inst][prod_type]
                             if prod_type == "attitude" and inst == "combined":
+                                # Shared per-ObsID attitude failed - flag the whole ObsID for removal
                                 shared_att_failed = True
-                            elif prod_type in ("attitude", "badpix", "maskfile"):
-                                # Per-instrument attitude/badpix/mask - only this instrument is affected
+                            elif prod_type in ("events", "attitude", "badpix", "maskfile"):
+                                # Event list or per-instrument housekeeping failed - this instrument (or the
+                                #  "combined" entry for COMBINED_INSTS telescopes whose single event list lives
+                                #  under "combined") cannot be used even if pre-generated images/expmaps exist
                                 invalidate_inst = True
+                        # Nested dictionary entries (e.g. energy-bound keyed "image" and "expmap" dicts): remove
+                        #  only the specific energy-bound product that failed usability validation
                         elif isinstance(prod, dict):
                             for bound_key in list(prod):
                                 if not prod[bound_key].usable:
                                     del obs_dict[tel][obs_id][inst][prod_type][bound_key]
 
+                    # If a foundational file for this instrument failed, wipe any remaining products (such as
+                    #  images or exposure maps) so the instrument entry is completely empty
                     if invalidate_inst:
                         obs_dict[tel][obs_id][inst] = {}
 
+                    # Remove any instrument entry that now holds no products at all
                     if len(obs_dict[tel][obs_id][inst]) == 0:
                         del obs_dict[tel][obs_id][inst]
 
+                # If the shared per-ObsID attitude file failed, clear all instruments for this ObsID
                 if shared_att_failed:
                     obs_dict[tel][obs_id] = {}
 
-                if len(obs_dict[tel][obs_id]) == 0:
+                # Remove the ObsID if it has no surviving entries, OR if this is a non-COMBINED_INSTS telescope
+                #  (like XMM) where every real instrument failed and only the shared "combined" housekeeping entry
+                #  (holding the attitude file) remains
+                if len(obs_dict[tel][obs_id]) == 0 or (
+                    not COMBINED_INSTS[tel] and set(obs_dict[tel][obs_id].keys()) == {"combined"}
+                ):
                     del obs_dict[tel][obs_id]
+
+            # Final pass to ensure no empty ObsID dicts remain for this telescope
             obs_dict[tel] = {o: v for o, v in obs_dict[tel].items() if len(v) != 0}
+
+            # For telescopes whose initial data products are shipped with all instruments combined (COMBINED_INSTS[tel]
+            #  is True, e.g. eROSITA/eRASS where the initial event list and images are stored under 'combined'), we
+            #  still need empty dictionary entries for each individual instrument (e.g. tm1..tm7) in the product
+            #  dictionary so that per-instrument products can be slotted in later and BaseSource.__init__ can verify
+            #  which instruments were successfully loaded. Crucially, this MUST happen after the post-download
+            #  validation loop above so those intentionally empty per-instrument dicts are not stripped as
+            #  "empty/failed" instruments in the cleanup check above, and it only runs over surviving ObsIDs.
+            if COMBINED_INSTS[tel]:
+                for obs_id in obs_dict[tel]:
+                    obs_dict[tel][obs_id].update({i: {} for i in init_obs[tel][obs_id]})
+
+            # Synchronize reg_dict[tel] with the surviving ObsIDs in obs_dict[tel], since reg_dict[tel][obs_id] is
+            #  populated before local attitude validation or post-download validation may have dropped an ObsID
+            reg_dict[tel] = {o: reg_dict[tel][o] for o in obs_dict[tel] if o in reg_dict[tel]}
 
         return obs_dict, reg_dict
 
