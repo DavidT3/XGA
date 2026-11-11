@@ -1,30 +1,43 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 11:13 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 1:46 PM. Copyright (c) The Contributors.
 
 from multiprocessing.dummy import Pool
-from typing import List, Tuple, Union
 from warnings import warn
 
 import numpy as np
-from astropy.units import Quantity, pix, kpc
+from astropy.units import Quantity, kpc, pix
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 from tqdm import tqdm
 
-from ..exceptions import NoRegionsError, NoProductAvailableError, XGAFitError, ModelNotAssociatedError, \
-    ParameterNotAssociatedError
+from xga import NUM_CORES
+
+from ..exceptions import (
+    ModelNotAssociatedError,
+    NoProductAvailableError,
+    NoRegionsError,
+    ParameterNotAssociatedError,
+    XGAFitError,
+)
 from ..imagetools.profile import radial_brightness
 from ..samples.extended import ClusterSample
 from ..sources import GalaxyCluster
-from ..utils import NUM_CORES
 from ..xspec.fakeit import cluster_cr_conv
 from ..xspec.fit import single_temp_apec
 
 
-def _stack_setup_checks(sources: ClusterSample, scale_radius: str = "r200", lo_en: Quantity = Quantity(0.5, 'keV'),
-                        hi_en: Quantity = Quantity(2.0, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
-                        psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
-                        telescope: str = None) -> None:
+def _stack_setup_checks(
+    sources: ClusterSample,
+    scale_radius: str = "r200",
+    lo_en: Quantity = Quantity(0.5, "keV"),
+    hi_en: Quantity = Quantity(2.0, "keV"),
+    psf_corr: bool = False,
+    psf_model: str = "ELLBETA",
+    psf_bins: int = 4,
+    psf_algo: str = "rl",
+    psf_iter: int = 15,
+    telescope: str = None,
+) -> None:
     """
     Internal function that was originally split off from radial data stack. This performs checks to make sure passed
     in values are valid for all types of stacking available in this part of XGA.
@@ -54,26 +67,32 @@ def _stack_setup_checks(sources: ClusterSample, scale_radius: str = "r200", lo_e
     elif scale_radius.lower() == "r2500":
         rad_check = [s.r2500 is not None for s in sources]
     else:
-        raise ValueError("{0} is not an acceptable overdensity radius, please use r200, r500, or "
-                         "r2500.".format(scale_radius))
+        raise ValueError(f"{scale_radius} is not an acceptable overdensity radius, please use r200, r500, or r2500.")
 
     if not all(rad_check):
-        raise NoRegionsError("Some GalaxyCluster objects are missing the {} region".format(scale_radius))
+        raise NoRegionsError(f"Some GalaxyCluster objects are missing the {scale_radius} region")
 
     if psf_corr:
-        psf_key = "bound_{l}-{u}_{m}_{n}_{a}{i}".format(l=lo_en.value, u=hi_en.value, m=psf_model, n=psf_bins,
-                                                        a=psf_algo, i=psf_iter)
-        psf_corr_avail = [len(source.get_products("combined_ratemap", extra_key=psf_key,
-                                                  telescope=telescope)) != 0 for source in sources]
+        psf_key = f"bound_{lo_en.value}-{hi_en.value}_{psf_model}_{psf_bins}_{psf_algo}{psf_iter}"
+        psf_corr_avail = [
+            len(source.get_products("combined_ratemap", extra_key=psf_key, telescope=telescope)) != 0
+            for source in sources
+        ]
         if False in psf_corr_avail:
-            raise NoProductAvailableError("At least one source does not have PSF corrected "
-                                          "image products available.")
+            raise NoProductAvailableError("At least one source does not have PSF corrected image products available.")
 
 
-def _create_stack(sb: np.ndarray, sources: ClusterSample, scale_radius: str, lo_en: Quantity, hi_en: Quantity,
-                  custom_temps: Quantity, sim_met: Union[float, List] = 0.3, abund_table: str = 'angr',
-                  telescope: str = None) \
-        -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, List]:
+def _create_stack(
+    sb: np.ndarray,
+    sources: ClusterSample,
+    scale_radius: str,
+    lo_en: Quantity,
+    hi_en: Quantity,
+    custom_temps: Quantity,
+    sim_met: float | list = 0.3,
+    abund_table: str = "angr",
+    telescope: str = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
     """
     Internal function that was originally split off from radial data stack. Takes the surface brightness profiles
     that have been generated for radii as a fraction of the scale radius. It then calculates the scaling factors and
@@ -106,8 +125,9 @@ def _create_stack(sb: np.ndarray, sources: ClusterSample, scale_radius: str, lo_
         # I'm not going to give the user the ability to choose the specifics of the spectra that are
         #  being used to calculate conversion factors - I'll use standard settings. This function will
         #  also make sure that they've actually been generated.
-        cluster_cr_conv(sources, scale_radius, custom_temps, sim_met=sim_met, abund_table=abund_table,
-                        telescope=telescope)
+        cluster_cr_conv(
+            sources, scale_radius, custom_temps, sim_met=sim_met, abund_table=abund_table, telescope=telescope
+        )
     else:
         # Use a simple single_temp_apec to fit said spectra, but only if we haven't had custom temperatures
         #  passed in
@@ -118,20 +138,19 @@ def _create_stack(sb: np.ndarray, sources: ClusterSample, scale_radius: str, lo_
                 # A temporary temperature variable
                 temp_temp = src.get_temperature(scale_radius, "constant*tbabs*apec", telescope=telescope)[0]
             except (ModelNotAssociatedError, ParameterNotAssociatedError):
-                warn("{s}'s temperature fit is not valid, defaulting to a temperature of 3 keV".format(s=src.name),
-                     stacklevel=2)
-                temp_temp = Quantity(3, 'keV')
+                warn(f"{src.name}'s temperature fit is not valid, defaulting to a temperature of 3 keV", stacklevel=2)
+                temp_temp = Quantity(3, "keV")
 
             temp_temps.append(temp_temp.value)
-        temps = Quantity(temp_temps, 'keV')
-        cluster_cr_conv(sources, scale_radius, sim_temp=temps, sim_met=sim_met, abund_table=abund_table,
-                        telescope=telescope)
+        temps = Quantity(temp_temps, "keV")
+        cluster_cr_conv(
+            sources, scale_radius, sim_temp=temps, sim_met=sim_met, abund_table=abund_table, telescope=telescope
+        )
 
     combined_factors = []
     # Now to generate a combined conversion factor from count rate to luminosity
     for source in sources:
-        combined_factors.append(source.combined_lum_conv_factor(scale_radius, lo_en, hi_en,
-                                                               telescope=telescope).value)
+        combined_factors.append(source.combined_lum_conv_factor(scale_radius, lo_en, hi_en, telescope=telescope).value)
 
     # Check for NaN values in the brightness profiles we've retrieved - very bad if they exist
     no_nan = np.where(~np.isnan(sb.sum(axis=1)))[0]
@@ -157,15 +176,18 @@ def _create_stack(sb: np.ndarray, sources: ClusterSample, scale_radius: str, lo_
     stack_names = []
     for src_ind, src in enumerate(sources):
         if src_ind not in no_nan:
-            warn("A NaN value was detected in {}'s brightness profile, and as such it has been excluded from the "
-                 "stack.".format(src.name), stacklevel=2)
+            warn(
+                f"A NaN value was detected in {src.name}'s brightness profile, and as such it has been excluded from the "
+                "stack.",
+                stacklevel=2,
+            )
         else:
             stack_names.append(src.name)
 
     return average_profile, scaled_luminosity, cov, norm_cov, stack_names
 
 
-def _view_stack(results: Tuple, scale_radius: str, radii: np.ndarray, figsize: Tuple) -> None:
+def _view_stack(results: tuple, scale_radius: str, radii: np.ndarray, figsize: tuple) -> None:
     """
     Internal function to plot the results of a stack function.
 
@@ -190,9 +212,9 @@ def _view_stack(results: Tuple, scale_radius: str, radii: np.ndarray, figsize: T
     fig, ax = plt.subplots(nrows=2, ncols=2, figsize=figsize)
 
     ax[0, 0].set_title("Average Profile")
-    ax[0, 0].set_xlabel("Radius [{}]".format(scale_radius))
+    ax[0, 0].set_xlabel(f"Radius [{scale_radius}]")
     ax[0, 1].set_title("All Profiles")
-    ax[0, 1].set_xlabel("Radius [{}]".format(scale_radius))
+    ax[0, 1].set_xlabel(f"Radius [{scale_radius}]")
 
     ax[0, 0].plot(radii, av_prof, color="black", label="Average Profile")
     ax[0, 0].errorbar(radii, av_prof, fmt="kx", yerr=sd, capsize=2)
@@ -208,14 +230,14 @@ def _view_stack(results: Tuple, scale_radius: str, radii: np.ndarray, figsize: T
     ax[0, 1].xaxis.set_major_formatter(ScalarFormatter())
 
     ax[1, 0].set_title("Covariance Matrix")
-    ax[1, 0].tick_params(axis='both', direction='in', which='both', top=False, right=False)
+    ax[1, 0].tick_params(axis="both", direction="in", which="both", top=False, right=False)
     ax[1, 0].xaxis.set_ticklabels([])
     ax[1, 0].yaxis.set_ticklabels([])
     im = ax[1, 0].imshow(cov, cmap="gnuplot2", origin="lower")
     fig.colorbar(im, ax=ax[1, 0])
 
     ax[1, 1].set_title("Normalised Covariance Matrix")
-    ax[1, 1].tick_params(axis='both', direction='in', which='both', top=False, right=False)
+    ax[1, 1].tick_params(axis="both", direction="in", which="both", top=False, right=False)
     ax[1, 1].xaxis.set_ticklabels([])
     ax[1, 1].yaxis.set_ticklabels([])
     im = ax[1, 1].imshow(norm_cov, cmap="gnuplot2", origin="lower")
@@ -225,11 +247,21 @@ def _view_stack(results: Tuple, scale_radius: str, radii: np.ndarray, figsize: T
     plt.show()
 
 
-def stacked_radial_brightness(sources: ClusterSample, scale_radius: str = "r200", lo_en: Quantity = Quantity(0.5, 'keV'),
-                              hi_en: Quantity = Quantity(2.0, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
-                              psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_bins: int = 100,
-                              max_scale: float = 1.5, num_cores: int = NUM_CORES,
-                              telescope: str = None) -> dict:
+def stacked_radial_brightness(
+    sources: ClusterSample,
+    scale_radius: str = "r200",
+    lo_en: Quantity = Quantity(0.5, "keV"),
+    hi_en: Quantity = Quantity(2.0, "keV"),
+    psf_corr: bool = False,
+    psf_model: str = "ELLBETA",
+    psf_bins: int = 4,
+    psf_algo: str = "rl",
+    psf_iter: int = 15,
+    num_bins: int = 100,
+    max_scale: float = 1.5,
+    num_cores: int = NUM_CORES,
+    telescope: str = None,
+) -> dict:
     """
     This function will scale the radial brightness profiles of a sample of clusters by a given over-density radius,
     interpolate them onto a common radial grid, then stack them to find the average profile of the sample.
@@ -253,8 +285,9 @@ def stacked_radial_brightness(sources: ClusterSample, scale_radius: str = "r200"
         standard deviation of the stacked profile.
     :rtype: dict
     """
-    _stack_setup_checks(sources, scale_radius, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
-                        telescope=telescope)
+    _stack_setup_checks(
+        sources, scale_radius, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, telescope=telescope
+    )
 
     # These are the fractional radii at which we'll interpolate the brightness profiles
     radii = np.linspace(0, max_scale, num_bins)
@@ -262,8 +295,9 @@ def stacked_radial_brightness(sources: ClusterSample, scale_radius: str = "r200"
 
     for source_ind, source in enumerate(sources):
         # Retrieving the relevant ratemap object, as well as masks
-        rt = source.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
-                                          telescope=telescope)
+        rt = source.get_combined_ratemaps(
+            lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, telescope=telescope
+        )
         # We obviously want to remove point sources from the profiles we make, so get the mask that removes
         #  interlopers
         int_mask = source.get_interloper_mask(telescope=telescope)
@@ -273,9 +307,19 @@ def stacked_radial_brightness(sources: ClusterSample, scale_radius: str = "r200"
 
         try:
             # We construct a brightness profile for each source in the sample
-            sb_prof, success = radial_brightness(rt, source.ra_dec, rad, float(source.background_radius_factors[0]),
-                                                 float(source.background_radius_factors[1]), int_mask,
-                                                 source.redshift, 1, kpc, source.cosmo, 0)
+            sb_prof, success = radial_brightness(
+                rt,
+                source.ra_dec,
+                rad,
+                float(source.background_radius_factors[0]),
+                float(source.background_radius_factors[1]),
+                int_mask,
+                source.redshift,
+                1,
+                kpc,
+                source.cosmo,
+                0,
+            )
             # Calculates the value of pixel radii in terms of the scale radii
             scaled_radii = (sb_prof.radii / rad).value
             # Interpolating brightness profile values at the radii passed by the user
@@ -285,8 +329,10 @@ def stacked_radial_brightness(sources: ClusterSample, scale_radius: str = "r200"
             # This will mean that the profile is thrown away in a later step
             sb[source_ind, :] = np.full(radii.shape, np.nan)
             # But will also raise a warning so the user knows
-            warn(str(ve).replace("you're looking at", "{s} is".format(s=source.name)).replace(".", "")
-                 + " - profile set to NaNs.", stacklevel=2)
+            warn(
+                str(ve).replace("you're looking at", f"{source.name} is").replace(".", "") + " - profile set to NaNs.",
+                stacklevel=2,
+            )
 
     # Actually does the stacking part
     average_profile = np.nanmean(sb, axis=0)
@@ -295,15 +341,26 @@ def stacked_radial_brightness(sources: ClusterSample, scale_radius: str = "r200"
     return {"radii": radii, "brightness": average_profile, "err": std_profile}
 
 
-def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_peak: bool = True,
-                      pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20),
-                      min_snr: Union[int, float] = 0.0,
-                      lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
-                      custom_temps: Quantity = None, sim_met: Union[float, List] = 0.3,
-                      abund_table: str = 'angr', psf_corr: bool = False, psf_model: str = "ELLBETA",
-                      psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES,
-                      telescope: str = None) \
-        -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
+def radial_data_stack(
+    sources: ClusterSample,
+    scale_radius: str = "r200",
+    use_peak: bool = True,
+    pix_step: int = 1,
+    radii: np.ndarray = np.linspace(0.01, 1, 20),
+    min_snr: int | float = 0.0,
+    lo_en: Quantity = Quantity(0.5, "keV"),
+    hi_en: Quantity = Quantity(2.0, "keV"),
+    custom_temps: Quantity = None,
+    sim_met: float | list = 0.3,
+    abund_table: str = "angr",
+    psf_corr: bool = False,
+    psf_model: str = "ELLBETA",
+    psf_bins: int = 4,
+    psf_algo: str = "rl",
+    psf_iter: int = 15,
+    num_cores: int = NUM_CORES,
+    telescope: str = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
     """
     Creates and scales radial brightness profiles for a set of galaxy clusters so that they can be combined
     and compared, like for like. This particular function does not fit models, and outputs a mean brightness
@@ -342,11 +399,11 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
         covariance matrix. I also return a list of source names that WERE included in the stack.
     :rtype: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray, list]
     """
-
     raise NotImplementedError("This has not been implemented yet.")
 
-    def construct_profile(src_obj: GalaxyCluster, src_id: int, lower: Quantity, upper: Quantity) \
-            -> Tuple[Quantity, int]:
+    def construct_profile(
+        src_obj: GalaxyCluster, src_id: int, lower: Quantity, upper: Quantity
+    ) -> tuple[Quantity, int]:
         """
         Constructs a brightness profile for the given galaxy cluster, and interpolates to find values
         at the requested radii in units of scale_radius.
@@ -363,14 +420,16 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
         # The storage key is different based on whether the user wishes to generate profiles from PSF corrected
         #  ratemaps or not.
         if not psf_corr:
-            storage_key = "bound_{l}-{u}".format(l=lower.value, u=upper.value)
+            storage_key = f"bound_{lower.value}-{upper.value}"
         else:
-            storage_key = "bound_{l}-{u}_{m}_{n}_{a}{i}".format(l=lower.value, u=upper.value, m=psf_model,
-                                                                n=psf_bins, a=psf_algo, i=psf_iter)
+            storage_key = f"bound_{lower.value}-{upper.value}_{psf_model}_{psf_bins}_{psf_algo}{psf_iter}"
 
         # Retrieving the relevant ratemap object, as well as masks
-        rt = [r[-1] for r in src_obj.get_products("combined_ratemap", just_obj=False,
-                                                  telescope=telescope) if storage_key in r][0]
+        rt = [
+            r[-1]
+            for r in src_obj.get_products("combined_ratemap", just_obj=False, telescope=telescope)
+            if storage_key in r
+        ][0]
 
         # The user can choose to use the original user passed coordinates, or the X-ray centroid
         if use_peak:
@@ -394,10 +453,18 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
         #     matching_profs = []
 
         try:
-            matching_profs = src_obj.get_1d_brightness_profile(rad, central_coord=central_coord, pix_step=pix_step,
-                                                               min_snr=min_snr, psf_corr=psf_corr, psf_algo=psf_algo,
-                                                               psf_model=psf_model, psf_iter=psf_iter,
-                                                               psf_bins=psf_bins, telescope=telescope)
+            matching_profs = src_obj.get_1d_brightness_profile(
+                rad,
+                central_coord=central_coord,
+                pix_step=pix_step,
+                min_snr=min_snr,
+                psf_corr=psf_corr,
+                psf_algo=psf_algo,
+                psf_model=psf_model,
+                psf_iter=psf_iter,
+                psf_bins=psf_bins,
+                telescope=telescope,
+            )
             if not isinstance(matching_profs, list):
                 matching_profs = [matching_profs]
         except NoProductAvailableError:
@@ -407,9 +474,19 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
         #  background mask
         try:
             if len(matching_profs) == 0:
-                sb_prof, success = radial_brightness(rt, central_coord, rad, float(src_obj.background_radius_factors[0]),
-                                                     float(src_obj.background_radius_factors[1]), int_mask,
-                                                     src_obj.redshift, pix_step, kpc, src_obj.cosmo, min_snr)
+                sb_prof, success = radial_brightness(
+                    rt,
+                    central_coord,
+                    rad,
+                    float(src_obj.background_radius_factors[0]),
+                    float(src_obj.background_radius_factors[1]),
+                    int_mask,
+                    src_obj.redshift,
+                    pix_step,
+                    kpc,
+                    src_obj.cosmo,
+                    min_snr,
+                )
                 src_obj.update_products(sb_prof)
             elif len(matching_profs) == 1:
                 sb_prof = matching_profs[0]
@@ -423,18 +500,22 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
             # This will mean that the profile is thrown away in a later step
             interp_brightness = np.full(radii.shape, np.nan)
             # But will also raise a warning so the user knows
-            warn(str(ve).replace("you're looking at", "{s} is".format(s=src_obj.name)).replace(".", "")
-                 + " - profile set to NaNs.", stacklevel=2)
+            warn(
+                str(ve).replace("you're looking at", f"{src_obj.name} is").replace(".", "") + " - profile set to NaNs.",
+                stacklevel=2,
+            )
 
         return interp_brightness, src_id
 
     # This is an internal function that does setup checks common to both stacking of data and models
-    _stack_setup_checks(sources, scale_radius, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
-                        telescope=telescope)
+    _stack_setup_checks(
+        sources, scale_radius, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, telescope=telescope
+    )
 
     sb = np.zeros((len(sources), len(radii)))
     # Sets up a multiprocessing pool
     with tqdm(total=len(sources), desc="Generating Brightness Profiles") as onwards, Pool(num_cores) as pool:
+
         def callback(results):
             nonlocal sb
             nonlocal onwards
@@ -447,28 +528,42 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
             raise err
 
         for s_ind, s in enumerate(sources):
-            pool.apply_async(construct_profile, callback=callback, error_callback=err_callback,
-                             args=(s, s_ind, lo_en, hi_en))
+            pool.apply_async(
+                construct_profile, callback=callback, error_callback=err_callback, args=(s, s_ind, lo_en, hi_en)
+            )
         pool.close()
         pool.join()
         onwards.close()
 
-    average_profile, scaled_luminosity, cov, norm_cov, stack_names = _create_stack(sb, sources, scale_radius, lo_en,
-                                                                                   hi_en, custom_temps, sim_met,
-                                                                                   abund_table, telescope=telescope)
+    average_profile, scaled_luminosity, cov, norm_cov, stack_names = _create_stack(
+        sb, sources, scale_radius, lo_en, hi_en, custom_temps, sim_met, abund_table, telescope=telescope
+    )
 
     return average_profile, scaled_luminosity, radii, cov, norm_cov, stack_names
 
 
-def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_peak: bool = True,
-                           pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20),
-                           min_snr: Union[int, float] = 0.0, lo_en: Quantity = Quantity(0.5, 'keV'),
-                           hi_en: Quantity = Quantity(2.0, 'keV'), custom_temps: Quantity = None,
-                           sim_met: Union[float, List] = 0.3, abund_table: str = 'angr',
-                           psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4,
-                           psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES,
-                           show_images: bool = False, figsize: tuple = (14, 14),
-                           telescope: str = None) -> None:
+def view_radial_data_stack(
+    sources: ClusterSample,
+    scale_radius: str = "r200",
+    use_peak: bool = True,
+    pix_step: int = 1,
+    radii: np.ndarray = np.linspace(0.01, 1, 20),
+    min_snr: int | float = 0.0,
+    lo_en: Quantity = Quantity(0.5, "keV"),
+    hi_en: Quantity = Quantity(2.0, "keV"),
+    custom_temps: Quantity = None,
+    sim_met: float | list = 0.3,
+    abund_table: str = "angr",
+    psf_corr: bool = False,
+    psf_model: str = "ELLBETA",
+    psf_bins: int = 4,
+    psf_algo: str = "rl",
+    psf_iter: int = 15,
+    num_cores: int = NUM_CORES,
+    show_images: bool = False,
+    figsize: tuple = (14, 14),
+    telescope: str = None,
+) -> None:
     """
     A convenience function that calls radial_data_stack and makes plots of the average profile, individual profiles,
     covariance, and normalised covariance matrix.
@@ -504,9 +599,26 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
         Default is None, in which case the default telescope associated with the source/sample will be used.
     """
     # Calls the stacking function
-    results = radial_data_stack(sources, scale_radius, use_peak, pix_step, radii, min_snr, lo_en, hi_en,
-                                custom_temps, sim_met, abund_table, psf_corr, psf_model, psf_bins, psf_algo,
-                                psf_iter, num_cores, telescope=telescope)
+    results = radial_data_stack(
+        sources,
+        scale_radius,
+        use_peak,
+        pix_step,
+        radii,
+        min_snr,
+        lo_en,
+        hi_en,
+        custom_temps,
+        sim_met,
+        abund_table,
+        psf_corr,
+        psf_model,
+        psf_bins,
+        psf_algo,
+        psf_iter,
+        num_cores,
+        telescope=telescope,
+    )
 
     # Gets the individual scaled profiles from results
     all_prof = results[1]
@@ -516,18 +628,18 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
     _view_stack(results, scale_radius, radii, figsize)
 
     if show_images:
-        raise NotImplementedError("The ability to show images alongside the stacked brightness profiles is not "
-                                  "currently functional.")
+        raise NotImplementedError(
+            "The ability to show images alongside the stacked brightness profiles is not currently functional."
+        )
 
         for name_ind, name in enumerate(results[5]):
             cur_src = sources[name]
             if not psf_corr:
-                storage_key = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
+                storage_key = f"bound_{lo_en.value}-{hi_en.value}"
             else:
-                storage_key = "bound_{l}-{u}_{m}_{n}_{a}{i}".format(l=lo_en.value, u=hi_en.value, m=psf_model,
-                                                                    n=psf_bins, a=psf_algo, i=psf_iter)
+                storage_key = f"bound_{lo_en.value}-{hi_en.value}_{psf_model}_{psf_bins}_{psf_algo}{psf_iter}"
 
-            rt = cur_src.get_products('combined_ratemap', extra_key=storage_key, telescope=telescope)[0]
+            rt = cur_src.get_products("combined_ratemap", extra_key=storage_key, telescope=telescope)[0]
 
             # The user can choose to use the original user passed coordinates, or the X-ray centroid
             if use_peak:
@@ -545,37 +657,63 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
             plt.sca(ax_arr[0])
 
             multiplier = (pr.back_pixel_bin[-1] / pr.pixel_bins[-1]) * 1.05
-            custom_xlims = (pr.centre[0].value - pr.pixel_bins[-1] * multiplier,
-                            pr.centre[0].value + pr.pixel_bins[-1] * multiplier)
-            custom_ylims = (pr.centre[1].value - pr.pixel_bins[-1] * multiplier,
-                            pr.centre[1].value + pr.pixel_bins[-1] * multiplier)
+            custom_xlims = (
+                pr.centre[0].value - pr.pixel_bins[-1] * multiplier,
+                pr.centre[0].value + pr.pixel_bins[-1] * multiplier,
+            )
+            custom_ylims = (
+                pr.centre[1].value - pr.pixel_bins[-1] * multiplier,
+                pr.centre[1].value + pr.pixel_bins[-1] * multiplier,
+            )
             # This populates ones of the axes with a view of the image
-            im_ax = rt.get_view(ax_arr[0], pr.centre, inter_mask, radial_bins_pix=pr.pixel_bins,
-                                back_bin_pix=pr.back_pixel_bin, zoom_in=True, manual_zoom_xlims=custom_xlims,
-                                manual_zoom_ylims=custom_ylims)
+            im_ax = rt.get_view(
+                ax_arr[0],
+                pr.centre,
+                inter_mask,
+                radial_bins_pix=pr.pixel_bins,
+                back_bin_pix=pr.back_pixel_bin,
+                zoom_in=True,
+                manual_zoom_xlims=custom_xlims,
+                manual_zoom_ylims=custom_ylims,
+            )
 
             ax_arr[1].set_xscale("log")
             ax_arr[1].set_yscale("log")
             ax_arr[1].xaxis.set_major_formatter(ScalarFormatter())
             ax_arr[1].plot(radii, all_prof[name_ind, :])
-            ax_arr[1].set_xlabel("Radius [{}]".format(scale_radius))
-            ax_arr[1].set_title("{} - Luminosity Profile".format(cur_src.name))
+            ax_arr[1].set_xlabel(f"Radius [{scale_radius}]")
+            ax_arr[1].set_title(f"{cur_src.name} - Luminosity Profile")
             ax_arr[1].set_ylabel("L$_x$ [erg$s^{-1}$]")
 
             plt.tight_layout()
             plt.show()
-            plt.close('all')
+            plt.close("all")
 
 
-def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "r200", fit_method: str = 'mcmc',
-                       use_peak: bool = True, pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20),
-                       min_snr: Union[int, float] = 0.0, lo_en: Quantity = Quantity(0.5, 'keV'),
-                       hi_en: Quantity = Quantity(2.0, 'keV'), custom_temps: Quantity = None,
-                       sim_met: Union[float, List] = 0.3, abund_table: str = 'angr', psf_corr: bool = False,
-                       psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
-                       num_cores: int = NUM_CORES, num_walkers: int = 20, num_steps: int = 20000,
-                       telescope: str = None) \
-        -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
+def radial_model_stack(
+    sources: ClusterSample,
+    model: str,
+    scale_radius: str = "r200",
+    fit_method: str = "mcmc",
+    use_peak: bool = True,
+    pix_step: int = 1,
+    radii: np.ndarray = np.linspace(0.01, 1, 20),
+    min_snr: int | float = 0.0,
+    lo_en: Quantity = Quantity(0.5, "keV"),
+    hi_en: Quantity = Quantity(2.0, "keV"),
+    custom_temps: Quantity = None,
+    sim_met: float | list = 0.3,
+    abund_table: str = "angr",
+    psf_corr: bool = False,
+    psf_model: str = "ELLBETA",
+    psf_bins: int = 4,
+    psf_algo: str = "rl",
+    psf_iter: int = 15,
+    num_cores: int = NUM_CORES,
+    num_walkers: int = 20,
+    num_steps: int = 20000,
+    telescope: str = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
     """
     Creates, fits, and scales radial brightness profiles for a set of galaxy clusters so that they can be combined
     and compared, like for like. This function fits models of a user's choice, and then uses the models to retrieve
@@ -621,9 +759,9 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
     """
     raise NotImplementedError("This has not been implemented yet.")
 
-
-    def construct_profile(src_obj: GalaxyCluster, src_id: int, lower: Quantity, upper: Quantity) \
-            -> Tuple[Quantity, int]:
+    def construct_profile(
+        src_obj: GalaxyCluster, src_id: int, lower: Quantity, upper: Quantity
+    ) -> tuple[Quantity, int]:
         """
         Constructs a brightness profile for the given galaxy cluster, and interpolates to find values
         at the requested radii in units of scale_radius.
@@ -640,14 +778,16 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
         # The storage key is different based on whether the user wishes to generate profiles from PSF corrected
         #  ratemaps or not.
         if not psf_corr:
-            storage_key = "bound_{l}-{u}".format(l=lower.value, u=upper.value)
+            storage_key = f"bound_{lower.value}-{upper.value}"
         else:
-            storage_key = "bound_{l}-{u}_{m}_{n}_{a}{i}".format(l=lower.value, u=upper.value, m=psf_model,
-                                                                n=psf_bins, a=psf_algo, i=psf_iter)
+            storage_key = f"bound_{lower.value}-{upper.value}_{psf_model}_{psf_bins}_{psf_algo}{psf_iter}"
 
         # Retrieving the relevant ratemap object, as well as masks
-        rt = [r[-1] for r in src_obj.get_products("combined_ratemap", just_obj=False,
-                                                  telescope=telescope) if storage_key in r][0]
+        rt = [
+            r[-1]
+            for r in src_obj.get_products("combined_ratemap", just_obj=False, telescope=telescope)
+            if storage_key in r
+        ][0]
 
         # The user can choose to use the original user passed coordinates, or the X-ray centroid
         if use_peak:
@@ -673,10 +813,19 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
         #  background mask
         try:
             if len(matching_profs) == 0:
-                sb_prof, success = radial_brightness(rt, central_coord, rad,
-                                                     float(src_obj.background_radius_factors[0]),
-                                                     float(src_obj.background_radius_factors[1]), int_mask,
-                                                     src_obj.redshift, pix_step, kpc, src_obj.cosmo, min_snr)
+                sb_prof, success = radial_brightness(
+                    rt,
+                    central_coord,
+                    rad,
+                    float(src_obj.background_radius_factors[0]),
+                    float(src_obj.background_radius_factors[1]),
+                    int_mask,
+                    src_obj.redshift,
+                    pix_step,
+                    kpc,
+                    src_obj.cosmo,
+                    min_snr,
+                )
                 src_obj.update_products(sb_prof)
             elif len(matching_profs) == 1:
                 sb_prof = matching_profs[0]
@@ -687,37 +836,49 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
             #  radii to values I can pass into the model
             model_radii = radii * src_obj.get_radius(scale_radius, kpc)
 
-            sb_prof.fit(model, progress_bar=False, show_warn=False, method=fit_method, num_walkers=num_walkers,
-                        num_steps=num_steps)
+            sb_prof.fit(
+                model,
+                progress_bar=False,
+                show_warn=False,
+                method=fit_method,
+                num_walkers=num_walkers,
+                num_steps=num_steps,
+            )
             try:
                 fitted_model = sb_prof.get_model_fit(model, fit_method)
                 model_brightness = fitted_model(model_radii)
 
             except XGAFitError:
                 model_brightness = np.full(radii.shape, np.nan)
-                warn('Model fit for {s} failed - profile set to NaNs'.format(s=src_obj.name), stacklevel=2)
+                warn(f"Model fit for {src_obj.name} failed - profile set to NaNs", stacklevel=2)
 
         except ValueError as ve:
             # This will mean that the profile is thrown away in a later step
             model_brightness = np.full(radii.shape, np.nan)
             # But will also raise a warning so the user knows
-            warn(str(ve).replace("you're looking at", "{s} is".format(s=src_obj.name)).replace(".", "")
-                 + " - profile set to NaNs.", stacklevel=2)
+            warn(
+                str(ve).replace("you're looking at", f"{src_obj.name} is").replace(".", "") + " - profile set to NaNs.",
+                stacklevel=2,
+            )
 
         return model_brightness, src_id
 
     # This is an internal function that does setup checks common to both stacking of data and models
-    _stack_setup_checks(sources, scale_radius, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
-                        telescope=telescope)
+    _stack_setup_checks(
+        sources, scale_radius, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, telescope=telescope
+    )
 
     sb = np.zeros((len(sources), len(radii)))
     # Sets up a multiprocessing pool
     with tqdm(total=len(sources), desc="Generating Brightness Profiles") as onwards, Pool(num_cores) as pool:
+
         def callback(results):
             nonlocal sb
             nonlocal onwards
             b, s_id = results
-            sb[s_id, :] = b.reshape(len(b),)
+            sb[s_id, :] = b.reshape(
+                len(b),
+            )
             onwards.update(1)
 
         def err_callback(err):
@@ -725,28 +886,46 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
             raise err
 
         for s_ind, s in enumerate(sources):
-            pool.apply_async(construct_profile, callback=callback, error_callback=err_callback,
-                             args=(s, s_ind, lo_en, hi_en))
+            pool.apply_async(
+                construct_profile, callback=callback, error_callback=err_callback, args=(s, s_ind, lo_en, hi_en)
+            )
         pool.close()
         pool.join()
         onwards.close()
 
-    average_profile, scaled_luminosity, cov, norm_cov, stack_names = _create_stack(sb, sources, scale_radius, lo_en,
-                                                                                   hi_en, custom_temps, sim_met,
-                                                                                   abund_table, telescope=telescope)
+    average_profile, scaled_luminosity, cov, norm_cov, stack_names = _create_stack(
+        sb, sources, scale_radius, lo_en, hi_en, custom_temps, sim_met, abund_table, telescope=telescope
+    )
 
     return average_profile, scaled_luminosity, radii, cov, norm_cov, stack_names
 
 
-def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "r200", fit_method: str = 'mcmc',
-                            use_peak: bool = True, pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20),
-                            min_snr: Union[int, float] = 0.0, lo_en: Quantity = Quantity(0.5, 'keV'),
-                            hi_en: Quantity = Quantity(2.0, 'keV'), custom_temps: Quantity = None,
-                            sim_met: Union[float, List] = 0.3, abund_table: str = 'angr', psf_corr: bool = False,
-                            psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
-                            num_cores: int = NUM_CORES, num_walkers: int = 30, num_steps: int = 20000,
-                            show_images: bool = False, figsize: tuple = (14, 14),
-                            telescope: str = None) -> None:
+def view_radial_model_stack(
+    sources: ClusterSample,
+    model: str,
+    scale_radius: str = "r200",
+    fit_method: str = "mcmc",
+    use_peak: bool = True,
+    pix_step: int = 1,
+    radii: np.ndarray = np.linspace(0.01, 1, 20),
+    min_snr: int | float = 0.0,
+    lo_en: Quantity = Quantity(0.5, "keV"),
+    hi_en: Quantity = Quantity(2.0, "keV"),
+    custom_temps: Quantity = None,
+    sim_met: float | list = 0.3,
+    abund_table: str = "angr",
+    psf_corr: bool = False,
+    psf_model: str = "ELLBETA",
+    psf_bins: int = 4,
+    psf_algo: str = "rl",
+    psf_iter: int = 15,
+    num_cores: int = NUM_CORES,
+    num_walkers: int = 30,
+    num_steps: int = 20000,
+    show_images: bool = False,
+    figsize: tuple = (14, 14),
+    telescope: str = None,
+) -> None:
     """
     A convenience function that calls radial_model_stack and makes plots of the average profile, individual profiles,
     covariance, and normalised covariance matrix.
@@ -786,9 +965,30 @@ def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: st
         Default is None, in which case the default telescope associated with the source/sample will be used.
     """
     # Calls the stacking function
-    results = radial_model_stack(sources, model, scale_radius, fit_method, use_peak, pix_step, radii, min_snr,
-                                 lo_en, hi_en, custom_temps, sim_met, abund_table, psf_corr, psf_model, psf_bins,
-                                 psf_algo, psf_iter, num_cores, num_walkers, num_steps, telescope=telescope)
+    results = radial_model_stack(
+        sources,
+        model,
+        scale_radius,
+        fit_method,
+        use_peak,
+        pix_step,
+        radii,
+        min_snr,
+        lo_en,
+        hi_en,
+        custom_temps,
+        sim_met,
+        abund_table,
+        psf_corr,
+        psf_model,
+        psf_bins,
+        psf_algo,
+        psf_iter,
+        num_cores,
+        num_walkers,
+        num_steps,
+        telescope=telescope,
+    )
 
     # Gets the individual scaled profiles from results
     all_prof = results[1]
@@ -801,12 +1001,11 @@ def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: st
         for name_ind, name in enumerate(results[5]):
             cur_src = sources[name]
             if not psf_corr:
-                storage_key = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
+                storage_key = f"bound_{lo_en.value}-{hi_en.value}"
             else:
-                storage_key = "bound_{l}-{u}_{m}_{n}_{a}{i}".format(l=lo_en.value, u=hi_en.value, m=psf_model,
-                                                                    n=psf_bins, a=psf_algo, i=psf_iter)
+                storage_key = f"bound_{lo_en.value}-{hi_en.value}_{psf_model}_{psf_bins}_{psf_algo}{psf_iter}"
 
-            rt = cur_src.get_products('combined_ratemap', extra_key=storage_key, telescope=telescope)[0]
+            rt = cur_src.get_products("combined_ratemap", extra_key=storage_key, telescope=telescope)[0]
 
             # The user can choose to use the original user passed coordinates, or the X-ray centroid
             if use_peak:
@@ -817,46 +1016,64 @@ def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: st
             rad = cur_src.get_radius(scale_radius, kpc)
 
             prof_prods = cur_src.get_products("combined_brightness_profile", telescope=telescope)
-            matching_profs = [p for p in list(prof_prods[0].values()) if p.check_match(rt, pix_peak, pix_step,
-                                                                                       min_snr, rad)]
+            matching_profs = [
+                p for p in list(prof_prods[0].values()) if p.check_match(rt, pix_peak, pix_step, min_snr, rad)
+            ]
             pr = matching_profs[0]
             fig, ax_arr = plt.subplots(ncols=3, figsize=(figsize[0], figsize[0] * 0.32))
 
             plt.sca(ax_arr[0])
             multiplier = (pr.back_pixel_bin[-1] / pr.pixel_bins[-1]) * 1.05
-            custom_xlims = (pr.centre[0].value - pr.pixel_bins[-1] * multiplier,
-                            pr.centre[0].value + pr.pixel_bins[-1] * multiplier)
-            custom_ylims = (pr.centre[1].value - pr.pixel_bins[-1] * multiplier,
-                            pr.centre[1].value + pr.pixel_bins[-1] * multiplier)
+            custom_xlims = (
+                pr.centre[0].value - pr.pixel_bins[-1] * multiplier,
+                pr.centre[0].value + pr.pixel_bins[-1] * multiplier,
+            )
+            custom_ylims = (
+                pr.centre[1].value - pr.pixel_bins[-1] * multiplier,
+                pr.centre[1].value + pr.pixel_bins[-1] * multiplier,
+            )
             # This populates ones of the axes with a view of the image
-            im_ax = rt.get_view(ax_arr[0], pr.centre, inter_mask, radial_bins_pix=pr.pixel_bins,
-                                back_bin_pix=pr.back_pixel_bin, zoom_in=True, manual_zoom_xlims=custom_xlims,
-                                manual_zoom_ylims=custom_ylims)
+            im_ax = rt.get_view(
+                ax_arr[0],
+                pr.centre,
+                inter_mask,
+                radial_bins_pix=pr.pixel_bins,
+                back_bin_pix=pr.back_pixel_bin,
+                zoom_in=True,
+                manual_zoom_xlims=custom_xlims,
+                manual_zoom_ylims=custom_ylims,
+            )
 
             ax_arr[1].set_xscale("log")
             ax_arr[1].set_yscale("log")
             ax_arr[1].xaxis.set_major_formatter(ScalarFormatter())
             ax_arr[1].plot(radii, all_prof[name_ind, :])
-            ax_arr[1].set_xlabel("Radius [{}]".format(scale_radius))
-            ax_arr[1].set_title("{} - Luminosity Profile".format(cur_src.name))
+            ax_arr[1].set_xlabel(f"Radius [{scale_radius}]")
+            ax_arr[1].set_title(f"{cur_src.name} - Luminosity Profile")
             ax_arr[1].set_ylabel("L$_x$ [erg$s^{-1}$]")
 
             # This plots a basic representation of the SB data and the model fit, for validation purposes
             ax_arr[2].set_xscale("log")
             ax_arr[2].set_yscale("log")
             ax_arr[2].xaxis.set_major_formatter(ScalarFormatter())
-            ax_arr[2].set_xlabel("Radius [{}]".format(pr.radii.unit.to_string()))
-            ax_arr[2].set_title("{} - Fitted Surface Brightness Profile".format(cur_src.name))
+            ax_arr[2].set_xlabel(f"Radius [{pr.radii.unit.to_string()}]")
+            ax_arr[2].set_title(f"{cur_src.name} - Fitted Surface Brightness Profile")
             y_unit = r"$\left[" + pr.values_unit.to_string("latex").strip("$") + r"\right]$"
             ax_arr[2].set_ylabel("Surface Brightness " + y_unit)
 
-            ax_arr[2].errorbar(pr.radii.value, pr.values.value-pr.background.value, xerr=pr.radii_err.value,
-                               yerr=pr.values_err.value, fmt="x", capsize=2,)
+            ax_arr[2].errorbar(
+                pr.radii.value,
+                pr.values.value - pr.background.value,
+                xerr=pr.radii_err.value,
+                yerr=pr.values_err.value,
+                fmt="x",
+                capsize=2,
+            )
 
             mod_fit = pr.get_model_fit(model)
             mod_plot_radii = np.linspace(pr.radii.value[0], pr.radii.value[-1], 300)
-            ax_arr[2].plot(mod_plot_radii, mod_fit['model_func'](mod_plot_radii, *mod_fit['par']))
+            ax_arr[2].plot(mod_plot_radii, mod_fit["model_func"](mod_plot_radii, *mod_fit["par"]))
 
             plt.tight_layout()
             plt.show()
-            plt.close('all')
+            plt.close("all")

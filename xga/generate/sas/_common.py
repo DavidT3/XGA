@@ -1,16 +1,17 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 1:34 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 1:46 PM. Copyright (c) The Contributors.
 
 import os.path
 import warnings
 
 from astropy.units import Quantity
 
+from xga import NUM_CORES, OUTPUT, RAD_LABELS
+
 from ...exceptions import NotAssociatedError
 from ...samples.base import BaseSample
 from ...sources import BaseSource, GalaxyCluster
 from ...sources.base import NullSource
-from ...utils import NUM_CORES, OUTPUT, RAD_LABELS
 from .misc import cifbuild
 
 

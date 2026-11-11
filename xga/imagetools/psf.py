@@ -1,29 +1,34 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 1:50 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 1:46 PM. Copyright (c) The Contributors.
 
 import os
 from multiprocessing.dummy import Pool
-from typing import Tuple, Union
 from warnings import warn
 
 import numpy as np
 from astropy.units import Quantity
-from fitsio import FITSHDR
-from fitsio import write
+from fitsio import FITSHDR, write
 from scipy.signal import convolve
 from tqdm import tqdm
 
-from ..exceptions import NotAssociatedError, NoProductAvailableError
-from ..generate.sas import evselect_image, psfgen, emosaic
-from ..products import PSFGrid, Image
+from xga import NUM_CORES, OUTPUT
+
+from ..exceptions import NoProductAvailableError, NotAssociatedError
+from ..generate.sas import emosaic, evselect_image, psfgen
+from ..products import Image, PSFGrid
 from ..samples.base import BaseSample
 from ..sources import BaseSource
-from ..utils import NUM_CORES, OUTPUT
 
 
-def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_model: str = "ELLBETA",
-           lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
-           bins: int = 4, num_cores: int = NUM_CORES):
+def rl_psf(
+    sources: BaseSource | BaseSample,
+    iterations: int = 15,
+    psf_model: str = "ELLBETA",
+    lo_en: Quantity = Quantity(0.5, "keV"),
+    hi_en: Quantity = Quantity(2.0, "keV"),
+    bins: int = 4,
+    num_cores: int = NUM_CORES,
+) -> None:
     """
     An implementation of the Richardson-Lucy (doi:10.1364/JOSA.62.000055) PSF deconvolution algorithm that
     also takes into account the spatial variance of the PSF. The sources passed into this
@@ -46,8 +51,8 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
     :param int num_cores: The number of cores to use (if running locally), the default is set to 90%
         of available cores in your system.
     """
-    def rl_step(ind: int, cur_image: np.ndarray, last_image: np.ndarray, rel_psf: np.ndarray) \
-            -> Tuple[np.ndarray, int]:
+
+    def rl_step(ind: int, cur_image: np.ndarray, last_image: np.ndarray, rel_psf: np.ndarray) -> tuple[np.ndarray, int]:
         """
         This performs one iteration of the Richardson-Lucy PSF deconvolution method. Basically copied from
         the skimage implementation, but set up so that we can multiprocess this, as well as do it in steps
@@ -61,8 +66,8 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
         :rtype: Tuple[np.ndarray, int]
         """
         psf_mirror = rel_psf[::-1, ::-1]
-        relative_blur = cur_image / convolve(last_image, rel_psf, mode='same')
-        im_deconv = last_image * convolve(relative_blur, psf_mirror, mode='same')
+        relative_blur = cur_image / convolve(last_image, rel_psf, mode="same")
+        im_deconv = last_image * convolve(relative_blur, psf_mirror, mode="same")
 
         return im_deconv, ind
 
@@ -101,8 +106,8 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
     # These just make sure that the images to be deconvolved and the PSFs to deconvolve them
     #  with have actually been generated. If they are already associated with the sources then this won't
     #  do anything.
-    lo_en = lo_en.to('keV')
-    hi_en = hi_en.to('keV')
+    lo_en = lo_en.to("keV")
+    hi_en = hi_en.to("keV")
     # Making sure that the necessary images and PSFs are generated
     evselect_image(sources, lo_en, hi_en, num_cores=num_cores)
 
@@ -111,9 +116,10 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
 
     # This method currently only works for xmm, so we need to make sure that XMM is actually associated with the
     #  source, or at least one source if it is in a sample
-    if 'xmm' not in _get_all_telescopes(sources):
-        raise NotAssociatedError("The XMM telescope is not associated with this source/sample, and this method "
-                                 "currently only supports XMM.")
+    if "xmm" not in _get_all_telescopes(sources):
+        raise NotAssociatedError(
+            "The XMM telescope is not associated with this source/sample, and this method currently only supports XMM."
+        )
 
     # If just one source is passed in, make it a list of one, makes behaviour more consistent
     #  throughout this function.
@@ -125,16 +131,24 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
     for source in sources:
         # It is possible, if we're dealing with a sample, that some of the component sources do have XMM data, and some
         #  don't. We know at this point that some DEFINITELY do - so we check here whether we should skip this one
-        if 'xmm' not in source.telescopes:
+        if "xmm" not in source.telescopes:
             continue
 
         # All the image objects of the specified energy range (so every combination of ObsID and instrument)
-        match_images = source.get_images(lo_en=lo_en, hi_en=hi_en, telescope='xmm')
+        match_images = source.get_images(lo_en=lo_en, hi_en=hi_en, telescope="xmm")
 
         try:
             # Check to see if all individual PSF corrected images are present
-            psf_corr_prod = source.get_images(lo_en=lo_en, hi_en=hi_en, psf_corr=True, psf_model=psf_model, psf_bins=bins,
-                                            psf_iter=iterations, psf_algo='rl', telescope='xmm')
+            psf_corr_prod = source.get_images(
+                lo_en=lo_en,
+                hi_en=hi_en,
+                psf_corr=True,
+                psf_model=psf_model,
+                psf_bins=bins,
+                psf_iter=iterations,
+                psf_algo="rl",
+                telescope="xmm",
+            )
         except NoProductAvailableError:
             psf_corr_prod = []
 
@@ -150,23 +164,28 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
     # Should have cleaned it so that only those sources that need it will have PSFs generated
     psfgen(sub_sources, bins, psf_model, num_cores=num_cores)
 
-    corr_prog_message = 'PSF Correcting Observations - Currently {}'
-    with tqdm(desc=corr_prog_message.format(''), total=len(sub_sources),
-              disable=len(sub_sources) == 0) as corr_progress:
+    corr_prog_message = "PSF Correcting Observations - Currently {}"
+    with tqdm(
+        desc=corr_prog_message.format(""), total=len(sub_sources), disable=len(sub_sources) == 0
+    ) as corr_progress:
         for source in sub_sources:
             source: BaseSource
             # Updates the source name in the message every iteration
             corr_progress.set_description(corr_prog_message.format(source.name))
 
             # All the image objects of the specified energy range (so every combination of ObsID and instrument)
-            match_images = source.get_images(lo_en=lo_en, hi_en=hi_en, telescope='xmm')
+            match_images = source.get_images(lo_en=lo_en, hi_en=hi_en, telescope="xmm")
 
             # Just warns the user that some of the images may not be valid
             for matched in match_images:
                 if "PrimeFullWindow" not in matched.header["SUBMODE"]:
-                    warn("PSF corrected images for {s}-{o}-{i} may not be valid, as the data was taken in {m} "
-                         "mode".format(s=source.name, o=matched.obs_id, i=matched.instrument,
-                                       m=matched.header["SUBMODE"]), stacklevel=2)
+                    warn(
+                        "PSF corrected images for {s}-{o}-{i} may not be valid, as the data was taken in {m} "
+                        "mode".format(
+                            s=source.name, o=matched.obs_id, i=matched.instrument, m=matched.header["SUBMODE"]
+                        ),
+                        stacklevel=2,
+                    )
 
             # For now just going to iterate through them, we'll see if I can improve it later
             for im in match_images:
@@ -176,18 +195,18 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
 
                 # Extra key we need to search for the PSFGrid we need, then fetch it.
                 psf_key = "_".join([psf_model, str(bins)])
-                psf_grid: PSFGrid = source.get_products("psf", obs_id, inst, psf_key, telescope='xmm')[0]
+                psf_grid: PSFGrid = source.get_products("psf", obs_id, inst, psf_key, telescope="xmm")[0]
 
                 # This uses a built in method of the PSF class to re-sample the PSF(s) to the same
                 #  scale as our image
                 resamp_psfs = []
                 for psf in psf_grid:
-                    resamp_psfs.append(psf.resample(im, Quantity(64, 'pix')))
+                    resamp_psfs.append(psf.resample(im, Quantity(64, "pix")))
 
                 full_im_data = im.data.copy()
                 # This adds very low level random noise to the image, getting rid of 0 values, this makes life
                 #  easier with the convolution functions
-                full_im_data += full_im_data.max() * 1E-8 * np.random.random(full_im_data.shape)
+                full_im_data += full_im_data.max() * 1e-8 * np.random.random(full_im_data.shape)
 
                 # Nasty nested list to store each step for each PSF in
                 # The starting array full of 0.5 values is what is used in the skimage implementation
@@ -210,8 +229,12 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
                         # Starts a deconvolution function for each spatial PSF, adding them to the
                         #  multiprocessing pool
                         for psf_ind, psf in enumerate(psf_grid):
-                            pool.apply_async(rl_step, callback=callback, error_callback=err_callback,
-                                             args=(psf_ind, full_im_data, storage[psf_ind][-1], resamp_psfs[psf_ind]))
+                            pool.apply_async(
+                                rl_step,
+                                callback=callback,
+                                error_callback=err_callback,
+                                args=(psf_ind, full_im_data, storage[psf_ind][-1], resamp_psfs[psf_ind]),
+                            )
                         pool.close()  # No more tasks can be added to the pool
                         pool.join()  # Joins the pool, the code will only move on once the pool is empty.
 
@@ -241,31 +264,49 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
                     # Cut out the piece of the image array (for all iteration steps) that is relevant for the current
                     # PSF and insert it into the final image array at the same coordinates
                     # Patch-working yay, terminology definitely inspired by the new Passenger Album :)
-                    final_form[y_lims[0]:y_lims[1], x_lims[0]:x_lims[1], :] = \
-                        deconv_steps[y_lims[0]:y_lims[1], x_lims[0]:x_lims[1], :]
+                    final_form[y_lims[0] : y_lims[1], x_lims[0] : x_lims[1], :] = deconv_steps[
+                        y_lims[0] : y_lims[1], x_lims[0] : x_lims[1], :
+                    ]
 
                 # Final re-normalization, bit cheesy but oh well
                 norm_factors = og_total / np.sum(final_form, (0, 1))
                 final_form = final_form * norm_factors
 
                 # Define file names for the whole datacube (all iteration steps), and the final image (just the last).
-                datacube_name = "{o}_{i}_{b}bin_{it}iter_{m}mod_rlalgo_{l}-{u}keVpsfcorr_datacube." \
-                                "fits".format(o=obs_id, i=inst, b=bins, it=iterations, l=lo_en.value, u=hi_en.value,
-                                              m=psf_model)
+                datacube_name = (
+                    f"{obs_id}_{inst}_{bins}bin_{iterations}iter_{psf_model}mod_rlalgo_{lo_en.value}-{hi_en.value}keVpsfcorr_datacube."
+                    "fits"
+                )
                 # Define this one because emosaic can't deal with fits datacubes, and thats what I use to combine images.
-                im_name = "{o}_{i}_{b}bin_{it}iter_{m}mod_rlalgo_{l}-{u}keVpsfcorr_img." \
-                          "fits".format(o=obs_id, i=inst, b=bins, it=iterations, l=lo_en.value, u=hi_en.value,
-                                        m=psf_model)
+                im_name = (
+                    f"{obs_id}_{inst}_{bins}bin_{iterations}iter_{psf_model}mod_rlalgo_{lo_en.value}-{hi_en.value}keVpsfcorr_img."
+                    "fits"
+                )
 
                 # Use the super handy fitsio write function to create the new fits datacube, and final image.
-                write(os.path.join(OUTPUT, 'xmm', obs_id, datacube_name), np.moveaxis(final_form, 2, 0),
-                      header=new_header(im.header))
-                write(os.path.join(OUTPUT, 'xmm', obs_id, im_name), np.moveaxis(final_form, 2, 0)[-1, :, :],
-                      header=new_header(im.header))
+                write(
+                    os.path.join(OUTPUT, "xmm", obs_id, datacube_name),
+                    np.moveaxis(final_form, 2, 0),
+                    header=new_header(im.header),
+                )
+                write(
+                    os.path.join(OUTPUT, "xmm", obs_id, im_name),
+                    np.moveaxis(final_form, 2, 0)[-1, :, :],
+                    header=new_header(im.header),
+                )
 
                 # Makes an XGA product of our brand new image
-                fin_im = Image(os.path.join(OUTPUT, 'xmm', obs_id, im_name), obs_id, inst, '', '', '', lo_en, hi_en,
-                               telescope='xmm')
+                fin_im = Image(
+                    os.path.join(OUTPUT, "xmm", obs_id, im_name),
+                    obs_id,
+                    inst,
+                    "",
+                    "",
+                    "",
+                    lo_en,
+                    hi_en,
+                    telescope="xmm",
+                )
                 # Adds PSF correction information for XGA's internal use
                 fin_im.psf_corrected = True
                 fin_im.psf_algorithm = "rl"
@@ -280,9 +321,17 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
                 psf_grid.unload_data()
 
             corr_progress.update(1)
-        corr_progress.set_description(corr_prog_message.format('complete'))
+        corr_progress.set_description(corr_prog_message.format("complete"))
 
     # For the passed sources we now run emosaic to create combined PSF corrected images.
-    emosaic(sources, "image", lo_en, hi_en, psf_corr=True, psf_model=psf_model, psf_bins=bins,
-            psf_algo="rl", psf_iter=iterations)
-
+    emosaic(
+        sources,
+        "image",
+        lo_en,
+        hi_en,
+        psf_corr=True,
+        psf_model=psf_model,
+        psf_bins=bins,
+        psf_algo="rl",
+        psf_iter=iterations,
+    )
