@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/6/26, 10:08 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 2:06 PM. Copyright (c) The Contributors.
 """
 The xga.generate.sas.phot module implements wrapper functions for SAS tools that generate 'photometric' (i.e. images
 and things related to images) data products. As these functions wrap SAS tools specifically, they are only
@@ -191,10 +191,10 @@ def eexpmap(
         lo_chan = int(lo_en.to("eV").value)
         hi_chan = int(hi_en.to("eV").value)
 
-    # These are crucial, to generate an exposure map one must have a ccf.cif calibration file, and a reference
-    # image. If they do not already exist, these commands should generate them.
+    # These are crucial; to generate an exposure map one must have a ccf.cif calibration file, and a reference
+    #  image. If they do not already exist, these commands should generate them.
     cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
-    sources = evselect_image(sources, lo_en, hi_en)
+    sources = evselect_image(sources, lo_en, hi_en, num_cores=num_cores, disable_progress=disable_progress)
 
     # This is necessary because the decorator will reduce a one element list of source objects to a single
     # source object. Useful for the user, not so much here where the code expects an iterable.
