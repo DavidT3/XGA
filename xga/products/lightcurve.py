@@ -972,7 +972,7 @@ class LightCurve(BaseProduct):
         :param float alpha: The alpha value to be used for the plotted data. Default is 0.8.
         """
         # Create figure object
-        fig = plt.figure(figsize=figsize)
+        plt.figure(figsize=figsize)
 
         ax = plt.gca()
 

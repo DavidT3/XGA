@@ -1223,7 +1223,7 @@ class ScalingRelation:
             colours = cmap_mapper.to_rgba(self.third_dimension_data.value)
             # I didn't really want to do this but errorbar calls plot (rather than scatter) so it will only do one
             #  colour at a time.
-            for c_ind, col in enumerate(colours):
+            for c_ind, _col in enumerate(colours):
                 ax.errorbar(
                     self._x_data[c_ind].value,
                     self._y_data[c_ind].value,
@@ -1955,7 +1955,7 @@ class AggregateScalingRelation:
             #  how to use the colour cycle object properly
             if len(rel.x_data.value[:, 0]) == 0 or not show_data:
                 # Sets up a null error bar instance for the colour basically
-                d_out = ax.errorbar(
+                ax.errorbar(
                     None,
                     None,
                     xerr=None,
@@ -1966,7 +1966,7 @@ class AggregateScalingRelation:
                     color=data_colour_list[rel_ind],
                 )
             else:
-                d_out = ax.errorbar(
+                ax.errorbar(
                     rel.x_data.value[:, 0],
                     rel.y_data.value[:, 0],
                     xerr=rel.x_data.value[:, 1],

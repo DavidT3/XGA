@@ -3,7 +3,7 @@
 """This module defines custom exceptions for XGA."""
 
 
-class eSASSInputInvalid(Exception):
+class eSASSInputInvalid(Exception):  # noqa: N801, N818
     """Exception raised when a user provides an invalid input to an eSASS function."""
 
     def __init__(self, *args: object) -> None:
@@ -72,7 +72,7 @@ class SASNotFoundError(Exception):
             return "SASNotFoundError has been raised"
 
 
-class eSASSNotFoundError(Exception):
+class eSASSNotFoundError(Exception):  # noqa: N801
     """Exception raised if the eROSITA Science Analysis Software System cannot be found on the system."""
 
     def __init__(self, *args: object) -> None:
@@ -565,7 +565,7 @@ class PeakConvergenceFailedError(Exception):
             return "PeakConvergenceFailedError has been raised"
 
 
-class SASInputInvalid(Exception):
+class SASInputInvalid(Exception):  # noqa: N818
     """Exception raised when a user provides an invalid input to a SAS function."""
 
     def __init__(self, *args: object) -> None:

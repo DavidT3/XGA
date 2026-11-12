@@ -321,7 +321,7 @@ def single_temp_apec_profile(
                     )
 
                     try:
-                        res = ann_spec.get_results(ann_id, model, "kT", fit_conf)
+                        ann_spec.get_results(ann_id, model, "kT", fit_conf)
                     except (ModelNotAssociatedError, FitConfNotAssociatedError):
                         out_file, script_file, inv_ent = _write_xspec_script(
                             source,
@@ -492,7 +492,7 @@ def single_temp_apec_profile(
                 file_prefix = ann_spec.storage_key + f"_ident{ann_spec.set_ident}_" + "all"
 
                 try:
-                    res = ann_spec.get_results(0, model, "kT", fit_conf)
+                    ann_spec.get_results(0, model, "kT", fit_conf)
                 except (ModelNotAssociatedError, FitConfNotAssociatedError):
                     out_file, script_file, inv_ent = _write_xspec_script(
                         source,

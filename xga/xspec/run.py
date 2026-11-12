@@ -251,7 +251,7 @@ def xspec_call(xspec_func: Callable[..., Any]) -> Callable[..., Any]:
             warn("All XSPEC operations had already been run.", stacklevel=2)
 
         # Now we assign the fit results to source objects
-        err_list: list[Any] = []
+        # err_list: list[Any] = []
         for src_repr in results:
             # Made this lookup list earlier, using string representations of source objects.
             # Finds the ind of the list of sources that we should add these results to

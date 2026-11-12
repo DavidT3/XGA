@@ -1,5 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 15/09/2025, 16:11. Copyright (c) The Contributors
+# ruff: noqa: N999
 """Pre-defined galaxy cluster temperature-X-ray luminosity scaling relations."""
 
 import numpy as np
@@ -10,7 +11,7 @@ from ...products.relation import ScalingRelation
 
 # TODO THIS ONE WAS FIT BY ME, AND IS PRELIMINARY
 
-xcs_sdss_r500_52_TL = ScalingRelation(
+xcs_sdss_r500_52_TL = ScalingRelation(  # noqa: N816
     np.array([0.30226566, 1.08843811]),
     np.array([0.01372833, 0.02184595]),
     power_law,
@@ -26,7 +27,7 @@ xcs_sdss_r500_52_TL = ScalingRelation(
     outer_aperture="R500",
 )
 
-xcs_sdss_r2500_52_TL = ScalingRelation(
+xcs_sdss_r2500_52_TL = ScalingRelation(  # noqa: N816
     np.array([0.27682937, 1.24930134]),
     np.array([0.01307604, 0.02552076]),
     power_law,

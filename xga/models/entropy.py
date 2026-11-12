@@ -51,8 +51,6 @@ class CoreConstPowerEntropy(BaseModel1D):
         if not any(x_convertible):
             allowed = ", ".join([u.to_string() for u in poss_x_units])
             raise UnitConversionError(f"{x_unit.to_string()} is not convertible to any of the allowed units; {allowed}")
-        else:
-            xu_ind = x_convertible.index(True)
 
         k_zero_starts = [Quantity(75, "keV cm^2")]
         k_100kpc = [Quantity(100, "keV cm^2")]
@@ -158,8 +156,6 @@ class PowerEntropy(BaseModel1D):
         if not any(x_convertible):
             allowed = ", ".join([u.to_string() for u in poss_x_units])
             raise UnitConversionError(f"{x_unit.to_string()} is not convertible to any of the allowed units; {allowed}")
-        else:
-            xu_ind = x_convertible.index(True)
 
         k_100kpc = [Quantity(100, "keV cm^2")]
         alpha = Quantity(1, "")

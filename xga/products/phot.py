@@ -303,12 +303,12 @@ class Image(BaseProduct):
                 # Not all images produced by SAS are going to be needed all the time, so they will only be read in if
                 # asked for.
                 self._data = read(self.path).astype("float64")
-            except OSError:
+            except OSError as err:
                 raise FileNotFoundError(
                     f"FITSIO read cannot open {self.path}, possibly because there is a problem with "
                     "the file, it doesn't exist, or maybe an SFTP problem? This product is "
                     f"associated with {self.src_name}."
-                )
+                ) from err
             if not self._allow_negative and self._data.min() < 0:
                 # This throws a non-fatal warning to let the user know there are negative pixel values,
                 #  and that they're being 'corrected'
@@ -379,7 +379,7 @@ class Image(BaseProduct):
                     f"FITSIO read_header cannot open {self.path}, possibly because there is a problem with "
                     "the file, it doesn't exist, or maybe an SFTP problem? This product is "
                     f"associated with {self.src_name}."
-                )
+                ) from err
 
         if not errored:
             # XMM images typically have two, both useful, so we'll find all available and store them
@@ -648,7 +648,7 @@ class Image(BaseProduct):
             # Not super happy with this, but the Astropy kernel.model.name attribute I would have preferred to
             #  use doesn't appear to be set for model objects upon which Kernels are based
             method_name = str(info).split(".")[-1].split(" object")[0]
-            method_pars = dict(zip(info.model.param_names, info.model.parameters.copy()))
+            method_pars = dict(zip(info.model.param_names, info.model.parameters.copy(), strict=False))
         else:
             method_name = info["method"]
             method_pars = info["pars"]
@@ -1459,9 +1459,9 @@ class Image(BaseProduct):
         zoom_in: bool = False,
         manual_zoom_xlims: tuple[float, float] | None = None,
         manual_zoom_ylims: tuple[float, float] | None = None,
-        radial_bins_pix: Quantity | np.ndarray = Quantity(np.array([]), "pix"),
+        radial_bins_pix: Quantity | np.ndarray = Quantity([], "pix"),
         back_bin_pix: Quantity | np.ndarray | None = None,
-        stretch: BaseStretch = LogStretch(),
+        stretch: BaseStretch | None = None,
         mask_edges: bool = True,
         view_regions: bool = False,
         ch_thickness: float | int = 0.8,
@@ -1505,7 +1505,8 @@ class Image(BaseProduct):
             measure the background value for a given profile, will only be triggered if a cross_hair coordinate is also
             specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
             specified, the first will be used as the centre.
-        :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
+        :param BaseStretch stretch: The astropy scaling to use for the image data. Default is None, in which case
+            LogStretch() is used.
         :param bool mask_edges: If viewing a RateMap, this variable will control whether the chip edges are masked
             to remove artificially bright pixels, default is True.
         :param bool view_regions: Controls whether regions are plotted on top of the visualization. Though only if
@@ -1633,6 +1634,8 @@ class Image(BaseProduct):
 
         # As this is a very quick view method, users will not be offered a choice of scaling
         #  There will be a more in-depth way of viewing cluster data eventually
+        if stretch is None:
+            stretch = LogStretch()
         norm = ImageNormalize(data=norm_data, interval=interval, stretch=stretch)
 
         # If we want to plot point clusters on the image
@@ -1760,9 +1763,9 @@ class Image(BaseProduct):
         zoom_in: bool = False,
         manual_zoom_xlims: tuple | None = None,
         manual_zoom_ylims: tuple | None = None,
-        radial_bins_pix: Quantity | np.ndarray = Quantity(np.array([]), "pix"),
+        radial_bins_pix: Quantity | np.ndarray = Quantity([], "pix"),
         back_bin_pix: Quantity | np.ndarray | None = None,
-        stretch: BaseStretch = LogStretch(),
+        stretch: BaseStretch | None = None,
         mask_edges: bool = True,
         view_regions: bool = False,
         ch_thickness: float | int = 0.8,
@@ -1804,7 +1807,8 @@ class Image(BaseProduct):
             measure the background value for a given profile, will only be triggered if a cross_hair coordinate is also
             specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
             specified, the first will be used as the centre.
-        :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
+        :param BaseStretch stretch: The astropy scaling to use for the image data. Default is None, in which case
+            LogStretch() is used.
         :param bool mask_edges: If viewing a RateMap, this variable will control whether the chip edges are masked
             to remove artificially bright pixels, default is True.
         :param bool view_regions: Controls whether regions are plotted on top of the visualization. Though only if
@@ -1824,7 +1828,7 @@ class Image(BaseProduct):
             Image/RateMap/ExpMap/etc. data. The default value is 'gnuplot2'.
         """
         # Create figure object
-        fig = plt.figure(figsize=figsize)
+        plt.figure(figsize=figsize)
 
         ax = plt.gca()
         ax = self.get_view(
@@ -1868,9 +1872,9 @@ class Image(BaseProduct):
         zoom_in: bool = False,
         manual_zoom_xlims: tuple | None = None,
         manual_zoom_ylims: tuple | None = None,
-        radial_bins_pix: Quantity | np.ndarray = Quantity(np.array([]), "pix"),
+        radial_bins_pix: Quantity | np.ndarray = Quantity([], "pix"),
         back_bin_pix: Quantity | np.ndarray | None = None,
-        stretch: BaseStretch = LogStretch(),
+        stretch: BaseStretch | None = None,
         mask_edges: bool = True,
         view_regions: bool = False,
         ch_thickness: float | int = 0.8,
@@ -1913,7 +1917,8 @@ class Image(BaseProduct):
             measure the background value for a given profile, will only be triggered if a cross_hair coordinate is also
             specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
             specified, the first will be used as the centre.
-        :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
+        :param BaseStretch stretch: The astropy scaling to use for the image data. Default is None, in which case
+            LogStretch() is used.
         :param bool mask_edges: If viewing a RateMap, this variable will control whether the chip edges are masked
             to remove artificially bright pixels, default is True.
         :param bool view_regions: Controls whether regions are plotted on top of the visualization. Though only if
@@ -1933,7 +1938,7 @@ class Image(BaseProduct):
             Image/RateMap/ExpMap/etc. data. The default value is 'gnuplot2'.
         """
         # Create figure object
-        fig = plt.figure(figsize=figsize)
+        plt.figure(figsize=figsize)
 
         # Turns off any ticks and tick labels, we don't want them in an image
         ax = plt.gca()
@@ -1974,7 +1979,7 @@ class Image(BaseProduct):
         cmap: str = "gnuplot2",
         reg_save_path: str | None = None,
         cross_hair: Quantity | None = None,
-        radial_bins_pix: Quantity | np.ndarray = Quantity(np.array([]), "pix"),
+        radial_bins_pix: Quantity | np.ndarray = Quantity([], "pix"),
         back_bin_pix: Quantity | np.ndarray | None = None,
     ) -> None:
         """
@@ -2012,7 +2017,7 @@ class Image(BaseProduct):
         figsize: tuple = (7, 7),
         cmap: str = "gnuplot2",
         cross_hair: Quantity | None = None,
-        radial_bins_pix: Quantity | np.ndarray = Quantity(np.array([]), "pix"),
+        radial_bins_pix: Quantity | np.ndarray = Quantity([], "pix"),
         back_bin_pix: Quantity | np.ndarray | None = None,
     ) -> None:
         """
@@ -2052,7 +2057,7 @@ class Image(BaseProduct):
             cmap: str = "gnuplot2",
             reg_save_path: str | None = None,
             cross_hair: Quantity | None = None,
-            radial_bins_pix: Quantity | np.ndarray = Quantity(np.array([]), "pix"),
+            radial_bins_pix: Quantity | np.ndarray = Quantity([], "pix"),
             back_bin_pix: Quantity | np.ndarray | None = None,
         ) -> None:
             """
@@ -2259,7 +2264,7 @@ class Image(BaseProduct):
             #  and they should be automatically added here.
             loc = [self._ax_loc.x0 - (0.075 + 0.005), 0.92, 0.075, 0.075]
             # Iterate through the stretches that I chose to store in the stretch_dict
-            for stretch_name, stretch in stretch_dict.items():
+            for stretch_name, _stretch in stretch_dict.items():
                 # Increments the position of the button
                 loc[0] += 0.075 + 0.005
                 # Sets up an axis for the button we're about to create
@@ -2430,7 +2435,7 @@ class Image(BaseProduct):
             # This chunk checks to see if there were any matched regions associated with the parent
             #  photometric object, and if so it adds them to the image and makes sure that they
             #  cannot be interacted with
-            for obs_id, match_reg in self._parent_phot_obj.matched_regions.items():
+            for _obs_id, match_reg in self._parent_phot_obj.matched_regions.items():
                 if match_reg is not None:
                     art_reg = match_reg.as_artist()
                     # Setting the style for these regions, to make it obvious that they are different from
@@ -3687,7 +3692,7 @@ class RateMap(Image):
             shape = (len(x) for x in arrays)
             ix = np.indices(shape, dtype=int)
             ix = ix.reshape(len(arrays), -1).T
-            for n, arr in enumerate(arrays):
+            for n, _arr in enumerate(arrays):
                 ix[:, n] = arrays[n][ix[:, n]]
             return ix
 

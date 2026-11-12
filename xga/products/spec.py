@@ -396,10 +396,10 @@ class Spectrum(BaseProduct):
                     if "QUALITY" in all_dat.dtype.names:
                         self._back_quality = all_dat["QUALITY"]
 
-            except OSError:
+            except OSError as err:
                 raise FileNotFoundError(
                     f"FITSIO read cannot open {rel_path} - this product is associated with {self.src_name}."
-                )
+                ) from err
 
         else:
             reasons = ", ".join(self.not_usable_reasons)
@@ -439,10 +439,10 @@ class Spectrum(BaseProduct):
                     rel_path = self.background
                     self._spec_back_header = read_header(rel_path, "SPECTRUM")
 
-            except OSError:
+            except OSError as err:
                 raise FileNotFoundError(
                     f"FITSIO read cannot open {rel_path} - this product is associated with {self.src_name}."
-                )
+                ) from err
 
         else:
             reasons = ", ".join(self.not_usable_reasons)
@@ -491,10 +491,10 @@ class Spectrum(BaseProduct):
                     # And make sure to close the arf file after reading
                     arf_read.close()
 
-            except OSError:
+            except OSError as err:
                 raise FileNotFoundError(
                     f"FITSIO read cannot open {rel_path} - this product is associated with {self.src_name}."
-                )
+                ) from err
 
         else:
             reasons = ", ".join(self.not_usable_reasons)
@@ -3944,7 +3944,6 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Create figure object
         plt.figure(figsize=figsize)
-        fig = plt.figure(figsize=figsize)
         ax = plt.gca()
         for sp in rel_spec:
             ax = sp.get_view(
@@ -4387,7 +4386,7 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         # This is a complete bodge, but just putting it here stops my IDE (PyCharm), from removing the import when it
         #  commits, because it's trying to be clever. It's a behaviour I normally appreciate, but not here.
-        Axes3D
+        _ = Axes3D
 
         # Setup the figure as we normally would
         fig = plt.figure(figsize=figsize)

@@ -232,9 +232,7 @@ def evtool_image(
                     # We try to retrieve the image we've been told to make from the
                     #  source object, if an exception occurs, then it already exists
                     try:
-                        im_exists = source.get_images(
-                            cur_ev.obs_id, cur_ev.instrument, telescope=er_miss, lo_en=lo_en, hi_en=hi_en
-                        )
+                        source.get_images(cur_ev.obs_id, cur_ev.instrument, telescope=er_miss, lo_en=lo_en, hi_en=hi_en)
                         # If we get here, then the image already exists, and we can
                         #  move to the next event list
                         continue
@@ -300,7 +298,7 @@ def evtool_image(
                 # We try to retrieve the combined image we've been asked to make, and
                 #  if an exception is raised, we know we will have to generate it.
                 try:
-                    im_exists = source.get_combined_images(lo_en=lo_en, hi_en=hi_en, telescope=er_miss)
+                    source.get_combined_images(lo_en=lo_en, hi_en=hi_en, telescope=er_miss)
                     # If we get here, then the image already exists, and we can move
                     #  to the next source
                     continue
@@ -476,7 +474,7 @@ def expmap(
                     #  from the source object, if an exception occurs, then it
                     #  already exists
                     try:
-                        ex_exists = source.get_expmaps(
+                        source.get_expmaps(
                             cur_ev.obs_id,
                             cur_ev.instrument,
                             lo_en,
@@ -555,7 +553,7 @@ def expmap(
                 #  make, and if an exception is raised, we know we will
                 #  have to generate it.
                 try:
-                    ex_exists = source.get_combined_expmaps(lo_en, hi_en, telescope=er_miss)
+                    source.get_combined_expmaps(lo_en, hi_en, telescope=er_miss)
                     # If we get here, then the exposure map already exists, and
                     #  we can move to the next source
                     continue

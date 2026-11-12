@@ -32,7 +32,7 @@ class TestImageToolsMisc(unittest.TestCase):
 
         assert data_limits(test_arr) == ([66, 401], [3, 501])
 
-    def test_edge_finder_array_border_F_keep_corners_F(self) -> None:
+    def test_edge_finder_array_border_F_keep_corners_F(self) -> None:  # noqa: N802
         """
         Tests that the edge finder works for a simple square in an array with border=False and keep_corners=False.
 
@@ -72,7 +72,7 @@ class TestImageToolsMisc(unittest.TestCase):
         # Use this numpy function to check whether the arrays are equal
         assert_array_equal(edgy, expected)
 
-    def test_edge_finder_array_border_T_keep_corners_F(self) -> None:
+    def test_edge_finder_array_border_T_keep_corners_F(self) -> None:  # noqa: N802
         """
         Tests that the edge finder works for a simple square in an array with border=True and keep_corners=False.
 
@@ -112,7 +112,7 @@ class TestImageToolsMisc(unittest.TestCase):
         # Use this numpy function to check whether the arrays are equal
         assert_array_equal(edgy, expected)
 
-    def test_edge_finder_array_border_T_keep_corners_T(self) -> None:
+    def test_edge_finder_array_border_T_keep_corners_T(self) -> None:  # noqa: N802
         """
         Tests that the edge finder works for a simple square in an array with border=True and keep_corners=True.
 
@@ -152,7 +152,7 @@ class TestImageToolsMisc(unittest.TestCase):
         # Use this numpy function to check whether the arrays are equal
         assert_array_equal(edgy, expected)
 
-    def test_edge_finder_array_border_F_keep_corners_T(self) -> None:
+    def test_edge_finder_array_border_F_keep_corners_T(self) -> None:  # noqa: N802
         """
         Tests that the edge finder works for a simple square in an array with border=False and keep_corners=True.
 

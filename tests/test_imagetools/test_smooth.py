@@ -61,7 +61,7 @@ class TestGeneralSmoothFunction(unittest.TestCase):
         # And then the RateMap itself
         cls.demo_rt = RateMap(cls.demo_im, cls.demo_ex)
 
-    def test_1D_kernel_fail(self) -> None:
+    def test_1D_kernel_fail(self) -> None:  # noqa: N802
         """Tests that a 1D Gaussian kernel triggers an exception."""
         # Define a 1D kernel
         cur_kern = Gaussian1DKernel(2)

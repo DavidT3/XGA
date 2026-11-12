@@ -347,7 +347,7 @@ def radial_data_stack(
     scale_radius: str = "r200",
     use_peak: bool = True,
     pix_step: int = 1,
-    radii: np.ndarray = np.linspace(0.01, 1, 20),
+    radii: np.ndarray | None = None,
     min_snr: int | float = 0.0,
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
@@ -375,6 +375,7 @@ def radial_data_stack(
         for each GalaxyCluster object.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
+        Default is None, in which case np.linspace(0.01, 1, 20) is used.
     :param int/float min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
         0, which disables automatic rebinning.
     :param Quantity lo_en: The lower energy bound of the ratemaps to use.
@@ -400,6 +401,8 @@ def radial_data_stack(
         covariance matrix. I also return a list of source names that WERE included in the stack.
     :rtype: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray, list]
     """
+    if radii is None:
+        radii = np.linspace(0.01, 1, 20)
     raise NotImplementedError("This has not been implemented yet.")
 
     def construct_profile(
@@ -548,7 +551,7 @@ def view_radial_data_stack(
     scale_radius: str = "r200",
     use_peak: bool = True,
     pix_step: int = 1,
-    radii: np.ndarray = np.linspace(0.01, 1, 20),
+    radii: np.ndarray | None = None,
     min_snr: int | float = 0.0,
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
@@ -576,6 +579,7 @@ def view_radial_data_stack(
         for each GalaxyCluster object.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
+        Default is None, in which case np.linspace(0.01, 1, 20) is used.
     :param int/float min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
         0, which disables automatic rebinning.
     :param Quantity lo_en: The lower energy limit of the data that goes into the stacked profiles.
@@ -599,6 +603,9 @@ def view_radial_data_stack(
     :param str telescope: The telescope to retrieve ratemaps, images, and masks for, e.g. 'xmm' or 'erosita'.
         Default is None, in which case the default telescope associated with the source/sample will be used.
     """
+    if radii is None:
+        radii = np.linspace(0.01, 1, 20)
+
     # Calls the stacking function
     results = radial_data_stack(
         sources,
@@ -667,7 +674,7 @@ def view_radial_data_stack(
                 pr.centre[1].value + pr.pixel_bins[-1] * multiplier,
             )
             # This populates ones of the axes with a view of the image
-            im_ax = rt.get_view(
+            rt.get_view(
                 ax_arr[0],
                 pr.centre,
                 inter_mask,
@@ -698,7 +705,7 @@ def radial_model_stack(
     fit_method: str = "mcmc",
     use_peak: bool = True,
     pix_step: int = 1,
-    radii: np.ndarray = np.linspace(0.01, 1, 20),
+    radii: np.ndarray | None = None,
     min_snr: int | float = 0.0,
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
@@ -731,6 +738,7 @@ def radial_model_stack(
         for each GalaxyCluster object.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
+        Default is None, in which case np.linspace(0.01, 1, 20) is used.
     :param int/float min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
         0, which disables automatic rebinning.
     :param Quantity lo_en: The lower energy limit of the data that goes into the stacked profiles.
@@ -758,6 +766,8 @@ def radial_model_stack(
         covariance matrix. I also return a list of source names that WERE included in the stack.
     :rtype: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray, list]
     """
+    if radii is None:
+        radii = np.linspace(0.01, 1, 20)
     raise NotImplementedError("This has not been implemented yet.")
 
     def construct_profile(
@@ -908,7 +918,7 @@ def view_radial_model_stack(
     fit_method: str = "mcmc",
     use_peak: bool = True,
     pix_step: int = 1,
-    radii: np.ndarray = np.linspace(0.01, 1, 20),
+    radii: np.ndarray | None = None,
     min_snr: int | float = 0.0,
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
@@ -940,6 +950,7 @@ def view_radial_model_stack(
         for each GalaxyCluster object.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
+        Default is None, in which case np.linspace(0.01, 1, 20) is used.
     :param int/float min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
         0, which disables automatic rebinning.
     :param Quantity lo_en: The lower energy limit of the data that goes into the stacked profiles.
@@ -965,6 +976,9 @@ def view_radial_model_stack(
     :param str telescope: The telescope to retrieve ratemaps, images, and masks for, e.g. 'xmm' or 'erosita'.
         Default is None, in which case the default telescope associated with the source/sample will be used.
     """
+    if radii is None:
+        radii = np.linspace(0.01, 1, 20)
+
     # Calls the stacking function
     results = radial_model_stack(
         sources,
@@ -1034,7 +1048,7 @@ def view_radial_model_stack(
                 pr.centre[1].value + pr.pixel_bins[-1] * multiplier,
             )
             # This populates ones of the axes with a view of the image
-            im_ax = rt.get_view(
+            rt.get_view(
                 ax_arr[0],
                 pr.centre,
                 inter_mask,

@@ -502,21 +502,16 @@ class EventList(BaseProduct):
                     and self.mission_db_entry["phamax"] != "TLMAX"
                     and self.mission_db_entry["phamax"] in self.event_header
                 ):
-                    max_ecol = self.event_header[self.mission_db_entry["phamax"]]
-                    # We have to assume that the minimum value is 0 in this case, as we don't know what
-                    #  header name to look out for
-                    min_ecol = 0
+                    _ = self.event_header[self.mission_db_entry["phamax"]]
                 elif "phamax" in self.mission_db_entry and (
                     self.mission_db_entry["phamax"] == "TLMAX"
                     or self.mission_db_entry["phamax"] not in self.event_header
                 ):
-                    max_ecol = self.event_header["TLMAX" + ecol_ttype_ind]
+                    _ = self.event_header["TLMAX" + ecol_ttype_ind]
                     # If there is a matching TLMIN entry, we'll use that information to describe the minimum
                     #  value of the energy column
                     if "TLMIN" + ecol_ttype_ind in self.mission_db_entry:
-                        min_ecol = self.event_header["TLMIN" + ecol_ttype_ind]
-                    else:
-                        min_ecol = 0
+                        _ = self.event_header["TLMIN" + ecol_ttype_ind]
 
                 # TODO Will need to implement said default values.
                 raise NotImplementedError(
@@ -916,7 +911,7 @@ class EventList(BaseProduct):
         except (KeyError, ValueError, TypeError) as err:
             raise ProductGenerationError(
                 f"The requested WCS ({position_type}) cannot be constructed for this event list. Error: {err}"
-            )
+            ) from err
 
         return out_wcs
 
@@ -962,18 +957,18 @@ class EventList(BaseProduct):
                     elif read_type == "event":
                         self._event_header = out_hdr
 
-            except OSError:
+            except OSError as err:
                 if self._local_file:
                     raise FileNotFoundError(
                         f"{self.path} primary header cannot be opened. This product (of type {self.type}) is "
                         f"associated with {self.src_name}."
-                    )
+                    ) from err
                 else:
                     raise FileNotFoundError(
                         f"The remote file's ({self.path}) primary header cannot be opened. This "
                         f"product (of type {self.type}) is associated "
                         f"with {self.src_name}."
-                    )
+                    ) from err
 
     def _read_data_on_demand(self, columns: list[str] | None = None) -> None:
         """
@@ -1076,17 +1071,17 @@ class EventList(BaseProduct):
                     # And update the EventList's knowledge of it having a subset loaded
                     self._data_col_subset = data_col_subset
 
-            except OSError:
+            except OSError as err:
                 if self._local_file:
                     raise FileNotFoundError(
                         f"{self.path} events data cannot be opened. This product (of type {self.type}) is "
                         f"associated with {self.src_name}."
-                    )
+                    ) from err
                 else:
                     raise FileNotFoundError(
                         f"The remote file's ({self.path}) events data cannot be opened. This product (of "
                         f" type {self.type}) is associated with {self.src_name}."
-                    )
+                    ) from err
 
     # --------- Define external functions ---------
     def get_position_type_col_names(self, position_type: str) -> tuple[str, str]:

@@ -468,14 +468,14 @@ def _run_sb(
             )
             # Grabs the mask which will remove interloper sources
             int_mask = src.get_interloper_mask(telescope=telescope)
-            comb = True
+            # comb = True
         else:
             rt = src.get_ratemaps(
                 obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, telescope=telescope
             )
             # Grabs the mask which will remove interloper sources
             int_mask = src.get_interloper_mask(telescope=telescope, obs_id=obs_id)
-            comb = False
+            # comb = False
 
     except NoProductAvailableError as err:
         raise NoProductAvailableError(
@@ -1474,8 +1474,8 @@ def ann_spectra_apec_norm(
                     apec_norm_prof = src.get_apec_norm_profiles(
                         cur_rads, group_spec, min_counts, min_sn, over_sample, telescope=tel
                     )
-                    obs_id = "combined"
-                    inst = "combined"
+                    # obs_id = "combined"
+                    # inst = "combined"
                     # Seeing as we're here, I might as well make a density profile from the apec
                     # normalisation profile
                     dens_prof = apec_norm_prof.gas_density_profile(

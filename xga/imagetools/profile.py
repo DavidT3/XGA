@@ -160,7 +160,7 @@ def ann_radii(
     """
     # Quickly get the central coordinates in degrees as well
     deg_cen = im_prod.coord_conv(centre, deg)
-    pix_cen = im_prod.coord_conv(centre, pix)
+    # pix_cen = im_prod.coord_conv(centre, pix)
 
     # If the radius is passed in a proper distance unit, this will convert it or raise an exception
     #  if it can't

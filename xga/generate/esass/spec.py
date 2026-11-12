@@ -1076,7 +1076,7 @@ def esass_spectrum_set(
             set_id = randint(0, 100_000_000)
 
             try:
-                exists = source.get_annular_spectra(radii[s_ind], group_spec, min_counts, min_sn, telescope=er_miss)
+                source.get_annular_spectra(radii[s_ind], group_spec, min_counts, min_sn, telescope=er_miss)
                 # If it already exists though we don't need to bother generating
                 generate_spec = False
             except NoProductAvailableError:

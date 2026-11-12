@@ -55,7 +55,10 @@ def region_setup(
 
     # Issuing a warning to the user that one or one sources have not been detected
     if not all([src.detected for src in sources]):
-        warnings.warn("Not all of these sources have been detected, the spectra generated may not be helpful.")
+        warnings.warn(
+            "Not all of these sources have been detected, the spectra generated may not be helpful.",
+            stacklevel=2,
+        )
 
     # Checking that inner radii that have been passed into the spectrum generation aren't nonsense
     if isinstance(inner_radius, str) and inner_radius not in RAD_LABELS:
@@ -170,8 +173,6 @@ def _gen_detmap_cmd(source: BaseSource, obs_id: str, inst: str, bin_size: int = 
 
     # Some settings depend on the instrument, we use different patterns for different instruments
     if "pn" in inst:
-        # Also the upper channel limit is different for EPN and EMOS detectors
-        spec_lim = 20479
         # This is an expression without region information to be used for making the detmaps
         #  required for ARF generation, we start off assuming we'll use a MOS observation as the detmap
         d_expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0)'"
@@ -190,7 +191,6 @@ def _gen_detmap_cmd(source: BaseSource, obs_id: str, inst: str, bin_size: int = 
                 d_expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0)'"
 
     elif "mos" in inst:
-        spec_lim = 11999
         # This is an expression without region information to be used for making the detmaps
         #  required for ARF generation, we start off assuming we'll use the PN observation as the detmap
         d_expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0)'"

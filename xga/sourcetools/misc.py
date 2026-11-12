@@ -52,27 +52,28 @@ def nh_lookup(coord_pair: Quantity) -> Quantity:
     try:
         average_nh = lines[-3].split(" ")[-1]
         weighed_av_nh = lines[-2].split(" ")[-1]
-    except IndexError:
-        raise HeasoftError("HEASoft nH command output is not as expected.")
+    except IndexError as err:
+        raise HeasoftError("HEASoft nH command output is not as expected.") from err
 
     try:
         average_nh = float(average_nh)
         weighed_av_nh = float(weighed_av_nh)
         nh_vals = Quantity(array([average_nh, weighed_av_nh]) / 10**22, "10^22 cm^-2")
-    except ValueError:
+    except ValueError as err:
         if any(["nH is from the closest pixel to the input position" in line for line in lines]):
             dist = [e for e in lines[12].split(" ") if e != ""][2]
             warnings.warn(
                 f"nH is from the closest pixel to the input position, that is {dist} "
-                "degrees away. Both returned nH values will be the same."
+                "degrees away. Both returned nH values will be the same.",
+                stacklevel=2,
             )
             try:
                 nh_val = float([e for e in lines[12].split(" ") if e != ""][3])
                 nh_vals = Quantity(array([nh_val, nh_val]) / 10**22, "10^22 cm^-2")
-            except ValueError:
-                raise HeasoftError("HEASoft nH command scraped output cannot be converted to float")
+            except ValueError as inner_err:
+                raise HeasoftError("HEASoft nH command scraped output cannot be converted to float") from inner_err
         else:
-            raise HeasoftError("HEASoft nH command scraped output cannot be converted to float")
+            raise HeasoftError("HEASoft nH command scraped output cannot be converted to float") from err
     # Returns both the average and weighted average nH values, as output by HEASoft nH tool.
     return nh_vals
 
@@ -118,13 +119,12 @@ def name_to_coord(name: str) -> Quantity:
     """
     raise NotImplementedError("I started this and will finish it at some point, but I got bored.")
     if " " in name:
-        survey, coord_str = name.split(" ")
+        _survey, coord_str = name.split(" ")
         coord_str = coord_str[1:]
     elif "J" in name:
-        survey, coord_str = name.sdplit("J")
+        _survey, coord_str = name.sdplit("J")
     else:
         num_search = [d.isdigit() for d in name].index(True)
-        survey = name[:num_search]
         coord_str = name[num_search:]
 
     if "+" in coord_str:

@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/15/26, 2:40 PM. Copyright (c) The Contributors.
+# ruff: noqa: N999
 """End-to-end pipeline for measuring galaxy cluster X-ray luminosities, temperatures, and overdensity radii."""
 
 from warnings import warn
@@ -491,7 +492,9 @@ def luminosity_temperature_pipeline(
 
             # Just to be safe I'm adding a check to make sure bad_gen has entries
             if len(bad_gen) == 0:
-                raise ProductGenerationError("Failed to identify sources for which spectrum generation failed.")
+                raise ProductGenerationError(
+                    "Failed to identify sources for which spectrum generation failed."
+                ) from err
 
             # We define the indices that WON'T have been removed from the sample (so these can be used to address
             #  things like the pr_rs quantity we defined up top
@@ -1004,7 +1007,7 @@ def luminosity_temperature_pipeline(
     #  of this pipeline I assemble a radius history dataframe (for all clusters that were initially in the
     #  ClusterSample), and want the final column to declare if they converged or not.
     rad_hist_acc_rad = []
-    for row_ind, row in loaded_samp_data.iterrows():
+    for _row_ind, row in loaded_samp_data.iterrows():
         if row["name"] in samp.names:
             # Did this radius converge?
             converged = acc_rad[np.argwhere(samp.names == row["name"])[0][0]]

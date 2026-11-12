@@ -126,7 +126,7 @@ def _vectorized_separation_match(
         # We identify all ObsIDs that are completely blacklisted for this telescope
         excl_cols = [col for col in rel_bl.columns if "EXCLUDE" in col]
         if len(excl_cols) > 0:
-            is_fully_bl = np.logical_and.reduce([rel_bl[col].values == True for col in excl_cols])
+            is_fully_bl = np.logical_and.reduce([rel_bl[col].eq(True).values for col in excl_cols])
             fully_bl_df = rel_bl[is_fully_bl]
             fully_bl_obsids = set(fully_bl_df["ObsID"].values)
         else:
@@ -223,11 +223,6 @@ def _on_obs_id(
     :return: The input RA, input dec, ObsID match array, and source index.
     :rtype: Tuple[float, float, np.ndarray, int]
     """
-    # Makes sure that the exp_maps variable is iterable, whether there is just one ExpMap or a set, makes it easier
-    #  to write just one piece of code that deals with either type of input
-    if isinstance(exp_maps, str):
-        obs_id = [exp_maps]
-
     # Possible that multiple exposure maps per ObsID-inst have been passed - we shall just make sure that we only
     #  use one per ObsID-Instrument
     exp_for_use = {}
@@ -418,7 +413,7 @@ def _process_flat_init_match(src_ra: np.ndarray, src_dec: np.ndarray, res_df: Da
         split_data = np.split(combined_data, split_points)
 
         # Construct the mapping: {obs_id: [[ra, dec, global_idx], ...]}
-        final_obs_id_srcs[tel] = dict(zip(unique_obs, split_data))
+        final_obs_id_srcs[tel] = dict(zip(unique_obs, split_data, strict=False))
 
     return final_obs_ids, all_indices, final_obs_id_srcs
 
@@ -597,7 +592,7 @@ def census_match(
         ]
         # Firstly we locate the 'exclude_{INST NAME}' columns for this telescope's blacklist
         excl_col = [col for col in in_bl.columns if "EXCLUDE" in col]
-        all_excl = in_bl[np.logical_and.reduce([in_bl[excl] == True for excl in excl_col])]
+        all_excl = in_bl[np.logical_and.reduce([in_bl[excl].eq(True) for excl in excl_col])]
 
         # These are the observations that have at  least some usable data.
         all_incl = rel_census[~rel_census["ObsID"].isin(all_excl["ObsID"])]
@@ -1334,8 +1329,9 @@ def region_match(
                 Pool(num_cores) as pool,
             ):
                 # This is called when a match process finished successfully, and the results need storing
-                def match_loop_callback(match_info: tuple[str, dict]) -> None:
-                    nonlocal onwards  # The progress bar will need updating
+                def match_loop_callback(
+                    match_info: tuple[str, dict], cur_tel: str = tel, cur_onwards: tqdm = onwards
+                ) -> None:
                     nonlocal reg_match_info
                     # Adds to the match storage dictionary, but so that the top keys are source indices, and
                     #  the lower level keys are ObsIDs
@@ -1343,20 +1339,20 @@ def region_match(
                         if s_idx not in reg_match_info:
                             reg_match_info[s_idx] = {}
 
-                        if tel not in reg_match_info[s_idx]:
-                            reg_match_info[s_idx][tel] = {match_info[0]: match_info[1][s_idx]}
+                        if cur_tel not in reg_match_info[s_idx]:
+                            reg_match_info[s_idx][cur_tel] = {match_info[0]: match_info[1][s_idx]}
                         else:
-                            reg_match_info[s_idx][tel][match_info[0]] = match_info[1][s_idx]
+                            reg_match_info[s_idx][cur_tel][match_info[0]] = match_info[1][s_idx]
 
-                    onwards.update(1)
+                    cur_onwards.update(1)
 
                 # This is called when a process errors out.
-                def error_callback(err: BaseException) -> None:
-                    nonlocal onwards
-                    nonlocal search_errors
+                def error_callback(
+                    err: BaseException, cur_onwards: tqdm = onwards, cur_errors: list = search_errors
+                ) -> None:
                     # Stores the exception object in a list for later.
-                    search_errors.append(err)
-                    onwards.update(1)
+                    cur_errors.append(err)
+                    cur_onwards.update(1)
 
                 for cur_obs_id in obs_id_srcs[tel]:
                     if cur_obs_id not in obs_src.obs_ids[tel]:

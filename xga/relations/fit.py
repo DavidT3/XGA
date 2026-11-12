@@ -481,23 +481,23 @@ def scaling_relation_lira(
         from rpy2.robjects.packages import importr
 
         robjects.r["options"](warn=-1)
-    except ImportError:
+    except ImportError as err:
         raise XGAOptionalDependencyError(
             "LIRA is an R fitting package, and as such you need to have installed rpy2 to use this function"
-        )
+        ) from err
 
     # We use the rpy2 module to interface with an underlying R installation, and import the basic R components
-    base_pack = importr("base")
-    utils_pack = importr("utils")
+    importr("base")
+    importr("utils")
 
     # Now we import the thing we're actually interested in, the LIRA package
     try:
         lira_pack = importr("lira")
-    except robjects.packages.PackageNotInstalledError:
+    except robjects.packages.PackageNotInstalledError as err:
         raise XGAOptionalDependencyError(
             "While the rpy2 module is installed, you do not appear to have installed "
             "the LIRA fitting package to your R environment"
-        )
+        ) from err
 
     # Slightly different data preparation to the other fitting methods, this one returns logged data and errors
     x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, point_names, third_dim_info = _fit_initialise(

@@ -121,7 +121,8 @@ def contour_bin_masks(
     if src_mask is None and bck_mask is None:
         warn(
             "You have not passed a src or bck mask, the whole image will be binned and no background subtraction "
-            "will be applied"
+            "will be applied",
+            stacklevel=2,
         )
 
     # If the src mask parameter is None, we assemble an array of ones, to allow all pixels to be considered

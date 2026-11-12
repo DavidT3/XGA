@@ -1878,7 +1878,7 @@ class BaseProfile1D:
             model.fit_warning = warning_str
 
         if show_warn and warning_str != "":
-            warn(warning_str)
+            warn(warning_str, stacklevel=2)
 
         # Tell the model whether we think the fit was successful or not
         model.success = success
@@ -2039,7 +2039,7 @@ class BaseProfile1D:
         """
         # Base profile don't have any type of model associated with them, so just making an empty list
         if self._prof_type == "base":
-            warn("There are no implemented models for this profile type")
+            warn("There are no implemented models for this profile type", stacklevel=2)
         else:
             allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
 

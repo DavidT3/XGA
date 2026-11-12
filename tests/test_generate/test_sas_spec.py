@@ -67,9 +67,9 @@ class TestSasSpecFuncs(unittest.TestCase):
             self.fail("NoProductAvailableError raised.")
 
         if isinstance(lc, list):
-            for l in lc:
-                assert isinstance(l, LightCurve)
-                assert l.telescope == "xmm"
+            for cur_lc in lc:
+                assert isinstance(cur_lc, LightCurve)
+                assert cur_lc.telescope == "xmm"
         else:
             assert isinstance(lc, LightCurve)
             assert lc.telescope == "xmm"

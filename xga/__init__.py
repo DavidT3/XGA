@@ -19,6 +19,8 @@ except Exception:
 #  runs XGA, the configuration file is set up in the default location.
 # This doesn't undermine the lazy-loading implemented in the __getattr__ function below, as this
 #  function doesn't set any global constants, just makes sure the file exists.
+import sys
+from types import ModuleType
 from typing import Any
 
 from .utils import _prep_xga_config_file
@@ -59,8 +61,6 @@ def __getattr__(name: str) -> Any:  # noqa: ANN401
 
 # Here we set up 'shims' to ensure that pre-multi-mission imports of SAS wrapper functions
 #  still function as intended.
-import sys
-from types import ModuleType
 
 
 # We use a custom dictionary-like object for sys.modules to lazily import the sas modules

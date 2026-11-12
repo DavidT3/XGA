@@ -118,11 +118,13 @@ class BaseModel1D(metaclass=ABCMeta):
                 f"set x-unit of this model ({self._x_unit.to_string()})"
             )
         elif x_lims is not None and x_lims.isscalar:
-            raise ValueError("The xlim argument should be a non-scalar astropy quantity, with a lower and upper limit.")
+            raise ValueError(
+                "The x_lims argument should be a non-scalar astropy quantity, with a lower and upper limit."
+            )
         elif x_lims is not None and x_lims.shape != (2,):
-            raise ValueError("The quantity passed for xlim should have a lower and upper limit, with a shape of (2,)")
+            raise ValueError("The quantity passed for x_lim should have a lower and upper limit, with a shape of (2,)")
         elif x_lims is not None:
-            xlim = x_lims.to(self._x_unit)
+            x_lims = x_lims.to(self._x_unit)
 
         # And setting xlim attribute, it is allowed to be None
         self._x_lims = x_lims
@@ -206,7 +208,10 @@ class BaseModel1D(metaclass=ABCMeta):
             x = x.to(self._x_unit)
 
         if self._x_lims is not None and (np.any(x < self._x_lims[0]) or np.any(x > self._x_lims[1])):
-            warn("Some x values are outside of the x-axis limits for this model, results may not be trustworthy.")
+            warn(
+                "Some x values are outside of the x-axis limits for this model, results may not be trustworthy.",
+                stacklevel=2,
+            )
 
         # Check whether parameter distributions have been added to this model
         if use_par_dist and len(self._par_dists[0]) == 0:
@@ -734,7 +739,7 @@ class BaseModel1D(metaclass=ABCMeta):
         # Check if there are parameter distributions associated with this model
         if len(self._par_dists[0] != 0):
             # Set up the figure
-            fig = plt.figure(figsize=figsize)
+            plt.figure(figsize=figsize)
             ax = plt.gca()
 
             ax.hist(self(radius, True).value, bins=bins, color=colour)
@@ -753,7 +758,7 @@ class BaseModel1D(metaclass=ABCMeta):
             plt.tight_layout()
             plt.show()
         else:
-            warn("You have not added parameter distributions to this model")
+            warn("You have not added parameter distributions to this model", stacklevel=2)
 
     def par_dist_view(self, bins: str | int = "auto", colour: str = "lightseagreen") -> None:
         """

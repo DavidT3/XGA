@@ -263,7 +263,7 @@ def derivative(func: FunctionType, x0: float, dx: float = 1.0, n: int = 1, args:
     :rtype: float
     """
 
-    def _central_diff_weights(Np, ndiv=1):
+    def _central_diff_weights(Np, ndiv=1):  # noqa: N803
         """
         Return weights for a Np-point central derivative.
 
@@ -280,9 +280,9 @@ def derivative(func: FunctionType, x0: float, dx: float = 1.0, n: int = 1, args:
         ho = Np >> 1
         x = np.arange(-ho, ho + 1.0)
         x = x[:, np.newaxis]
-        X = x**0.0
+        X = x**0.0  # noqa: N806
         for k in range(1, Np):
-            X = np.hstack([X, x**k])
+            X = np.hstack([X, x**k])  # noqa: N806
         w = np.prod(np.arange(1, ndiv + 1), axis=0) * np.linalg.inv(X)[ndiv]
         return w
 

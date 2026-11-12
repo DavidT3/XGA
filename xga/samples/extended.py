@@ -693,7 +693,7 @@ class ClusterSample(BaseSample):
         else:
             raise ValueError("Please pass either 'r2500', 'r500', or 'r200'.")
 
-    def Lx(
+    def Lx(  # noqa: N802
         self,
         outer_radius: str | Quantity,
         telescope: str,
@@ -768,7 +768,7 @@ class ClusterSample(BaseSample):
             fit_conf,
         )
 
-    def Tx(
+    def Tx(  # noqa: N802
         self,
         telescope: str,
         outer_radius: str | Quantity = "r500",
@@ -1140,7 +1140,7 @@ class ClusterSample(BaseSample):
             raise NotAssociatedError(f"The {telescope} telescope is not associated with any source in this sample.")
 
         # Iterate through all of our Galaxy Clusters
-        for gcs_ind, gcs in enumerate(self._sources.values()):
+        for _gcs_ind, gcs in enumerate(self._sources.values()):
             actual_rad = gcs.get_radius(rad_name, "kpc")
             try:
                 mass_profs = gcs.get_hydrostatic_mass_profiles(
@@ -1218,7 +1218,7 @@ class ClusterSample(BaseSample):
             raise NotAssociatedError(f"The {telescope} telescope is not associated with any source in this sample.")
 
         # Iterating over the galaxy clusters in this sample
-        for gcs_ind, gcs in enumerate(self._sources.values()):
+        for _gcs_ind, gcs in enumerate(self._sources.values()):
             # First off, we try to fetch hydrostatic mass profile(s), and catch the exception if there
             #  aren't any matching profiles
             try:
@@ -1397,7 +1397,7 @@ class ClusterSample(BaseSample):
 
     # I don't allow the user to supply an inner radius here because I cannot think of a reason why you'd want to
     #  make a scaling relation with a core excised temperature.
-    def gm_Tx(
+    def gm_Tx(  # noqa: N802
         self,
         rad_name: str,
         telescope: str,
@@ -1548,7 +1548,7 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
-    def Lx_richness(
+    def Lx_richness(  # noqa: N802
         self,
         telescope: str,
         outer_radius: str = "r500",
@@ -1668,7 +1668,7 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
-    def Lx_Tx(
+    def Lx_Tx(  # noqa: N802
         self,
         telescope: str,
         outer_radius: str = "r500",
@@ -1809,7 +1809,7 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
-    def mass_Tx(
+    def mass_Tx(  # noqa: N802
         self,
         telescope: str,
         outer_radius: str = "r500",
@@ -2024,7 +2024,7 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
-    def mass_Lx(
+    def mass_Lx(  # noqa: N802
         self,
         telescope: str,
         outer_radius: str = "r500",

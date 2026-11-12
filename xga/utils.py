@@ -792,7 +792,7 @@ def rebuild_census(
     """
     # This triggers the initial setup if it hasn't happened yet
     from xga import BLACKLIST, CENSUS, USABLE
-    from xga import NUM_CORES as global_nc
+    from xga import NUM_CORES as global_nc  # noqa: N811
 
     if num_cores is None:
         num_cores = global_nc

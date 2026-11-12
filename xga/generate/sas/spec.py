@@ -1107,12 +1107,12 @@ def cross_arf(
             ann_spec = src.get_annular_spectra(
                 radii, group_spec, min_counts, min_sn, over_sample, set_id[src_ind], telescope="xmm"
             )
-        except NoProductAvailableError:
+        except NoProductAvailableError as err:
             # We make our own version of this error
             raise NoProductAvailableError(
                 f"The requested AnnularSpectra cannot be located for {src.name}, and this function "
                 "will not automatically generate annular spectra."
-            )
+            ) from err
 
         oi_combos = [(o_id, inst) for o_id, insts in ann_spec.instruments.items() for inst in insts]
         for oi in oi_combos:

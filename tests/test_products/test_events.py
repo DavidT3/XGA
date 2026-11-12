@@ -540,7 +540,7 @@ class TestEventListLocalLoad(unittest.TestCase):
             ProductNotUsableError,
             msg="EventList does not raise ProductNotUsableError when the file path does not exist.",
         ):
-            cur_test_evt = EventList(cur_test_path, check_exists=True)
+            EventList(cur_test_path, check_exists=True)
 
         # self.assertEqual(
         #     cur_test_evt.usable,
