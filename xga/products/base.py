@@ -9,6 +9,7 @@ import os
 import pickle
 from copy import deepcopy
 from random import randint
+from typing import Any
 from warnings import warn
 
 import emcee as em
@@ -39,8 +40,8 @@ from ..utils import OUTPUT, PRETTY_TELESCOPE_NAMES, SASERROR_LIST, SASWARNING_LI
 
 class BaseProduct:
     """
-    The super class for all X-ray products in XGA. Stores relevant file path information, ObsID, instrument, and telescope.
-    It can also parse the std_err output of some generation processes into specific errors.
+    The super class for all X-ray products in XGA. Stores relevant file path information, ObsID, instrument, and
+    telescope. It can also parse the std_err output of some generation processes into specific errors.
 
     :param str path: The path to where the product file SHOULD be located.
     :param str obs_id: The ObsID related to the product being declared.
@@ -76,7 +77,7 @@ class BaseProduct:
         force_remote: bool = False,
         fsspec_kwargs: dict | None = None,
         check_exists: bool = True,
-    ):
+    ) -> None:
         """
         The initialisation method for the BaseProduct class, the super class for all products in XGA. Stores
         relevant file path information, ObsID, instrument, and telescope. It can also parse the std_err output
@@ -111,7 +112,7 @@ class BaseProduct:
             if force_remote:
                 # Here the user has forced us to treat the path as remote
                 self._local_file = False
-                self._remote_type = "unknown"
+                self._remote_type: str | None = "unknown"
             else:
                 # Using the same fsspec protocol-splitting logic used elsewhere in XGA (e.g. for root data
                 #  directories in the config file) to determine whether this path is local or remote, and if
@@ -167,13 +168,14 @@ class BaseProduct:
         self._fsspec_kwargs = fsspec_kwargs
 
         # This attribute stores strings that indicate why a product object has been deemed as unusable
-        self._why_unusable = []
+        self._why_unusable: list[str] = []
 
         # This flag indicates whether we think this data product can be used for analysis - it can be set to False
         #  for different reasons, but the most important is that the file cannot be found
         self._usable = True
 
         # Try to determine if the file exists (if this init has been told to, at least)
+        self._path: Any = None
         if self._local_file:
             if not check_exists or os.path.exists(path):
                 self._path = path
@@ -228,9 +230,9 @@ class BaseProduct:
             gen_cmd = ""
         self._og_cmd = gen_cmd
 
-        self._energy_bounds = (None, None)
-        self._prod_type = None
-        self._src_name = None
+        self._energy_bounds: tuple[Quantity, Quantity] | tuple[None, None] = (None, None)
+        self._prod_type: str | None = None
+        self._src_name: str | None = None
 
         # This is now telescope aware, and will look for errors formatted in the way expected for a particular
         #  backend software for the telescope - to help with legacy support I am going to have it check for XMM
@@ -256,7 +258,7 @@ class BaseProduct:
         return self._usable
 
     @usable.setter
-    def usable(self, is_usable: bool):
+    def usable(self, is_usable: bool) -> None:
         """
         Setter for the usable property.
 
@@ -278,18 +280,19 @@ class BaseProduct:
         return self._path
 
     @path.setter
-    def path(self, prod_path: str):
+    def path(self, prod_path: str) -> None:
         """
         Property setter for the attribute containing the path to the product.
 
         :param str prod_path: The product path.
         """
         if not os.path.exists(prod_path):
-            prod_path = None
+            self._path = None
             # We won't be able to make use of this product if it isn't where we think it is
             self._usable = False
             self._why_unusable.append("ProductPathDoesNotExist")
-        self._path = prod_path
+        else:
+            self._path = prod_path
 
     @property
     def local_file(self) -> bool:
@@ -304,7 +307,7 @@ class BaseProduct:
         return self._local_file
 
     @local_file.setter
-    def local_file(self, is_local: bool):
+    def local_file(self, is_local: bool) -> None:
         """
         Setter for the local_file property.
 
@@ -452,7 +455,7 @@ class BaseProduct:
         return self._src_name
 
     @src_name.setter
-    def src_name(self, name: str):
+    def src_name(self, name: str) -> None:
         """
         Property setter for the src_name attribute of a product, should only really be called by a source object,
         not by a user.
@@ -473,7 +476,7 @@ class BaseProduct:
         return self._why_unusable
 
     @not_usable_reasons.setter
-    def not_usable_reasons(self, reasons: list):
+    def not_usable_reasons(self, reasons: list) -> None:
         """
         Setter for the not_usable_reasons property.
 
@@ -543,7 +546,7 @@ class BaseProduct:
         return self._downloaded
 
     @downloaded.setter
-    def downloaded(self, is_downloaded: bool):
+    def downloaded(self, is_downloaded: bool) -> None:
         """
         Setter for the downloaded property.
 
@@ -602,8 +605,8 @@ class BaseProduct:
         :param str save_path: A local directory (preferred) or complete destination file path. Treated as a
             directory if it exists as one, ends with a path separator, or has no file extension.
         :param bool overwrite: Forces a re-download even if 'downloaded' is already True. Default False.
-        :param AbstractFileSystem remote_file_sys: An existing fsspec filesystem to use instead of constructing one from 'fsspec_kwargs' -
-            mainly for reuse by download_products().
+        :param AbstractFileSystem remote_file_sys: An existing fsspec filesystem to use instead of constructing one
+            from 'fsspec_kwargs' - mainly for reuse by download_products().
         :param bool show_warn: Whether to show a warning if this product is already local. Default True.
         :rtype: None
         """
@@ -845,7 +848,7 @@ class BaseProduct:
         # TODO honestly this method could be a little more sophisticated/elegant, but it'll do for now
         # Defined as empty as they are returned by this method
         tel_errs_msgs = []
-        parsed_tel_warns = []
+        parsed_tel_warns: list[dict[str, str]] = []
         other_err_lines = []
 
         if self.telescope is None or self.telescope == "xmm":
@@ -961,8 +964,8 @@ class BaseProduct:
             # This should only trigger if the telescope is not XMM/eROSITa/Chandra AND there was a non-empty
             #  string passed for the stderr
             warn(
-                f"We do not currently support checking {self.telescope}-specific backend software stderr for issues - feel free to "
-                "contact the developer team and request this feature.",
+                f"We do not currently support checking {self.telescope}-specific backend software stderr for issues - "
+                "feel free to contact the developer team and request this feature.",
                 stacklevel=2,
             )
 
@@ -993,7 +996,9 @@ class BaseAggregateProduct:
     :param str telescope: The telescope that this product is derived from. Default is None.
     """
 
-    def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str, telescope: str | None = None):
+    def __init__(
+        self, file_paths: list, prod_type: str, obs_id: str, instrument: str, telescope: str | None = None
+    ) -> None:
         """
         The init method for the BaseAggregateProduct class
 
@@ -1009,14 +1014,14 @@ class BaseAggregateProduct:
         self._inst = instrument
         self._tele = telescope
         self._prod_type = prod_type
-        self._src_name = None
+        self._src_name: str | None = None
 
         # This was originally going to create the individual products here, but realised it was
         # easier to do in subclasses
-        self._component_products = {}
+        self._component_products: dict[Any, Any] = {}
 
         # Setting up energy limits, if they're ever required
-        self._energy_bounds = (None, None)
+        self._energy_bounds: tuple[Quantity, Quantity] | tuple[None, None] = (None, None)
 
     @property
     def src_name(self) -> str:
@@ -1031,7 +1036,7 @@ class BaseAggregateProduct:
 
     # This needs a setter, as this property only becomes not-None when the product is added to a source object.
     @src_name.setter
-    def src_name(self, name: str):
+    def src_name(self, name: str) -> None:
         """
         Property setter for the src_name attribute of a product, should only really be called by a source object,
         not by a user. This is overridden in the AnnularSpectra class.
@@ -1111,7 +1116,8 @@ class BaseAggregateProduct:
     @property
     def gen_errors(self) -> list[list[str]]:
         """
-        Equivelant to the BaseProduct gen_errors property, but reports any telescope software errors stored in the component products.
+        Equivelant to the BaseProduct gen_errors property, but reports any telescope software errors stored in the
+        component products.
 
         :return: A list of telescope software errors related to component products.
         :rtype: List
@@ -1161,14 +1167,14 @@ class BaseAggregateProduct:
         """
         return len(self._component_products)
 
-    def __iter__(self):
+    def __iter__(self) -> "BaseAggregateProduct":
         """
         Called when initiating iterating through an AggregateProduct based object. Resets the counter _n.
         """
         self._n = 0
         return self
 
-    def __next__(self):
+    def __next__(self) -> BaseProduct | dict[str, Any]:
         """
         Iterates the counter _n and returns the next entry in the the component_products dictionary.
         """
@@ -1179,7 +1185,7 @@ class BaseAggregateProduct:
         else:
             raise StopIteration
 
-    def __getitem__(self, ind):
+    def __getitem__(self, ind: int) -> BaseProduct | dict[str, Any]:
         return list(self._component_products.values())[ind]
 
 
@@ -1237,7 +1243,7 @@ class BaseProfile1D:
         telescope: str | None = None,
         spec_model: str | None = None,
         fit_conf: str | None = None,
-    ):
+    ) -> None:
         """
         The init of the superclass 1D profile product. Unlikely to ever be declared by a user, but the base
         of all other 1D profiles in XGA - contains many useful functions.
@@ -1271,13 +1277,13 @@ class BaseProfile1D:
             spectra to measure the results that were then used to create this profile. Only relevant to profiles that
             are generated from annular spectra, default is None.
         """
-        if type(radii) != Quantity or type(values) != Quantity:
+        if type(radii) is not Quantity or type(values) is not Quantity:
             raise TypeError("Both the radii and values passed into this object definition must be astropy quantities.")
-        elif radii_err is not None and type(radii_err) != Quantity:
+        elif radii_err is not None and type(radii_err) is not Quantity:
             raise TypeError("The radii_err variable must be an astropy Quantity, or None.")
         elif radii_err is not None and radii_err.unit != radii.unit:
             raise UnitConversionError("The radii_err unit must be the same as the radii unit.")
-        elif values_err is not None and type(values_err) != Quantity:
+        elif values_err is not None and type(values_err) is not Quantity:
             raise TypeError("The values_err variable must be an astropy Quantity, or None.")
         elif values_err is not None and values_err.unit != values.unit:
             raise UnitConversionError("The values_err unit must be the same as the values unit.")
@@ -1305,8 +1311,8 @@ class BaseProfile1D:
         ):
             raise ValueError(
                 "radii_err must be the same shape as radii, and values_err must be the same shape "
-                f"as values. The shape of radii_err is {radii_err.shape} where radii is {radii.shape}, and the shape of "
-                f"values_err is {values_err.shape} where values is {values.shape}"
+                f"as values. The shape of radii_err is {radii_err.shape} where radii is {radii.shape}, and the shape "
+                f"of values_err is {values_err.shape} where values is {values.shape}"
             )
 
         # I'm actually going to enforce that the central coordinates passed when declaring a profile must
@@ -1375,7 +1381,7 @@ class BaseProfile1D:
             if self._radii[0].value == 0:
                 bounds[0] = self._radii[0]
                 bounds[1] = bounds[1] + self._radii_err[0]
-            self._rad_ann_bounds = bounds
+            self._rad_ann_bounds: Quantity | None = bounds
         else:
             self._rad_ann_bounds = None
 
@@ -1394,8 +1400,8 @@ class BaseProfile1D:
         self._nice_fit_methods = {"curve_fit": "Curve Fit", "mcmc": "MCMC", "odr": "ODR"}
 
         # Here is where information about fitted models is stored (and any failed fit attempts)
-        self._good_model_fits = {m: {} for m in self._fit_methods}
-        self._bad_model_fits = {m: {} for m in self._fit_methods}
+        self._good_model_fits: dict[str, dict[str, BaseModel1D]] = {m: {} for m in self._fit_methods}
+        self._bad_model_fits: dict[str, dict[str, BaseModel1D]] = {m: {} for m in self._fit_methods}
 
         # Some types of profiles will support a background value (like surface brightness), which will
         #  need to be incorporated into the fit and plotting.
@@ -1403,7 +1409,7 @@ class BaseProfile1D:
 
         # Need to be able to store upper and lower energy bounds for those profiles that
         #  have them (like brightness profiles for instance)
-        self._energy_bounds = (None, None)
+        self._energy_bounds: tuple[Quantity, Quantity] | tuple[None, None] = (None, None)
 
         # Checking if associated_set_id is supplied, so is set_storage_key, and vice versa
         if not all([associated_set_id is None, set_storage_key is None]) and not all(
@@ -1478,7 +1484,7 @@ class BaseProfile1D:
         else:
             self._outer_rad = radii[-1]
 
-        self._save_path = None
+        self._save_path: str | None = None
         # We store the input for the 'auto_save' argument - this exists so that the auto-saving after successful
         #  model fits etc. can be turned off, as it isn't necessarily going to work for profiles that were defined
         #  outside of an XGA source analysis. All profiles created by XGA processes running through XGA sources will
@@ -1488,9 +1494,9 @@ class BaseProfile1D:
         # This attribute is null by default, and can only be set through a property - if set then (when profiles
         #  are combined into an BaseAggregateProfile1D for the purposes of plotting) the value will be used as the
         #  label for the profile, rather than just the name
-        self._custom_agg_label = None
+        self._custom_agg_label: str | None = None
 
-    def _model_allegiance(self, model: BaseModel1D):
+    def _model_allegiance(self, model: BaseModel1D) -> None:
         """
         This internal method with a silly name just checks whether a model instance has already been associated
         with a profile other than this one, or if it has any association with a profile. If there is an association
@@ -1582,7 +1588,8 @@ class BaseProfile1D:
         for prior in model.par_priors:
             if prior["type"] != "uniform":
                 raise NotImplementedError(
-                    "Non-uniform priors for profile fitting are not currently supported - please contact the developers if you need this feature."
+                    "Non-uniform priors for profile fitting are not currently supported - please contact the "
+                    "developers if you need this feature."
                 )
 
         prior_list = [p["prior"].to(model.par_units[p_ind]).value for p_ind, p in enumerate(model.par_priors)]
@@ -1883,7 +1890,7 @@ class BaseProfile1D:
         # And then the model gets sent back
         return model, success
 
-    def _odr_fit(self, model: BaseModel1D, show_warn: bool):
+    def _odr_fit(self, model: BaseModel1D, show_warn: bool) -> tuple[BaseModel1D, bool]:
         # TODO MAKE THIS A NON-INTERNAL METHOD WHEN ITS WRITTEN
         # TODO REMEMBER TO USE THE FIT RADII PROPERTY
         # Tell the model whether we think the fit was successful or not
@@ -2480,7 +2487,7 @@ class BaseProfile1D:
         auto_legend: bool = True,
         joined_points: bool = False,
         axis_formatters: dict | None = None,
-    ):
+    ) -> tuple[Axes, Axes | None]:
         """
         A get method for an axes (or multiple axes) showing this profile and model fits. The idea of this get method
         is that, whilst it is used by the view() method, it can also be called by external methods that wish to use
@@ -2682,8 +2689,8 @@ class BaseProfile1D:
             elif isinstance(model_colour, list) and len(model_colour) != num_to_plot:
                 raise ValueError(
                     "If the 'model_colour' argument is a list, it must have one entry per model-method "
-                    f"combination. The passed list has {len(model_colour)} entries, and there are {num_to_plot} model-method "
-                    "combinations."
+                    f"combination. The passed list has {len(model_colour)} entries, and there are {num_to_plot} "
+                    "model-method combinations."
                 )
 
             # We use the slightly-no-longer-useful fit_radii property (it is only useful if any of the radii values
@@ -2910,7 +2917,7 @@ class BaseProfile1D:
 
     def view(
         self,
-        figsize=(10, 7),
+        figsize: tuple = (10, 7),
         xscale: str = "log",
         yscale: str = "log",
         xlim: tuple | None = None,
@@ -3026,7 +3033,7 @@ class BaseProfile1D:
     def save_view(
         self,
         save_path: str,
-        figsize=(10, 7),
+        figsize: tuple = (10, 7),
         xscale: str = "log",
         yscale: str = "log",
         xlim: tuple | None = None,
@@ -3198,7 +3205,7 @@ class BaseProfile1D:
         return self._auto_save
 
     @auto_save.setter
-    def auto_save(self, new_val: bool):
+    def auto_save(self, new_val: bool) -> None:
         """
         Whether the profile will automatically save itself at any point (such as after successful model fits).
 
@@ -3366,7 +3373,7 @@ class BaseProfile1D:
         return self._src_name
 
     @src_name.setter
-    def src_name(self, new_name):
+    def src_name(self, new_name: str) -> None:
         """
         Setter for the name attribute of this profile, what source object it was derived from.
         """
@@ -3466,7 +3473,7 @@ class BaseProfile1D:
         return self._y_axis_name
 
     @y_axis_label.setter
-    def y_axis_label(self, new_name: str):
+    def y_axis_label(self, new_name: str) -> None:
         """
         This allows the user to set a new y axis label for any plots generated by a profile object.
 
@@ -3534,7 +3541,7 @@ class BaseProfile1D:
         return self._x_norm
 
     @x_norm.setter
-    def x_norm(self, new_val: Quantity):
+    def x_norm(self, new_val: Quantity) -> None:
         """
         The setter for the normalisation value for x-axis data passed on the definition of the this profile object.
         :param Quantity new_val: The new value for the normalisation of x-axis data.
@@ -3555,7 +3562,7 @@ class BaseProfile1D:
         return self._y_norm
 
     @y_norm.setter
-    def y_norm(self, new_val: Quantity):
+    def y_norm(self, new_val: Quantity) -> None:
         """
         The setter for the normalisation value for y-axis data passed on the definition of the this profile object.
         :param Quantity new_val: The new value for the normalisation of y-axis data.
@@ -3607,7 +3614,7 @@ class BaseProfile1D:
         return self._custom_agg_label
 
     @custom_aggregate_label.setter
-    def custom_aggregate_label(self, new_val: str):
+    def custom_aggregate_label(self, new_val: str | None) -> None:
         """
         Setter for the custom_aggregate_label property.
 
@@ -3628,9 +3635,11 @@ class BaseProfile1D:
         """
         return len(self._radii)
 
-    def __add__(self, other):
+    def __add__(
+        self, other: "BaseProfile1D | BaseAggregateProfile1D | list[BaseProfile1D]"
+    ) -> "BaseAggregateProfile1D":
         to_combine = [self]
-        if type(other) == list:
+        if isinstance(other, list):
             to_combine += other
         elif isinstance(other, BaseProfile1D):
             to_combine.append(other)
@@ -3651,11 +3660,12 @@ class BaseAggregateProfile1D:
     :param list profiles: A list of profile objects (of the same type) to include in this aggregate profile.
     """
 
-    def __init__(self, profiles: list[BaseProfile1D]):
+    def __init__(self, profiles: list[BaseProfile1D]) -> None:
         """
         The init for the BaseAggregateProfile1D class.
 
-        :param List[BaseProfile1D] profiles: A list of profile objects (of the same type) to include in this aggregate profile.
+        :param List[BaseProfile1D] profiles: A list of profile objects (of the same type) to include in this
+            aggregate profile.
         """
         # This checks that all profiles have the same x units - we used to explicitly check for Python instance
         #  type, but actually we do want profiles to be plottable on the same axis if they have the same units
@@ -3770,7 +3780,7 @@ class BaseAggregateProfile1D:
         return self._x_norms
 
     @x_norms.setter
-    def x_norms(self, new_vals: list[Quantity]):
+    def x_norms(self, new_vals: list[Quantity]) -> None:
         """
         Setter for the collated x normalisation values for the constituent profiles of this aggregate profile.
 
@@ -3793,7 +3803,7 @@ class BaseAggregateProfile1D:
         return self._y_norms
 
     @y_norms.setter
-    def y_norms(self, new_vals: list[Quantity]):
+    def y_norms(self, new_vals: list[Quantity]) -> None:
         """
         Setter for the collated y normalisation values for the constituent profiles of this aggregate profile.
 
@@ -4445,9 +4455,11 @@ class BaseAggregateProfile1D:
         # Clearing the current figure and closing all open figures
         plt.close("all")
 
-    def __add__(self, other):
+    def __add__(
+        self, other: "BaseProfile1D | BaseAggregateProfile1D | list[BaseProfile1D]"
+    ) -> "BaseAggregateProfile1D":
         to_combine = self.profiles
-        if type(other) == list:
+        if isinstance(other, list):
             to_combine += other
         elif isinstance(other, BaseProfile1D):
             to_combine.append(other)

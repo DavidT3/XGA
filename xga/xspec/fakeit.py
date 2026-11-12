@@ -22,18 +22,18 @@ def cluster_cr_conv(
     sources: GalaxyCluster | ClusterSample,
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
-    sim_temp: dict[str, Quantity] = None,
+    sim_temp: dict[str, Quantity] | None = None,
     sim_met: float | list = 0.3,
     conv_en: Quantity = Quantity([[0.5, 2.0]], "keV"),
     abund_table: str = "angr",
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: int | float = None,
-    over_sample: float = None,
+    min_sn: int | float | None = None,
+    over_sample: float | None = None,
     one_rmf: bool = True,
     num_cores: int = NUM_CORES,
     stacked_spectra: bool = False,
-    telescope: str | list[str] = None,
+    telescope: str | list[str] | None = None,
 ) -> GalaxyCluster | ClusterSample | list[GalaxyCluster]:
     """
     This function uses the xspec fakeit tool to calculate conversion factors between count rate and
@@ -222,7 +222,7 @@ def cluster_cr_conv(
 
             t = the_temp.to("keV", equivalencies=u.temperature_energy()).value
             # Another TCL list, this time of the parameter start values for this model.
-            par_values = "{{{0} {1} {2} {3} {4}}}".format(
+            par_values = "{{{} {} {} {} {}}}".format(
                 source.nH.to("10^22 cm^-2").value, t, the_met, source.redshift, 1.0
             )
 

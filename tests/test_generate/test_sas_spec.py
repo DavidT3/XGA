@@ -16,7 +16,7 @@ from ..utils import require_sas
 
 class TestSasSpecFuncs(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         cls.src = get_test_source("xmm")
 
     @require_sas

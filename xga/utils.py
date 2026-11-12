@@ -6,10 +6,12 @@ import json
 import os
 import re
 import shutil
+from collections.abc import Callable, Iterator
 from concurrent.futures import ProcessPoolExecutor
 from configparser import ConfigParser
 from functools import wraps
 from subprocess import PIPE, Popen
+from typing import Any
 from warnings import simplefilter, warn
 
 import numpy as np
@@ -22,7 +24,6 @@ from astropy.wcs import WCS
 from fitsio import FITSHDR
 from fsspec import AbstractFileSystem
 from fsspec.core import split_protocol, url_to_fs
-from fsspec.spec import AbstractFileSystem
 from packaging.version import Version
 from pandas import DataFrame
 from tqdm import tqdm
@@ -68,10 +69,10 @@ _LAZY_VARS = {
 # This set contains any variables from _LAZY_VARS that should NOT be exposed at the top level
 #  of the xga module (i.e. via xga.VAR_NAME). This allows for internal lazy variables in utils.py.
 # Any variable name in this set must also be present in _LAZY_VARS
-_KEEP_PRIVATE_LAZY_VARS = set()
+_KEEP_PRIVATE_LAZY_VARS: set[str] = set()
 
 
-def reinitialise_xga(config_dir: str = None, override_output_dir: str = None) -> None:
+def reinitialise_xga(config_dir: str | None = None, override_output_dir: str | None = None) -> None:
     """
     A function to re-initialise XGA, allowing the user to change the configuration directory
     mid-session, or to pick up changes to the configuration file.
@@ -101,7 +102,7 @@ def reinitialise_xga(config_dir: str = None, override_output_dir: str = None) ->
         OUTPUT = os.path.join(os.path.abspath(override_output_dir), "")
 
 
-def __getattr__(name):
+def __getattr__(name: str) -> Any:
     """
     A module level __getattr__ which allows us to lazily load the XGA configuration and census, as well as
     check for the availability of backend software. This helps to avoid race conditions when importing
@@ -419,16 +420,16 @@ def _prep_xga_config_file() -> tuple[dict, str, str]:
     # This chunk of utils will be dedicated to making sure that the configuration file has been created (by default with
     #  sections for every telescope that XGA supports), or that if it already exists it contains valid entries.
     # THIS STAGE USED TO FAIL ENTIRELY IF THERE WEREN'T VALID ENTRIES - but now I realise that sometimes you just want
-    #  to use the XGA products with your own data files without using the source/sample classes, so it will no longer fail
-    #  at this stage.
+    #  to use the XGA products with your own data files without using the source/sample classes, so it will no longer
+    #  fail at this stage.
 
     # In this case we find that the configuration file does not exist, and we set it up using the default sections and
     #  configurations that were set up toward the top of this file
     if not os.path.exists(cur_config_file):
         # Define a configuration object
         xga_default = ConfigParser()
-        # This adds the overall XGA setup section - controls global things like where XGA generated files are stored, and
-        #  how many cores XGA is allowed to use (though that can also be set at import time).
+        # This adds the overall XGA setup section - controls global things like where XGA generated files are stored,
+        #  and how many cores XGA is allowed to use (though that can also be set at import time).
         xga_default.add_section("XGA_SETUP")
         xga_default["XGA_SETUP"] = XGA_CONFIG
 
@@ -483,7 +484,7 @@ def _prep_xga_config_file() -> tuple[dict, str, str]:
     return cur_xga_conf, cur_config_path, cur_config_file
 
 
-def _get_root_data_filesystem(cur_root_dir: str) -> tuple[str, AbstractFileSystem | None, str | None]:
+def _get_root_data_filesystem(cur_root_dir: str) -> tuple[str | None, AbstractFileSystem | None, str | None]:
     """
     Internal function to derive the file protocol of and set up a filesystem for root data directories
     of the various missions specified in the configuration file.
@@ -523,7 +524,7 @@ def _get_root_data_filesystem(cur_root_dir: str) -> tuple[str, AbstractFileSyste
     return root_dir_prot, root_dir_fs, root_dir_url_path
 
 
-def _initialise_xga():
+def _initialise_xga() -> None:
     """
     The internal function that actually performs the XGA configuration and census loading, as well as
     checking for the availability of backend software.
@@ -587,9 +588,9 @@ def _initialise_xga():
         NUM_CORES = max(int(np.floor(os.cpu_count() * 0.9)), 1)  # Makes sure that at least one core is used
     # ------------------------------------------------------------------------------------------
 
-    # Firstly, we check if the entries in the general XGA configuration section are valid - the output path is the first to
-    #  check, though we are actually only checking for a very unlikely edge case. That somebody is using this new version
-    #  of XGA with an old, unmodified, configuration file.
+    # Firstly, we check if the entries in the general XGA configuration section are valid - the output path is the
+    #  first to check, though we are actually only checking for a very unlikely edge case. That somebody is using this
+    #  new version of XGA with an old, unmodified, configuration file.
     if xga_conf["XGA_SETUP"]["xga_save_path"] == "/this/is/required/xga_output/":
         raise XGAConfigError(
             "The 'xga_save_path' entry is currently '/this/is/required/xga_output/', which at one point"
@@ -743,7 +744,7 @@ def _initialise_xga():
     _INITIALISED = True
 
 
-def _deprecated(message):
+def _deprecated(message: str) -> Callable[..., Any]:
     """
     An internal function designed to be used as a decorator for any methods or functions which have been
     deprecated - means that the warning will be shown when they're imported or used.
@@ -751,7 +752,7 @@ def _deprecated(message):
     :param str message: The warning message which should be shown.
     """
 
-    def deprecated_function(dep_func):
+    def deprecated_function(dep_func: Callable[..., Any]) -> Callable[..., Any]:
         """
         This ensures that the decorated, deprecated, function is actually still run.
         :param dep_func: The method which is deprecated.
@@ -761,7 +762,7 @@ def _deprecated(message):
         # The wraps decorator updates the wrapper function to look like wrapped function by copying attributes
         #  such as __name__, __doc__ (the docstring)
         @wraps(dep_func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             # Shows the warning message - this makes sure it is shown when the function is used.
             warn(message, DeprecationWarning, stacklevel=2)
             return dep_func(*args, **kwargs)
@@ -956,7 +957,7 @@ def _extract_header_info(
 
 def build_observation_census(
     tel: str, num_cores: int, clean_dead: bool = False
-) -> tuple[DataFrame, DataFrame, str, AbstractFileSystem | None, str | None]:
+) -> tuple[DataFrame, DataFrame, str | None, AbstractFileSystem | None, str | None]:
     """
     A function that builds/updates the census and blacklist for each telescope.
 
@@ -1179,7 +1180,7 @@ def find_all_wcs(hdr: FITSHDR) -> list[WCS]:
 
 
 # Very handy function that is used in several places - just not really sure where else to put it but here
-def dict_search(key: str, var: dict) -> list:
+def dict_search(key: str, var: dict) -> Iterator[Any]:
     """
     This simple function was very lightly modified from a stackoverflow answer, and is an
     efficient method of searching through a nested dictionary structure for specfic keys
@@ -1212,8 +1213,8 @@ def check_telescope_choices(telescope: str | list[str] | None) -> list[str]:
     XGA, and makes sure that a list of strings is returned (even if there is only one) so that the output is always
     consistent.
 
-    :param str/List[str]/None telescope: The telescope choice made by the user - the formatting and validity of which will
-        be checked by this function.
+    :param str/List[str]/None telescope: The telescope choice made by the user - the formatting and validity of which
+        will be checked by this function.
     :return: A list of telescope names (or a single name) that are valid and that have made it through the checks.
     :rtype: List[str]
     """

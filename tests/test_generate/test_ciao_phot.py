@@ -15,7 +15,7 @@ from ..utils import require_ciao
 
 class TestCiaoPhotFuncs(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         cls.src = get_test_source("all")
 
     @require_ciao

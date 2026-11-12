@@ -4,6 +4,7 @@
 import os
 from copy import copy
 from random import randint
+from typing import Any
 
 import astropy.units as u
 import numpy as np
@@ -26,12 +27,12 @@ def _chandra_spec_cmds(
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
-    over_sample: int = None,
+    min_sn: float | None = None,
+    over_sample: int | None = None,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
     force_gen: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     An internal function to generate all the commands necessary to produce a Chandra spectrum using specextract,
     but is not decorated by the ciao_call function, so the commands aren't immediately run.
@@ -101,9 +102,9 @@ def _chandra_spec_cmds(
         # Explicitly states that source is at very least a BaseSource instance - useful for code completion in IDEs
         source: BaseSource
 
-        cmds = []
-        final_paths = []
-        extra_info = []
+        cmds: list[str] = []
+        final_paths: list[str] = []
+        extra_info: list[dict[str, Any]] = []
 
         # Skip sources that do not have Chandra data.
         if "chandra" not in source.telescopes:
@@ -328,12 +329,14 @@ def _chandra_spec_cmds(
                 # f"export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; "
                 # f"punlearn specextract; "
                 # f"export PFILES=\"{new_pfiles}:$PFILES\"; "
-                f'cd {temp_dir}; punlearn specextract; specextract infile="{evt_file.path}[sky=region({spec_ext_reg_path})]" '
+                f"cd {temp_dir}; punlearn specextract; "
+                f'specextract infile="{evt_file.path}[sky=region({spec_ext_reg_path})]" '
                 f'outroot={obs_id}_{inst} bkgfile="{evt_file.path}[sky=region({spec_bkg_reg_path})]" '
                 f"asp={att_file} badpixfile={badpix_file} grouptype={grouptype_int} binspec={binspec_int} "
                 f"weight=yes weight_rmf=no clobber=yes parallel=no mskfile={mask_file} tmpdir={temp_dir}; "
                 f"mv {spec_ciao_out} {spec_file}; mv {arf_ciao_out} {arf_file}; mv {rmf_ciao_out} {rmf_file}; "
-                f"mv {bkg_spec_ciao_out} {bkg_spec_file}; mv {bkg_arf_ciao_out} {bkg_arf_file}; mv {bkg_rmf_ciao_out} {bkg_rmf_file}; "
+                f"mv {bkg_spec_ciao_out} {bkg_spec_file}; mv {bkg_arf_ciao_out} {bkg_arf_file}; "
+                f"mv {bkg_rmf_ciao_out} {bkg_rmf_file}; "
                 f"rm -r {temp_dir}; rm -r {temp_region_dir}"
             )
 
@@ -381,11 +384,11 @@ def specextract_spectrum(
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
-    over_sample: int = None,
+    min_sn: float | None = None,
+    over_sample: int | None = None,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A wrapper for all the CIAO processes necessary to generate Chandra spectra that can be analysed
     in XSPEC. Every observation associated with this source, and every instrument associated with that
@@ -424,13 +427,13 @@ def ciao_spectrum_set(
     radii: list[Quantity] | Quantity,
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
-    over_sample: float = None,
+    min_sn: float | None = None,
+    over_sample: float | None = None,
     one_rmf: bool = True,
     num_cores: int = NUM_CORES,
     force_regen: bool = False,
     disable_progress: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     This function can be used to produce 'sets' of XGA Spectrum objects, generated in concentric circular annuli.
     Such spectrum sets can be used to measure projected spectroscopic quantities, or even be de-projected to attempt
@@ -456,8 +459,8 @@ def ciao_spectrum_set(
         if your call to this function was interrupted and an incomplete AnnularSpectrum is being read in.
     :param bool disable_progress: Setting this to true will turn off the CIAO generation progress bar.
     """
-    # We check to see whether there is an Chandra entry in the 'telescopes' property. If sources is a Source object, then
-    #  that property contains the telescopes associated with that source, and if it is a Sample object then
+    # We check to see whether there is an Chandra entry in the 'telescopes' property. If sources is a Source object,
+    #  then that property contains the telescopes associated with that source, and if it is a Sample object then
     #  'telescopes' contains the list of unique telescopes that are associated with at least one member source.
     # Clearly if Chandra isn't associated at all, then continuing with this function would be pointless
     if (not isinstance(sources, list) and "chandra" not in sources.telescopes) or (
@@ -558,7 +561,7 @@ def ciao_spectrum_set(
         # This is where the commands/extra information get concatenated from the different annuli
         src_cmds = np.array([])
         src_paths = np.array([])
-        src_out_types = []
+        src_out_types: Any = []
         src_extras = np.array([])
 
         # By this point we know that at least one of the sources has Chandra data associated (we checked that at the

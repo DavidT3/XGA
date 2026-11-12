@@ -4,6 +4,7 @@
 import os
 from copy import deepcopy
 from random import randint
+from typing import Any
 from warnings import warn
 
 import numpy as np
@@ -11,6 +12,7 @@ from astropy.units import Quantity, UnitConversionError
 
 from ... import ESASS_VERSION, NUM_CORES, OUTPUT
 from ...exceptions import NoProductAvailableError, TelescopeNotAssociatedError
+from ...products.events import EventList
 from ...samples.base import BaseSample
 from ...sources import BaseSource
 from ..common import get_annular_esass_region
@@ -33,7 +35,7 @@ def _lc_cmds(
     combine_tm: bool = True,
     combine_obs: bool = True,
     force_gen: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     This is an internal function which sets up the commands necessary to generate light curves from eROSITA
     data - and can be used both to generate them from simple circular regions and also from annular regions. The
@@ -63,7 +65,7 @@ def _lc_cmds(
         instead of for one combined observation.
     """
 
-    def _make_lc_cmd_info(cur_evt_list):
+    def _make_lc_cmd_info(cur_evt_list: EventList) -> tuple[list[str], list[str], list[dict[str, Any]]]:
         """
         Internal function to get prepare the commands required to generate light curves
         from eROSITA observations. This functions acts on a single event list at a time.
@@ -421,9 +423,9 @@ def _lc_cmds(
 
     for s_ind, source in enumerate(sources):
         source: BaseSource
-        cmds = []
-        final_paths = []
-        extra_info = []
+        cmds: list[str] = []
+        final_paths: list[str] = []
+        extra_info: list[dict[str, Any]] = []
 
         # By this point we know that at least one of the sources has eROSITA data
         #  associated (we checked that at the beginning of this function).
@@ -534,7 +536,7 @@ def srctool_lightcurve(
     combine_tm: bool = True,
     combine_obs: bool = True,
     force_gen: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A wrapper for all the SAS processes necessary to generate eROSITA light curves for a specified region.
      Every observation associated with this source, and every instrument associated with that

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 from copy import copy
+from typing import TYPE_CHECKING
 from warnings import warn
 
 import numpy as np
@@ -34,6 +35,9 @@ from xga.products.base import BaseProfile1D
 from xga.products.phot import RateMap
 from xga.sourcetools.deproj import shell_ann_vol_intersect
 from xga.sourcetools.misc import ang_to_rad
+
+if TYPE_CHECKING:
+    from xga.sources.extended import GalaxyCluster
 
 
 class SurfaceBrightness1D(BaseProfile1D):

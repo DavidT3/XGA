@@ -18,7 +18,7 @@ class TestGeneralSmoothFunction(unittest.TestCase):
     """A set of tests of XGA's `general_smooth` imagetools function."""
 
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         """Exists to prepare the XGA Image instance we'll use to test `general_smooth(...)`."""
         # Store the URL in a class attribute just in case
         # Might want to reconsider how much I'm using remote data for tests of product

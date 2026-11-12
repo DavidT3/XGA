@@ -3,6 +3,7 @@
 
 import os
 from random import randint
+from typing import Any
 
 import numpy as np
 
@@ -18,7 +19,7 @@ from .run import esass_call
 @esass_call
 def evtool_combine_evts(
     sources: BaseSource | NullSource | BaseSample, num_cores: int = NUM_CORES, disable_progress: bool = False
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A convenient Python wrapper for the eSASS evtool command that combines event lists. In eRASS data
     releases, observations contain duplicate events. For sources that lie in this area that
@@ -60,9 +61,9 @@ def evtool_combine_evts(
     sources_extras = []
     sources_types = []
     for source in sources:
-        cmds = []
-        final_paths = []
-        extra_info = []
+        cmds: list[str] = []
+        final_paths: list[str] = []
+        extra_info: list[dict[str, Any]] = []
         # By this point we know that at least one of the sources has erosita data associated (we checked that at the
         #  beginning of this function). We still need to append the empty cmds, paths, extra_info, and ptypes to
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids

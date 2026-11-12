@@ -4,6 +4,7 @@
 import os
 from copy import copy, deepcopy
 from random import randint
+from typing import Any
 from warnings import warn
 
 import numpy as np
@@ -28,14 +29,14 @@ def _spec_cmds(
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
+    min_sn: float | None = None,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
     combine_tm: bool = True,
     combine_obs: bool = True,
     force_gen: bool = False,
-    telescope: str = None,
-):
+    telescope: str | None = None,
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     An internal function to generate all the commands necessary to produce a srctool spectrum, but is not
     decorated by the esass_call function, so the commands aren't immediately run. This means it can be used for
@@ -68,11 +69,11 @@ def _spec_cmds(
     :param bool combine_obs: Setting this to False will generate an spectrum for each associated observation,
         instead of for one combined observation.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
-    :param str telescope: The telescope to make spectral generation commands for (either 'erass', 'erosita', or None). If None, then all available
-        eROSITA telescopes will be used.
+    :param str telescope: The telescope to make spectral generation commands for (either 'erass', 'erosita', or
+        None). If None, then all available eROSITA telescopes will be used.
     """
 
-    def _make_spec_cmd_info(cur_evt_list: EventList):
+    def _make_spec_cmd_info(cur_evt_list: EventList) -> tuple[list[str], list[str], list[dict[str, Any]]]:
         """
         Internal function to get prepare the commands required to generate spectra
         from eROSITA observations. This functions acts on a single event list at a time.
@@ -607,9 +608,9 @@ def _spec_cmds(
     sources_types = []
     for s_ind, source in enumerate(sources):
         source: BaseSource
-        cmds = []
-        final_paths = []
-        extra_info = []
+        cmds: list[str] = []
+        final_paths: list[str] = []
+        extra_info: list[dict[str, Any]] = []
 
         # By this point we know that at least one of the sources has eROSITA data
         #  associated (we checked that at the beginning of this function).
@@ -820,13 +821,13 @@ def srctool_spectrum(
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
+    min_sn: float | None = None,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
     combine_tm: bool = True,
     combine_obs: bool = True,
     force_gen: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A wrapper for all the eSASS and Heasoft processes necessary to generate an eROSITA spectrum that can be analysed
     in XSPEC. Every observation associated with this source, and every instrument associated with that
@@ -886,12 +887,12 @@ def esass_spectrum_set(
     radii: list[Quantity] | Quantity,
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
+    min_sn: float | None = None,
     num_cores: int = NUM_CORES,
     force_regen: bool = False,
     disable_progress: bool = False,
     combine_tm: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     This function can be used to produce 'sets' of XGA Spectrum objects, generated in concentric circular
     annuli, specifically using data from the eROSITA telescope.
@@ -1024,7 +1025,7 @@ def esass_spectrum_set(
         # This is where the commands/extra information get concatenated from the different annuli
         src_cmds = np.array([])
         src_paths = np.array([])
-        src_out_types = []
+        src_out_types: Any = []
         src_extras = np.array([])
 
         # By this point we know that at least one of the sources has eROSITA data associated (we checked that at the
@@ -1127,8 +1128,9 @@ def esass_spectrum_set(
                             split_r = copy(interim_extras[p_ind]["rmf_path"]).split("/")
                             # split_br = copy(interim_extras[p_ind]['b_rmf_path']).split('/')
                             new_rmf = split_r[-1].replace(".rmf", f"_ident{set_id}_{r_ind}") + ".rmf"
-                            # new_b_rmf = split_br[-1].replace('_back.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
-                            #             + "_back.rmf"
+                            # new_b_rmf = split_br[-1].replace(
+                            #     '_back.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)
+                            # ) + "_back.rmf"
 
                             # Replacing the names in the eSASS commands
                             cur_cmd = cur_cmd.replace(split_r[-1], new_rmf)

@@ -15,7 +15,7 @@ from .. import get_test_source
 
 class TestSetupFuncs(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         cls.src = get_test_source("all")
 
     def test_get_all_telescopes_list_input(self) -> None:
@@ -43,8 +43,8 @@ class TestSetupFuncs(unittest.TestCase):
         )
 
         assert isinstance(res[0][0], GalaxyCluster)
-        assert type(res[1][0]) == Quantity
-        assert type(res[2]) == dict
+        assert isinstance(res[1][0], Quantity)
+        assert isinstance(res[2], dict)
         assert set(res[2].keys()) == {"erass", "xmm"}
         assert len(res[2]["erass"]) == 1
 
@@ -53,17 +53,17 @@ class TestSetupFuncs(unittest.TestCase):
             self.src, Quantity(600, "kpc"), "beta", "king", "vikhlinin_temp", Quantity(600, "kpc"), stacked_spectra=True
         )
 
-        assert type(res[0]) == list
+        assert isinstance(res[0], list)
         assert len(res[0]) == 1
-        assert type(res[1]) == dict
-        assert type(res[1][repr(self.src)]["erass"]) == GasDensity3D
-        assert type(res[1][repr(self.src)]["xmm"]) == GasDensity3D
-        assert type(res[2]) == dict
-        assert type(res[2][repr(self.src)]["erass"]) == GasTemperature3D
-        assert type(res[2][repr(self.src)]["xmm"]) == GasTemperature3D
-        assert type(res[3]) == dict
-        assert type(res[3][repr(self.src)]) == str
+        assert isinstance(res[1], dict)
+        assert isinstance(res[1][repr(self.src)]["erass"], GasDensity3D)
+        assert isinstance(res[1][repr(self.src)]["xmm"], GasDensity3D)
+        assert isinstance(res[2], dict)
+        assert isinstance(res[2][repr(self.src)]["erass"], GasTemperature3D)
+        assert isinstance(res[2][repr(self.src)]["xmm"], GasTemperature3D)
+        assert isinstance(res[3], dict)
+        assert isinstance(res[3][repr(self.src)], str)
         assert res[3][repr(self.src)] == "king"
-        assert type(res[4]) == dict
-        assert type(res[4][repr(self.src)]) == str
+        assert isinstance(res[4], dict)
+        assert isinstance(res[4][repr(self.src)], str)
         assert res[4][repr(self.src)] == "vikhlinin_temp"

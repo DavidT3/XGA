@@ -3,6 +3,7 @@
 
 from inspect import Parameter, signature
 from random import randint
+from typing import Any
 
 import astropy.units as u
 from astropy.units import Quantity
@@ -34,8 +35,8 @@ def single_temp_apec_profile(
     fit_method: str = "leven",
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: int | float = None,
-    over_sample: float = None,
+    min_sn: int | float | None = None,
+    over_sample: float | None = None,
     one_rmf: bool = True,
     num_cores: int = NUM_CORES,
     spectrum_checking: bool = True,
@@ -44,8 +45,8 @@ def single_temp_apec_profile(
     first_fit_start_pars: bool = True,
     detmap_bin: int = 200,
     stacked_spectra: bool = False,
-    telescope: str | list[str] = None,
-):
+    telescope: str | list[str] | None = None,
+) -> BaseSource | BaseSample | list[BaseSource]:
     """
     A function that allows for the fitting of sets of annular spectra (generated from objects such as galaxy
     clusters) with an absorbed plasma emission model (tbabs*apec). This function fits the annuli completely
@@ -217,7 +218,7 @@ def single_temp_apec_profile(
     og_start_temp = start_temp.copy()
     og_start_met = start_met.copy()
 
-    deg_rad = {}
+    deg_rad: dict[str, dict[str, Any]] = {}
     for src_ind, source in enumerate(sources):
         deg_rad[repr(source)] = {}
         # We do not do simultaneous fits with spectra from different telescopes, they are all fit separately - at
@@ -254,9 +255,9 @@ def single_temp_apec_profile(
 
             # We are going to generate a random identifier for this set of fits, which will be used as part of the
             #  filename for the results files generated from the XSPEC run. We're doing this outside of the
-            #  _write_xspec_script function because we will append annulus identifers to the end of the identifiers, so
-            #  we can both easily identify the annulus fits which belong together and still have unique results files for
-            #  each annulus
+            #  _write_xspec_script function because we will append annulus identifers to the end of the identifiers,
+            #  so we can both easily identify the annulus fits which belong together and still have unique results
+            #  files for each annulus
             rand_ident = randint(0, int(1e8))
 
             # ----------------------- NON-CROSS-ARF SETUP -----------------------
@@ -277,7 +278,7 @@ def single_temp_apec_profile(
                     # Whatever start temperature is passed gets converted to keV, this will be put in the template
                     t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
                     # Another TCL list, this time of the parameter start values for this model.
-                    par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(
+                    par_values = "{{{} {} {} {} {} {}}}".format(
                         1.0, source.nH.to("10^22 cm^-2").value, t, start_met, source.redshift, 1.0
                     )
 
@@ -368,9 +369,9 @@ def single_temp_apec_profile(
                 ca_start_met = []
                 ca_start_norm = []
                 for ann_id in ann_spec.annulus_ids:
-                    # Here we retrieve the results of the previous fit that was run without cross-arf, to use as starting
-                    #  parameters for the cross-arf fits. If we can't get a result for a particular annulus then we're
-                    #  going to set the start parameter value to the default
+                    # Here we retrieve the results of the previous fit that was run without cross-arf, to use as
+                    #  starting parameters for the cross-arf fits. If we can't get a result for a particular annulus
+                    #  then we're going to set the start parameter value to the default
                     if first_fit_start_pars:
                         try:
                             # We retrieve all the results from the previous fit to the current annulus
@@ -403,8 +404,8 @@ def single_temp_apec_profile(
 
                 # The start constants will always be one
                 start_con = [1] * len(ann_spec.annulus_ids)
-                # The nH and redshift values are known quantities that can just be set from information in the source. The
-                #  nH can be allowed to vary though
+                # The nH and redshift values are known quantities that can just be set from information in the source.
+                #  The nH can be allowed to vary though
                 start_nh = [source.nH.to("10^22 cm^-2").value] * (len(ann_spec.annulus_ids))
                 start_z = [source.redshift] * (len(ann_spec.annulus_ids))
 
@@ -423,13 +424,14 @@ def single_temp_apec_profile(
                 #  annular spectrum we're dealing with
                 oi_combos = [(o_id, inst) for o_id, insts in ann_spec.instruments.items() for inst in insts]
 
-                # These lists will store the strings representing tcl lists of annular spectra paths, list of lists of paths
-                #  to cross-arf paths for those annular spectra, and the RMF files those cross-arfs were generated with
+                # These lists will store the strings representing tcl lists of annular spectra paths, list of lists of
+                #  paths to cross-arf paths for those annular spectra, and the RMF files those cross-arfs were
+                #  generated with
                 ann_spec_paths = []
                 cross_arf_paths = []
                 cross_arf_rmf_paths = []
-                # Assembling spectrum list strings for the annuli, as well as cross-arf paths, and paths to the rmfs they
-                #  were generated with
+                # Assembling spectrum list strings for the annuli, as well as cross-arf paths, and paths to the rmfs
+                #  they were generated with
                 for ann_id in ann_spec.annulus_ids:
                     # We can just fetch the annular spectra paths from the annular spectrum object we fetched earlier,
                     #  for the current source annulus defined by ann_id
@@ -440,9 +442,9 @@ def single_temp_apec_profile(
                     cross_arf_rmf_paths.append(
                         "{" + " ".join([ann_spec.get_spectra(ann_id, oi[0], oi[1]).rmf for oi in oi_combos]) + "}"
                     )
-                    # As each source annulus has a list of cross-arfs associated with it, we need another for loop here to
-                    #  go through them - this list will store lists of cross-arfs for each ObsID-instrument combo, as they
-                    #  have to be generated separately for each instrument of each observation
+                    # As each source annulus has a list of cross-arfs associated with it, we need another for loop
+                    #  here to go through them - this list will store lists of cross-arfs for each ObsID-instrument
+                    #  combo, as they have to be generated separately for each instrument of each observation
                     cur_ann_cross_arfs = []
                     for oi in oi_combos:
                         rel_c_arfs = ann_spec.get_cross_arf_paths(oi[0], oi[1], ann_id)

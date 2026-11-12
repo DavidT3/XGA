@@ -23,7 +23,7 @@ from .. import get_test_source
 
 class TestTempFuncs(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         """
         This is run once before all tests. Here we define class objects that we want to test.
         """
@@ -45,17 +45,17 @@ class TestTempFuncs(unittest.TestCase):
         # checking the rtmap is the correct telescope
         assert retrn[0].telescope == "erass"
         # checking cur_rads is the correct type
-        assert type(retrn[1]) == np.ndarray
+        assert type(retrn[1]) is np.ndarray
         # checking max_ann is the correct type
-        assert type(retrn[2]) == int
+        assert isinstance(retrn[2], int)
         # checking ann_masks is the correct type
-        assert type(retrn[3]) == np.ndarray
+        assert type(retrn[3]) is np.ndarray
         # checking back_mask is the correct type
-        assert type(retrn[4]) == np.ndarray
+        assert type(retrn[4]) is np.ndarray
         # checking pix_centre is the correct type and has correct units
         assert retrn[5].unit == "pix"
         # checking corr_mask is the correct type
-        assert type(retrn[6]) == np.ndarray
+        assert type(retrn[6]) is np.ndarray
         # checking pix_to_deg is the correct type and has correct units
         assert retrn[7].unit == "deg/pix"
 
@@ -80,9 +80,9 @@ class TestTempFuncs(unittest.TestCase):
         # Checking that final_rads is the right type and in the right units
         assert retrn[0].unit == "arcsec"
         # checking snrs is the correct type
-        assert type(retrn[1]) == np.ndarray
+        assert type(retrn[1]) is np.ndarray
         # checking max_ann is the correct type
-        assert type(retrn[2]) == int
+        assert isinstance(retrn[2], int)
 
     def test_cnt_bins_working_with_erass(self) -> None:
         """
@@ -105,9 +105,9 @@ class TestTempFuncs(unittest.TestCase):
         # Checking that final_rads is the right type and in the right units
         assert retrn[0].unit == "arcsec"
         # checking cnts is the correct type
-        assert type(retrn[1]) == Quantity
+        assert isinstance(retrn[1], Quantity)
         # checking max_ann is the correct type
-        assert type(retrn[2]) == int
+        assert isinstance(retrn[2], int)
 
     def test_min_snr_proj_temp_prof_w_two_tscopes(self) -> None:
         # need combined ratemaps already generated for erass

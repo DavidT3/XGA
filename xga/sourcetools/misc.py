@@ -135,7 +135,7 @@ def name_to_coord(name: str) -> Quantity:
         raise ValueError("There doesn't seem to be a + or - in the object name.")
 
 
-def coord_to_name(coord_pair: Quantity, survey: str = None) -> str:
+def coord_to_name(coord_pair: Quantity, survey: str | None = None) -> str:
     """
     This was originally just written in the init of BaseSource, but I figured I should split it out
     into its own function really. This will take a coordinate pair, and optional survey name, and spit

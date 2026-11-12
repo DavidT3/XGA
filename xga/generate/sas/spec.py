@@ -5,6 +5,7 @@ import os
 from copy import copy
 from itertools import permutations
 from random import randint
+from typing import Any
 
 import numpy as np
 from astropy.units import Quantity
@@ -25,14 +26,14 @@ def _spec_cmds(
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
-    over_sample: int = None,
+    min_sn: float | None = None,
+    over_sample: int | None = None,
     one_rmf: bool = True,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
     force_gen: bool = False,
     debug_images: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     An internal function to generate all the commands necessary to produce an evselect spectrum, but is not
     decorated by the sas_call function, so the commands aren't immediately run. This means it can be used for
@@ -174,9 +175,9 @@ def _spec_cmds(
     sources_extras = []
     sources_types = []
     for s_ind, source in enumerate(sources):
-        cmds = []
-        final_paths = []
-        extra_info = []
+        cmds: list[str] = []
+        final_paths: list[str] = []
+        extra_info: list[dict[str, Any]] = []
 
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
         #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to
@@ -576,7 +577,10 @@ def _spec_cmds(
                 cmd_str += "; " + new_grp
 
             # Adds clean up commands to move all generated files and remove temporary directory
-            cmd_str += f"; rm ccf.cif; find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {{}} ../ \\;; cd ..; rm -r {dest_dir}"
+            cmd_str += (
+                "; rm ccf.cif; find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {} ../ \\;; "
+                f"cd ..; rm -r {dest_dir}"
+            )
             cmds.append(cmd_str)  # Adds the full command to the set
             # Makes sure the whole path to the temporary directory is created
             os.makedirs(dest_dir)
@@ -620,14 +624,14 @@ def evselect_spectrum(
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
-    over_sample: float = None,
+    min_sn: float | None = None,
+    over_sample: float | None = None,
     one_rmf: bool = True,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
     force_gen: bool = False,
     debug_images: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A wrapper for all the SAS processes necessary to generate an XMM spectrum that can be analysed
     in XSPEC. Every observation associated with this source, and every instrument associated with that
@@ -685,14 +689,14 @@ def spectrum_set(
     radii: list[Quantity] | Quantity,
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
-    over_sample: float = None,
+    min_sn: float | None = None,
+    over_sample: float | None = None,
     one_rmf: bool = True,
     num_cores: int = NUM_CORES,
     force_regen: bool = False,
     disable_progress: bool = False,
     debug_images: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     This function can be used to produce 'sets' of XGA Spectrum objects, generated in concentric circular annuli.
     Such spectrum sets can be used to measure projected spectroscopic quantities, or even be de-projected to attempt
@@ -827,7 +831,7 @@ def spectrum_set(
         # This is where the commands/extra information get concatenated from the different annuli
         src_cmds = np.array([])
         src_paths = np.array([])
-        src_out_types = []
+        src_out_types: Any = []
         src_extras = np.array([])
 
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
@@ -993,13 +997,13 @@ def cross_arf(
     radii: list[Quantity] | Quantity,
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
-    over_sample: float = None,
-    set_id: str = None,
+    min_sn: float | None = None,
+    over_sample: float | None = None,
+    set_id: str | None = None,
     detmap_bin: int = 200,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     This function will generate cross-arfs for annular spectra, which describe the contribution of each annulus
     to each other annulus due to XMM's relatively sizeable PSF. The cross-arfs are generated for each instrument
@@ -1076,7 +1080,7 @@ def cross_arf(
         # This is where the commands/extra information get concatenated from the different annuli
         src_cmds = np.array([])
         src_paths = np.array([])
-        src_out_types = []
+        src_out_types: Any = []
         src_extras = np.array([])
 
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the

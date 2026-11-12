@@ -21,7 +21,7 @@ class TestBaseProductFileExists(unittest.TestCase):
     """
 
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         rel_info = TEST_EVTS["XMM_PN"]
         rel_url = os.path.join(HTTPS_ROOT, rel_info["path"])
 
@@ -48,7 +48,7 @@ class TestBaseProductFileExists(unittest.TestCase):
         cls.broken_s3_evt_path = cls.s3_evt_path + ".broken.gz"
 
     @classmethod
-    def tearDownClass(cls):
+    def tearDownClass(cls) -> None:
         # We clean up the local file we created for the existence checks.
         test_ext_data_dir = os.path.join(EXTERNAL_TEST_DATA_PATH, "TestBaseProductFileExists")
         if os.path.exists(test_ext_data_dir):
@@ -82,23 +82,25 @@ class TestBaseProductFileExists(unittest.TestCase):
         )
 
     def test_local_not_exist(self) -> None:
-        """Tests whether defining a BaseProduct with a fake local file path and check_exists=True will behave properly."""
+        """Tests whether defining a BaseProduct with a fake local file path and check_exists=True behaves properly."""
         cur_broken_test_evt = BaseProduct(self.broken_loc_evt_path, "", "", "", "", "", check_exists=True)
         self.assertEqual(cur_broken_test_evt.usable, False, "Expected usable to be False, instead True.")
         self.assertEqual(
             cur_broken_test_evt.not_usable_reasons,
             ["ProductPathDoesNotExist"],
-            f"Expected not_usable_reasons to be ['ProductPathDoesNotExist'], instead {cur_broken_test_evt.not_usable_reasons}.",
+            f"Expected not_usable_reasons to be ['ProductPathDoesNotExist'], instead "
+            f"{cur_broken_test_evt.not_usable_reasons}.",
         )
 
     def test_url_not_exist(self) -> None:
-        """Tests whether defining a BaseProduct with a fake HTTP/HTTPS path and check_exists=True will behave properly."""
+        """Tests whether defining a BaseProduct with a fake HTTP/HTTPS path and check_exists=True behaves properly."""
         cur_broken_test_evt = BaseProduct(self.broken_url_evt_path, "", "", "", "", "", check_exists=True)
         self.assertEqual(cur_broken_test_evt.usable, False, "Expected usable to be False, instead True.")
         self.assertEqual(
             cur_broken_test_evt.not_usable_reasons,
             ["ProductPathDoesNotExist"],
-            f"Expected not_usable_reasons to be ['ProductPathDoesNotExist'], instead {cur_broken_test_evt.not_usable_reasons}.",
+            f"Expected not_usable_reasons to be ['ProductPathDoesNotExist'], instead "
+            f"{cur_broken_test_evt.not_usable_reasons}.",
         )
 
     def test_s3_uri_not_exist(self) -> None:
@@ -108,7 +110,8 @@ class TestBaseProductFileExists(unittest.TestCase):
         self.assertEqual(
             cur_broken_test_evt.not_usable_reasons,
             ["ProductPathDoesNotExist"],
-            f"Expected not_usable_reasons to be ['ProductPathDoesNotExist'], instead {cur_broken_test_evt.not_usable_reasons}.",
+            f"Expected not_usable_reasons to be ['ProductPathDoesNotExist'], instead "
+            f"{cur_broken_test_evt.not_usable_reasons}.",
         )
 
 
@@ -118,7 +121,7 @@ class TestBaseProductDownload(unittest.TestCase):
     """
 
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         rel_info = TEST_EVTS["XMM_PN"]
         cls.url_evt_path = os.path.join(HTTPS_ROOT, rel_info["path"])
         cls.s3_evt_path = os.path.join(S3_ROOT, rel_info["path"])
@@ -127,7 +130,7 @@ class TestBaseProductDownload(unittest.TestCase):
         cls.shared_td = tempfile.TemporaryDirectory()
 
     @classmethod
-    def tearDownClass(cls):
+    def tearDownClass(cls) -> None:
         cls.shared_td.cleanup()
 
     def test_download_url(self) -> None:

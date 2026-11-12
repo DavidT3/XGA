@@ -5,6 +5,7 @@
 for extended X-ray sources.
 """
 
+from typing import Any
 from warnings import warn
 
 import numpy as np
@@ -289,7 +290,7 @@ def _dens_setup(
         # Then we need to grab the temperatures and pass them through to the cluster conversion
         # factor calculator - this may well change as I intend to let cluster_cr_conv grab
         # temperatures for itself at some point
-        temps = {key: [] for key in src_telescopes}
+        temps: dict[str, Any] = {key: [] for key in src_telescopes}
         for src in sources:
             for tel in src_telescopes:
                 try:
@@ -353,7 +354,7 @@ def _dens_setup(
 
     # This where the combined conversion factor that takes a count-rate/volume to a squared number
     # density of hydrogen
-    to_dens_convs = {key: [] for key in src_telescopes}
+    to_dens_convs: dict[str, list[Quantity]] = {key: [] for key in src_telescopes}
     # These are from the distance and redshift, also the normalizing 10^-14 (see my paper for
     #  more of an explanation)
     for src_ind, src in enumerate(sources):

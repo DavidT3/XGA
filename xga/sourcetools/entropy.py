@@ -27,7 +27,7 @@ def entropy_inv_abel_dens_onion_temp(
     num_steps: int = 20000,
     sb_pix_step: int = 1,
     sb_min_snr: int | float = 0.0,
-    inv_abel_method: str = None,
+    inv_abel_method: str | None = None,
     temp_annulus_method: str = "min_snr",
     temp_min_snr: int | float = 30,
     temp_min_cnt: int | Quantity = Quantity(1000, "ct"),
@@ -40,14 +40,14 @@ def entropy_inv_abel_dens_onion_temp(
     temp_hi_en: Quantity = Quantity(7.9, "keV"),
     group_spec: bool = True,
     spec_min_counts: int = 5,
-    spec_min_sn: int | float = None,
-    over_sample: float = None,
+    spec_min_sn: int | float | None = None,
+    over_sample: float | None = None,
     one_rmf: bool = True,
     num_cores: int = NUM_CORES,
     show_warn: bool = True,
     psf_bins: int = 4,
     stacked_spectra: bool = False,
-    telescope: str | list[str] = None,
+    telescope: str | list[str] | None = None,
     global_temp_success_check: bool = False,
 ) -> dict[str, list[SpecificEntropy]] | list[SpecificEntropy]:
     """
@@ -213,8 +213,8 @@ def entropy_inv_abel_dens_onion_temp(
                     d_model = dens_model_dict[str(src)]
                     t_model = temp_model_dict[str(src)]
 
-                    # Set up the specific entropy profile using the temperature radii as they will tend to be spaced a lot
-                    #  wider than the density radii.
+                    # Set up the specific entropy profile using the temperature radii as they will tend to be
+                    #  spaced a lot wider than the density radii.
                     try:
                         rads = t_prof.radii.copy()[1:]
                         rad_errs = t_prof.radii_err.copy()[1:]

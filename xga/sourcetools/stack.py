@@ -36,7 +36,7 @@ def _stack_setup_checks(
     psf_bins: int = 4,
     psf_algo: str = "rl",
     psf_iter: int = 15,
-    telescope: str = None,
+    telescope: str | None = None,
 ) -> None:
     """
     Internal function that was originally split off from radial data stack. This performs checks to make sure passed
@@ -88,10 +88,10 @@ def _create_stack(
     scale_radius: str,
     lo_en: Quantity,
     hi_en: Quantity,
-    custom_temps: Quantity,
+    custom_temps: Quantity | None,
     sim_met: float | list = 0.3,
     abund_table: str = "angr",
-    telescope: str = None,
+    telescope: str | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
     """
     Internal function that was originally split off from radial data stack. Takes the surface brightness profiles
@@ -177,8 +177,8 @@ def _create_stack(
     for src_ind, src in enumerate(sources):
         if src_ind not in no_nan:
             warn(
-                f"A NaN value was detected in {src.name}'s brightness profile, and as such it has been excluded from the "
-                "stack.",
+                f"A NaN value was detected in {src.name}'s brightness profile, and as such it has been excluded "
+                "from the stack.",
                 stacklevel=2,
             )
         else:
@@ -260,7 +260,7 @@ def stacked_radial_brightness(
     num_bins: int = 100,
     max_scale: float = 1.5,
     num_cores: int = NUM_CORES,
-    telescope: str = None,
+    telescope: str | None = None,
 ) -> dict:
     """
     This function will scale the radial brightness profiles of a sample of clusters by a given over-density radius,
@@ -350,7 +350,7 @@ def radial_data_stack(
     min_snr: int | float = 0.0,
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
-    custom_temps: Quantity = None,
+    custom_temps: Quantity | None = None,
     sim_met: float | list = 0.3,
     abund_table: str = "angr",
     psf_corr: bool = False,
@@ -359,7 +359,7 @@ def radial_data_stack(
     psf_algo: str = "rl",
     psf_iter: int = 15,
     num_cores: int = NUM_CORES,
-    telescope: str = None,
+    telescope: str | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
     """
     Creates and scales radial brightness profiles for a set of galaxy clusters so that they can be combined
@@ -516,14 +516,14 @@ def radial_data_stack(
     # Sets up a multiprocessing pool
     with tqdm(total=len(sources), desc="Generating Brightness Profiles") as onwards, Pool(num_cores) as pool:
 
-        def callback(results):
+        def callback(results: tuple[np.ndarray | Quantity, int]) -> None:
             nonlocal sb
             nonlocal onwards
             b, s_id = results
             sb[s_id, :] = b
             onwards.update(1)
 
-        def err_callback(err):
+        def err_callback(err: BaseException) -> None:
             onwards.update()
             raise err
 
@@ -551,7 +551,7 @@ def view_radial_data_stack(
     min_snr: int | float = 0.0,
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
-    custom_temps: Quantity = None,
+    custom_temps: Quantity | None = None,
     sim_met: float | list = 0.3,
     abund_table: str = "angr",
     psf_corr: bool = False,
@@ -562,7 +562,7 @@ def view_radial_data_stack(
     num_cores: int = NUM_CORES,
     show_images: bool = False,
     figsize: tuple = (14, 14),
-    telescope: str = None,
+    telescope: str | None = None,
 ) -> None:
     """
     A convenience function that calls radial_data_stack and makes plots of the average profile, individual profiles,
@@ -701,7 +701,7 @@ def radial_model_stack(
     min_snr: int | float = 0.0,
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
-    custom_temps: Quantity = None,
+    custom_temps: Quantity | None = None,
     sim_met: float | list = 0.3,
     abund_table: str = "angr",
     psf_corr: bool = False,
@@ -712,7 +712,7 @@ def radial_model_stack(
     num_cores: int = NUM_CORES,
     num_walkers: int = 20,
     num_steps: int = 20000,
-    telescope: str = None,
+    telescope: str | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
     """
     Creates, fits, and scales radial brightness profiles for a set of galaxy clusters so that they can be combined
@@ -872,7 +872,7 @@ def radial_model_stack(
     # Sets up a multiprocessing pool
     with tqdm(total=len(sources), desc="Generating Brightness Profiles") as onwards, Pool(num_cores) as pool:
 
-        def callback(results):
+        def callback(results: tuple[np.ndarray | Quantity, int]) -> None:
             nonlocal sb
             nonlocal onwards
             b, s_id = results
@@ -881,7 +881,7 @@ def radial_model_stack(
             )
             onwards.update(1)
 
-        def err_callback(err):
+        def err_callback(err: BaseException) -> None:
             onwards.update()
             raise err
 
@@ -911,7 +911,7 @@ def view_radial_model_stack(
     min_snr: int | float = 0.0,
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
-    custom_temps: Quantity = None,
+    custom_temps: Quantity | None = None,
     sim_met: float | list = 0.3,
     abund_table: str = "angr",
     psf_corr: bool = False,
@@ -924,7 +924,7 @@ def view_radial_model_stack(
     num_steps: int = 20000,
     show_images: bool = False,
     figsize: tuple = (14, 14),
-    telescope: str = None,
+    telescope: str | None = None,
 ) -> None:
     """
     A convenience function that calls radial_model_stack and makes plots of the average profile, individual profiles,

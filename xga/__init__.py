@@ -17,12 +17,14 @@ except Exception:
 #  runs XGA, the configuration file is set up in the default location.
 # This doesn't undermine the lazy-loading implemented in the __getattr__ function below, as this
 #  function doesn't set any global constants, just makes sure the file exists.
+from typing import Any
+
 from .utils import _prep_xga_config_file
 
 _prep_xga_config_file()
 
 
-def __getattr__(name):
+def __getattr__(name: str) -> Any:
     """
     A module level __getattr__ which allows us to lazily load the XGA configuration and census from the utils
     module. This helps to avoid race conditions when importing XGA from other modules (like DAXA).
@@ -61,16 +63,16 @@ from types import ModuleType
 
 # We use a custom dictionary-like object for sys.modules to lazily import the sas modules
 class LazyModuleShim(ModuleType):
-    def __init__(self, target_name):
+    def __init__(self, target_name: str) -> None:
         super().__init__(target_name)
         self.target_name = target_name
-        self._module = None
+        self._module: ModuleType | None = None
         # We set this to None to avoid triggering a load when someone checks for __file__
         self.__file__ = None
         self.__path__ = []
 
     @property
-    def _real_module(self):
+    def _real_module(self) -> ModuleType | None:
         if self._module is None:
             # We import xga.generate here, which will then allow us to access the submodules
             import importlib
@@ -90,10 +92,10 @@ class LazyModuleShim(ModuleType):
                 self._module = generate.sas.run
         return self._module
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         return getattr(self._real_module, name)
 
-    def __dir__(self):
+    def __dir__(self) -> list[str]:
         return dir(self._real_module)
 
 

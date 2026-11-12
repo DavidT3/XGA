@@ -645,7 +645,7 @@ def min_snr_proj_temp_prof(
     # We're setting up a dictionary that will contain lists of annular radius sets, with top level keys being
     #  telescope names, and values being lists. Each list will have one entry per source, even if that source
     #  doesn't have the telescope associated (in those cases, a null value will be added)
-    all_rads = {tel: [] for tel in src_telescopes}
+    all_rads: dict[str, list[Quantity | None]] = {tel: [] for tel in src_telescopes}
 
     for src_ind, src in enumerate(sources):
         # Iterating through all the telescopes being considered
@@ -847,7 +847,7 @@ def min_cnt_proj_temp_prof(
     # We're setting up a dictionary that will contain lists of annular radius sets, with top level keys being
     #  telescope names, and values being lists. Each list will have one entry per source, even if that source
     #  doesn't have the telescope associated (in those cases, a null value will be added)
-    all_rads = {tel: [] for tel in src_telescopes}
+    all_rads: dict[str, list[Quantity | None]] = {tel: [] for tel in src_telescopes}
 
     for src_ind, src in enumerate(sources):
         # Iterating through all the telescopes being considered

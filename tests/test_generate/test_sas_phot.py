@@ -15,7 +15,7 @@ from ..utils import require_sas
 
 class TestSasPhotFuncs(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         # Grab a source with XMM in
         cls.src = get_test_source("xmm")
 

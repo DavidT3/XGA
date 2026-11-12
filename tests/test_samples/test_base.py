@@ -12,7 +12,7 @@ from .. import CLUSTER_SMP, SRC_INFO, SUPP_SRC_INFO
 
 class TestBaseSample(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         cls.test_smp = ClusterSample(
             CLUSTER_SMP["ra"].values,
             CLUSTER_SMP["dec"].values,

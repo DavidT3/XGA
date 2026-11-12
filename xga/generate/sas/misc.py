@@ -6,6 +6,7 @@ import sys
 from datetime import datetime
 from random import randint
 from subprocess import PIPE, Popen
+from typing import Any
 
 import numpy as np
 from astropy.io import fits
@@ -21,7 +22,7 @@ from ...products import BaseProduct
 from .run import sas_call
 
 
-def mifbuild(sources):
+def mifbuild(sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource]) -> str:
     """
     This function generates a master index file from the SAS_CCFPATH constituents, which
     will then be used for cifbuild runs. If a MIF already exists, the creation date
@@ -96,7 +97,9 @@ def mifbuild(sources):
 
 
 @sas_call
-def cifbuild(sources: BaseSource | NullSource | BaseSample, num_cores: int = NUM_CORES, disable_progress: bool = False):
+def cifbuild(
+    sources: BaseSource | NullSource | BaseSample, num_cores: int = NUM_CORES, disable_progress: bool = False
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A wrapper for the XMM cifbuild command, which will be run before many of the more complex SAS commands, to
     check that a CIF compatible with the local version of SAS is available. The observation date is taken from an
@@ -142,9 +145,9 @@ def cifbuild(sources: BaseSource | NullSource | BaseSample, num_cores: int = NUM
     sources_extras = []
     sources_types = []
     for source in sources:
-        cmds = []
-        final_paths = []
-        extra_info = []
+        cmds: list[str] = []
+        final_paths: list[str] = []
+        extra_info: list[dict[str, Any]] = []
 
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
         #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to

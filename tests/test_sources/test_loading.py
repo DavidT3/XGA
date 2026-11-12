@@ -19,7 +19,7 @@ from .. import SRC_INFO, get_test_source
 
 class TestProductLoading(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         cls.src = get_test_source("xmm")
 
     def test_xmm_image_loading(self) -> None:

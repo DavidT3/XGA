@@ -1,9 +1,11 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:20 PM. Copyright (c) The Contributors.
 
+from typing import Any
+
 
 class eSASSInputInvalid(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         This error is raised when a user provides an invalid input to an eSASS function.
 
@@ -15,7 +17,7 @@ class eSASSInputInvalid(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message} "
         else:
@@ -23,7 +25,7 @@ class eSASSInputInvalid(Exception):
 
 
 class HeasoftError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Exception raised for unexpected output from HEASoft calls, currently all encompassing.
 
@@ -35,7 +37,7 @@ class HeasoftError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message} "
         else:
@@ -43,7 +45,7 @@ class HeasoftError(Exception):
 
 
 class SASNotFoundError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Exception raised if the XMM Scientific Analysis System can not be found on the system.
 
@@ -55,7 +57,7 @@ class SASNotFoundError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message} "
         else:
@@ -63,7 +65,7 @@ class SASNotFoundError(Exception):
 
 
 class eSASSNotFoundError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Exception raised if the eROSITA Science Analysis Software
         System can not be found on the system.
@@ -76,7 +78,7 @@ class eSASSNotFoundError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message} "
         else:
@@ -84,7 +86,7 @@ class eSASSNotFoundError(Exception):
 
 
 class CIAONotFoundError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Exception raised if the Chandra CIAO can not be found on the system.
 
@@ -96,7 +98,7 @@ class CIAONotFoundError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message} "
         else:
@@ -104,7 +106,7 @@ class CIAONotFoundError(Exception):
 
 
 class CALDBNotFoundError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Exception raised if the Calibration files CALDB can not be found on the system.
 
@@ -116,7 +118,7 @@ class CALDBNotFoundError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message} "
         else:
@@ -124,7 +126,7 @@ class CALDBNotFoundError(Exception):
 
 
 class XSPECNotFoundError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Exception raised if XSPEC can not be found on the system.
 
@@ -136,7 +138,7 @@ class XSPECNotFoundError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message} "
         else:
@@ -144,7 +146,7 @@ class XSPECNotFoundError(Exception):
 
 
 class ProductGenerationError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Exception raised if an error is found to have occurred during a run of backend software that generates
         products for a telescope supported by XGA - equivalent to the now-removed SASGenerationError, but more general.
@@ -157,7 +159,7 @@ class ProductGenerationError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message} "
         else:
@@ -165,7 +167,7 @@ class ProductGenerationError(Exception):
 
 
 class UnknownCommandlineError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Exception raised if an error is found to have occurred during a run of a part
         of the SAS software, but it cannot be linked to a SAS function.
@@ -178,7 +180,7 @@ class UnknownCommandlineError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message} "
         else:
@@ -186,7 +188,7 @@ class UnknownCommandlineError(Exception):
 
 
 class TelescopeNotAssociatedError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Exception raised if the user tries to run a telescope specific function (e.g. a SAS function for XMM, or an
         eSASS function for eROSITA) and the source or sample has no data for that telescope associated with it.
@@ -199,7 +201,7 @@ class TelescopeNotAssociatedError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message} "
         else:
@@ -207,7 +209,7 @@ class TelescopeNotAssociatedError(Exception):
 
 
 class FailedProductError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Exception raised when trying to access certain data/attributes from an object wrapping a
          product that failed to generate properly.
@@ -220,7 +222,7 @@ class FailedProductError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message} "
         else:
@@ -228,7 +230,7 @@ class FailedProductError(Exception):
 
 
 class XGAConfigError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Exception raised for flawed XGA config files.
 
@@ -240,7 +242,7 @@ class XGAConfigError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message} "
         else:
@@ -248,7 +250,7 @@ class XGAConfigError(Exception):
 
 
 class NoMatchFoundError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Exception raised when source ra and dec coordinates can't be made to match to any XMM observation.
 
@@ -260,7 +262,7 @@ class NoMatchFoundError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message} "
         else:
@@ -268,7 +270,7 @@ class NoMatchFoundError(Exception):
 
 
 class NotAssociatedError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Error raised when a given telescope or ObsID is not associated with a source object.
 
@@ -280,7 +282,7 @@ class NotAssociatedError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message} "
         else:
@@ -288,7 +290,7 @@ class NotAssociatedError(Exception):
 
 
 class UnknownProductError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Error raised when there is an attempt to write an unknown XMM product type to an XGA source.
 
@@ -300,7 +302,7 @@ class UnknownProductError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -308,7 +310,7 @@ class UnknownProductError(Exception):
 
 
 class NoValidObservationsError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Error raised when there is an initial match to an XMM observation, but the
         necessary files cannot be found.
@@ -321,7 +323,7 @@ class NoValidObservationsError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -329,7 +331,7 @@ class NoValidObservationsError(Exception):
 
 
 class MultipleMatchError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Error raised when more than one match for a specific type of object is found in a single region file.
         Hopefully this error is never raised, it probably shouldn't!
@@ -342,7 +344,7 @@ class MultipleMatchError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -350,7 +352,7 @@ class MultipleMatchError(Exception):
 
 
 class NoRegionsError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Error raised when there are no appropriate regions available for an attempted analysis.
 
@@ -362,7 +364,7 @@ class NoRegionsError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -370,7 +372,7 @@ class NoRegionsError(Exception):
 
 
 class NoProductAvailableError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Error raised when requesting a product from an XGA source that hasn't yet been generated.
 
@@ -382,7 +384,7 @@ class NoProductAvailableError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -390,7 +392,7 @@ class NoProductAvailableError(Exception):
 
 
 class ModelNotAssociatedError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Error raised when values from a model fit that isn't associated with a particular product object.
 
@@ -402,7 +404,7 @@ class ModelNotAssociatedError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -410,7 +412,7 @@ class ModelNotAssociatedError(Exception):
 
 
 class ParameterNotAssociatedError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Error raised when a parameter is not associated with a particular model.
 
@@ -422,7 +424,7 @@ class ParameterNotAssociatedError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -430,7 +432,7 @@ class ParameterNotAssociatedError(Exception):
 
 
 class XSPECFitError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         This error is raised when there is a problem during an XSPEC fit instigated by XGA.
 
@@ -442,7 +444,7 @@ class XSPECFitError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -450,7 +452,7 @@ class XSPECFitError(Exception):
 
 
 class RateMapPairError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         This error is raised when there is a problem with the pair of Image and Exposure map objects that
         are passed into the RateMap init.
@@ -463,7 +465,7 @@ class RateMapPairError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -471,7 +473,7 @@ class RateMapPairError(Exception):
 
 
 class PeakConvergenceFailedError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         This error is raised when iterating peak finding fails to converge within the allowed number
         of iterations.
@@ -484,7 +486,7 @@ class PeakConvergenceFailedError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -492,7 +494,7 @@ class PeakConvergenceFailedError(Exception):
 
 
 class SASInputInvalid(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         This error is raised when a user provides an invalid input to a SAS function.
 
@@ -504,7 +506,7 @@ class SASInputInvalid(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -512,7 +514,7 @@ class SASInputInvalid(Exception):
 
 
 class NotPSFCorrectedError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Raised when the user tries to set PSF deconvolution properties of an Image product, but the
         psf correction flag indicates that the product is not deconvolved.
@@ -525,7 +527,7 @@ class NotPSFCorrectedError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -533,7 +535,7 @@ class NotPSFCorrectedError(Exception):
 
 
 class IncompatibleProductError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Raised when products are used together that do not have matching ObsID and instrument
         values, or when they were not generated at the same coordinates. For instance when you try to
@@ -547,7 +549,7 @@ class IncompatibleProductError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -555,7 +557,7 @@ class IncompatibleProductError(Exception):
 
 
 class XGAFitError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Raised when there is an issue with a fit that XGA is trying to perform.
 
@@ -567,7 +569,7 @@ class XGAFitError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -575,7 +577,7 @@ class XGAFitError(Exception):
 
 
 class XGAInvalidModelError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Raised when the user is trying to fit a model that is not appropriate to the data.
 
@@ -587,7 +589,7 @@ class XGAInvalidModelError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -595,7 +597,7 @@ class XGAInvalidModelError(Exception):
 
 
 class XGAFunctionConversionError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Raised when an attempt to convert an XGA model function (or a custom function supplied by the user) to the
         standard required by scipy's orthogonal distance regression failed.
@@ -608,7 +610,7 @@ class XGAFunctionConversionError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -616,7 +618,7 @@ class XGAFunctionConversionError(Exception):
 
 
 class XGAOptionalDependencyError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Raised when an optional XGA dependency hasn't been installed, but the feature that needs it has been
         activated.
@@ -629,7 +631,7 @@ class XGAOptionalDependencyError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -637,7 +639,7 @@ class XGAOptionalDependencyError(Exception):
 
 
 class XGASetIDError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Raised when something is attempting to use annular spectra (which are all part of spectrum sets) together,
         but they have different set IDs.
@@ -649,7 +651,7 @@ class XGASetIDError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -657,7 +659,7 @@ class XGASetIDError(Exception):
 
 
 class XGAPoorDataError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Raised when the data aren't of sufficient quality to complete an operation.
         :param expression:
@@ -668,7 +670,7 @@ class XGAPoorDataError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -676,7 +678,7 @@ class XGAPoorDataError(Exception):
 
 
 class InvalidProductError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Raised when there is a signficiant problem with a data product.
         :param expression:
@@ -687,7 +689,7 @@ class InvalidProductError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -695,7 +697,7 @@ class InvalidProductError(Exception):
 
 
 class NotSampleMemberError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Raised when a feature reserved for sources that belong to samples is used, and the source is independent
         of a sample.
@@ -707,7 +709,7 @@ class NotSampleMemberError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -715,7 +717,7 @@ class NotSampleMemberError(Exception):
 
 
 class NoTelescopeDataError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Raised when a part of XGA that directly accesses telescope data is used, but there are no relevant
         telescopes setup in the configuration file.
@@ -727,7 +729,7 @@ class NoTelescopeDataError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -735,7 +737,7 @@ class NoTelescopeDataError(Exception):
 
 
 class InvalidTelescopeError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Raised when the name of a telescope has been passed to a function, but it is not recognised or supported.
         :param expression:
@@ -746,7 +748,7 @@ class InvalidTelescopeError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:
@@ -754,7 +756,7 @@ class InvalidTelescopeError(Exception):
 
 
 class XGADeveloperError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Raised when an error has occurred that needs the attention of developers.
 
@@ -766,7 +768,7 @@ class XGADeveloperError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message} "
         else:
@@ -774,7 +776,7 @@ class XGADeveloperError(Exception):
 
 
 class ProductNotUsableError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Raised when a product instance is unusable, for reasons specified in the
         not_usable_reasons property.
@@ -787,7 +789,7 @@ class ProductNotUsableError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message} "
         else:
@@ -795,7 +797,7 @@ class ProductNotUsableError(Exception):
 
 
 class FitConfNotAssociatedError(Exception):
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         """
         Raised when a supplied fit configuration isn't associated with the source, model, or spectrum.
         :param expression:
@@ -806,7 +808,7 @@ class FitConfNotAssociatedError(Exception):
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         else:

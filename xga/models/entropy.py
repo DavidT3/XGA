@@ -22,8 +22,11 @@ class CoreConstPowerEntropy(BaseModel1D):
     """
 
     def __init__(
-        self, x_unit: str | Unit = "kpc", y_unit: str | Unit = Unit("keV cm^2"), cust_start_pars: list[Quantity] = None
-    ):
+        self,
+        x_unit: str | Unit = "kpc",
+        y_unit: str | Unit = Unit("keV cm^2"),
+        cust_start_pars: list[Quantity] | None = None,
+    ) -> None:
         """
         The init of a subclass of the XGA BaseModel1D class, describing a model of how entropy changes with radius -
         this one is almost constant in the core and behaves as a power-law in the outskirts.
@@ -126,8 +129,11 @@ class PowerEntropy(BaseModel1D):
     """
 
     def __init__(
-        self, x_unit: str | Unit = "kpc", y_unit: str | Unit = Unit("keV cm^2"), cust_start_pars: list[Quantity] = None
-    ):
+        self,
+        x_unit: str | Unit = "kpc",
+        y_unit: str | Unit = Unit("keV cm^2"),
+        cust_start_pars: list[Quantity] | None = None,
+    ) -> None:
         """
         The init of a subclass of the XGA BaseModel1D class, describing a model of how entropy changes with radius -
         this one is almost constant in the core and behaves as a power-law in the outskirts.

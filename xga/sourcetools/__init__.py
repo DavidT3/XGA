@@ -3,3 +3,5 @@
 
 from .match import separation_match, simple_xmm_match
 from .misc import ang_to_rad, nh_lookup, rad_to_ang
+
+__all__ = ["ang_to_rad", "nh_lookup", "rad_to_ang", "separation_match", "simple_xmm_match"]

@@ -3,6 +3,7 @@
 
 import os
 from random import randint
+from typing import Any
 
 import numpy as np
 from astropy.units import Quantity
@@ -17,7 +18,7 @@ from .misc import evtool_combine_evts
 from .run import esass_call
 
 
-def _img_params_from_evtlist(evt_list: EventList):
+def _img_params_from_evtlist(evt_list: EventList) -> tuple[int, int, int, str]:
     """
     Internal function to work out the XGA image size and centre position for eROSITA observations. This is done using
     the minimum and maximum of the ra and dec, with a 1% buffer, as the corners of the image.
@@ -101,7 +102,7 @@ def evtool_image(
     combine_obs: bool = False,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A convenient Python wrapper for a configuration of the eSASS evtool command that makes images.
     Images will be generated for every observation associated with every source passed to this function.
@@ -182,9 +183,9 @@ def evtool_image(
     sources_extras = []
     sources_types = []
     for source in sources:
-        cmds = []
-        final_paths = []
-        extra_info = []
+        cmds: list[str] = []
+        final_paths: list[str] = []
+        extra_info: list[dict[str, Any]] = []
 
         # By this point we know that at least one of the sources has eROSITA data associated (we checked that at the
         #  beginning of this function). We still need to append the empty cmds, paths, extra_info, and ptypes to
@@ -373,7 +374,7 @@ def expmap(
     combine_obs: bool = False,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A convenient Python wrapper for the eSASS expmap command.
     Expmaps will be generated for every observation associated with every source passed to this function.
@@ -425,9 +426,9 @@ def expmap(
     sources_types = []
     for source in sources:
         source: BaseSource
-        cmds = []
-        final_paths = []
-        extra_info = []
+        cmds: list[str] = []
+        final_paths: list[str] = []
+        extra_info: list[dict[str, Any]] = []
 
         # By this point we know that at least one of the sources has eROSITA data associated (we checked that at the
         #  beginning of this function). We still need to append the empty cmds, paths, extra_info, and ptypes to

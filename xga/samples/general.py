@@ -62,9 +62,9 @@ class ExtendedSample(BaseSample):
         self,
         ra: np.ndarray,
         dec: np.ndarray,
-        redshift: np.ndarray = None,
-        name: np.ndarray = None,
-        custom_region_radius: Quantity = None,
+        redshift: np.ndarray | None = None,
+        name: np.ndarray | None = None,
+        custom_region_radius: Quantity | None = None,
         use_peak: bool = True,
         peak_lo_en: Quantity = Quantity(0.5, "keV"),
         peak_hi_en: Quantity = Quantity(2.0, "keV"),
@@ -75,12 +75,12 @@ class ExtendedSample(BaseSample):
         no_prog_bar: bool = False,
         psf_corr: bool = False,
         peak_find_method: str = "hierarchical",
-        telescope: str | list[str] = None,
-        search_distance: Quantity | dict = None,
+        telescope: str | list[str] | None = None,
+        search_distance: Quantity | dict | None = None,
         clean_obs: bool = True,
         clean_obs_reg: str = "custom",
         clean_obs_threshold: float = 0.3,
-    ):
+    ) -> None:
         """
         The init method of the ExtendedSample class.
 
@@ -339,7 +339,7 @@ class ExtendedSample(BaseSample):
         """
         return self._cr_unit
 
-    def _del_data(self, key: int):
+    def _del_data(self, key: int) -> None:
         """
         Specific to the ExtendedSample class, this deletes the extra data stored during the initialisation
         of this type of sample.
@@ -394,8 +394,8 @@ class PointSample(BaseSample):
         self,
         ra: np.ndarray,
         dec: np.ndarray,
-        redshift: np.ndarray = None,
-        name: np.ndarray = None,
+        redshift: np.ndarray | None = None,
+        name: np.ndarray | None = None,
         point_radius: Quantity = Quantity(30, "arcsec"),
         use_peak: bool = False,
         peak_lo_en: Quantity = Quantity(0.5, "keV"),
@@ -408,9 +408,9 @@ class PointSample(BaseSample):
         clean_obs_threshold: float = 0.9,
         no_prog_bar: bool = False,
         psf_corr: bool = False,
-        telescope: str | list[str] = None,
-        search_distance: Quantity | dict = None,
-    ):
+        telescope: str | list[str] | None = None,
+        search_distance: Quantity | dict | None = None,
+    ) -> None:
         """
         The init method of the PointSample class.
 
@@ -657,7 +657,7 @@ class PointSample(BaseSample):
         """
         return self._pr_unit
 
-    def _del_data(self, key: int):
+    def _del_data(self, key: int) -> None:
         """
         Specific to the PointSample class, this deletes the extra data stored during the initialisation
         of this type of sample.

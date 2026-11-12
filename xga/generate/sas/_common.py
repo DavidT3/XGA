@@ -47,7 +47,7 @@ def region_setup(
         sources = [sources]
 
     # Checking that the user hasn't passed BaseSources
-    if not all([type(src) != BaseSource for src in sources]):
+    if not all([type(src) is not BaseSource for src in sources]):
         raise TypeError(
             "You cannot generate spectra from a BaseSource object, really you shouldn't be using "
             "them at all, they are mostly useful as a superclass."
@@ -67,7 +67,7 @@ def region_setup(
     elif (
         isinstance(inner_radius, str)
         and inner_radius in ["r2500", "r500", "r200"]
-        and not all([type(src) == GalaxyCluster for src in sources])
+        and not all([isinstance(src, GalaxyCluster) for src in sources])
     ):
         raise TypeError(f"The {inner_radius} radius is only valid for GalaxyCluster objects")
 
@@ -93,7 +93,7 @@ def region_setup(
     elif (
         isinstance(outer_radius, str)
         and outer_radius in ["r2500", "r500", "r200"]
-        and not all([type(src) == GalaxyCluster for src in sources])
+        and not all([isinstance(src, GalaxyCluster) for src in sources])
     ):
         raise TypeError(f"The {outer_radius} radius is only valid for GalaxyCluster objects")
     elif (

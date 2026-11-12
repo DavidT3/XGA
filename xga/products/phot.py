@@ -1,14 +1,19 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 11/10/26, 9:57 AM. Copyright (c) The Contributors.
 
+from __future__ import annotations
+
 import os
+from collections.abc import Callable
 from copy import deepcopy
+from typing import Any, NoReturn
 from warnings import warn
 
 import numpy as np
 import pandas as pd
 from astropy import wcs
 from astropy.convolution import Gaussian2DKernel, Kernel, convolve_fft
+from astropy.cosmology import Cosmology
 from astropy.io import fits
 from astropy.units import Quantity, Unit, UnitBase, UnitConversionError, deg, pix
 from astropy.visualization import BaseStretch, ImageNormalize, ManualInterval, MinMaxInterval
@@ -23,6 +28,7 @@ from astropy.visualization.stretch import (
 from fitsio import FITSHDR, read
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
+from matplotlib.backend_bases import Event, KeyEvent, MouseEvent, PickEvent
 from matplotlib.patches import Circle, Ellipse
 from matplotlib.widgets import Button, RangeSlider, Slider
 from regions import CirclePixelRegion, EllipsePixelRegion, PixCoord, PixelRegion, Regions, SkyRegion
@@ -82,8 +88,9 @@ class Image(BaseProduct):
         kernel used or a dictionary of information (required structure detailed in
         parse_smoothing). Default is None
     :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
-        is combined and wasn't made by a mosaic tool like XMM-SAS emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
-        ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
+        is combined and wasn't made by a mosaic tool like XMM-SAS emosaic (e.g. [['0404910601', 'pn'],
+        ['0404910601', 'mos1'], ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'],
+        ['0201901401', 'mos2']].
     :param str telescope: The telescope that this product is derived from. Default is None.
     :param bool allow_negative_vals: Controls how negative values in data are treated. If True then they will be
         left as they are, if False (the default) then they are set to zero.
@@ -111,7 +118,7 @@ class Image(BaseProduct):
         telescope: str | None = None,
         allow_negative_vals: bool = False,
         check_exists: bool = True,
-    ):
+    ) -> None:
         """
         The initialisation method for the Image class. This class stores image data from X-ray observations. It also
         allows easy, direct, access to that data, and implements many helpful methods with extra
@@ -174,9 +181,9 @@ class Image(BaseProduct):
                     "If the 'path' argument is a dictionary, it must contain 'data', 'wcs', and 'header' keys."
                 )
             elif isinstance(path, dict):
-                self._data = path["data"]
-                self._wcs_radec = path["wcs"]
-                self._header = path["header"]
+                self._data: np.ndarray | None = path["data"]
+                self._wcs_radec: wcs.WCS | None = path["wcs"]
+                self._header: FITSHDR | fits.Header | None = path["header"]
             elif isinstance(path, list) and len(path) != 3:
                 raise ValueError(
                     "If the 'path' argument is a list, it must contain exactly three elements, "
@@ -200,7 +207,7 @@ class Image(BaseProduct):
                 self._header = FITSHDR(self._header)
 
             # Set the shape from the data manually
-            self._shape = self._data.shape
+            self._shape: tuple[int, ...] | None = self._data.shape
 
         # Otherwise we think that the 'path' argument is actually just a file path, and setup accordingly
         else:
@@ -213,8 +220,8 @@ class Image(BaseProduct):
             self._shape = None
 
         # Set up many image-specific attributes
-        self._wcs_skyXY = None
-        self._wcs_detXY = None
+        self._wcs_skyXY: wcs.WCS | None = None
+        self._wcs_detXY: wcs.WCS | None = None
         self._energy_bounds = (lo_en, hi_en)
         self._prod_type = "image"
         # Adding an attribute to tell the product what its data units are, as there are subclasses of Image
@@ -227,10 +234,10 @@ class Image(BaseProduct):
         self._psf_corrected = False
         # These give extra information about the PSF correction, but can't be set unless PSF
         #  corrected is true
-        self._psf_correction_algorithm = None
-        self._psf_num_bins = None
-        self._psf_num_iterations = None
-        self._psf_model = None
+        self._psf_correction_algorithm: str | None = None
+        self._psf_num_bins: int | None = None
+        self._psf_num_iterations: int | None = None
+        self._psf_model: str | None = None
 
         # We perform validity checks on any input passed to the obs_inst_combs argument.
         if obs_inst_combs is not None:
@@ -274,12 +281,14 @@ class Image(BaseProduct):
         self._smoothed = smoothed
         # If the user says at this point that the image has been smoothed, then we try and parse the smoothing info
         if smoothed:
+            self._smoothed_method: str | None
+            self._smoothed_info: dict | None
             self._smoothed_method, self._smoothed_info = self.parse_smoothing(smoothed_info)
         else:
             self._smoothed_info = None
             self._smoothed_method = None
 
-    def _read_on_demand(self):
+    def _read_on_demand(self) -> None:
         """
         Internal method to read the image associated with this Image object into memory when it is requested by
         another method. Doing it on-demand saves on wasting memory.
@@ -300,8 +309,8 @@ class Image(BaseProduct):
                 # This throws a non-fatal warning to let the user know there are negative pixel values,
                 #  and that they're being 'corrected'
                 warn(
-                    f"Negative values in {self._prod_type} data have been set to zero - this behaviour can be controlled using "
-                    "the 'allow_negative_vals' argument at initilisation.",
+                    f"Negative values in {self._prod_type} data have been set to zero - this behaviour can be "
+                    "controlled using the 'allow_negative_vals' argument at initilisation.",
                     stacklevel=2,
                 )
                 self._data[self._data < 0] = 0
@@ -321,7 +330,7 @@ class Image(BaseProduct):
                 f"The reason(s) given are: {reasons}."
             )
 
-    def _read_header_on_demand(self):
+    def _read_header_on_demand(self) -> None:
         """
         Very specific method to just read the header of the fits file in. This also sets the '_shape' attribute
         from the NAXIS keywords.
@@ -342,7 +351,7 @@ class Image(BaseProduct):
                 f"and the header cannot be read."
             )
 
-    def _read_wcs_on_demand(self):
+    def _read_wcs_on_demand(self) -> None:
         """
         The equivalent of _read_on_demand, but for the header and wcs information. These are often
         required more than the data for individual images (as the merged images are generally used
@@ -393,7 +402,7 @@ class Image(BaseProduct):
                     "SAS has generated this image without a WCS capable of going from pixels to RA-DEC."
                 )
 
-    def _oi_inst_pairs_on_demand(self):
+    def _oi_inst_pairs_on_demand(self) -> None:
         """
         Generates and caches combined ObsID and Instrument pairs on demand for specific telescope data.
 
@@ -521,7 +530,7 @@ class Image(BaseProduct):
                 )
 
         # Checking what kind of regions there are, as that changes whether they need to be converted or not
-        final_regs = {}
+        final_regs: dict = {}
         # Top level of iteration is through the ObsID keys
         for o in ds9_regs:
             # Setting up an entry in the output dictionary for that ObsID
@@ -544,7 +553,7 @@ class Image(BaseProduct):
 
         return final_regs
 
-    def _process_matched_regions(self, matched_reg_input: SkyRegion | PixelRegion | dict):
+    def _process_matched_regions(self, matched_reg_input: SkyRegion | PixelRegion | dict | None) -> dict:
         """
         This processes input matched region information, making sure that it is in an acceptable format, and then
         returning a dictionary in the form expected by this class. Also makes sure that all matched regions are
@@ -643,7 +652,7 @@ class Image(BaseProduct):
         return method_name, method_pars
 
     @property
-    def smoothing_info(self) -> dict:
+    def smoothing_info(self) -> dict | None:
         """
         If the image has been smoothed, then this property getter will return information on the smoothing done.
 
@@ -654,7 +663,7 @@ class Image(BaseProduct):
         return self._smoothed_info
 
     @smoothing_info.setter
-    def smoothing_info(self, new_info: dict | Kernel):
+    def smoothing_info(self, new_info: dict | Kernel) -> None:
         """
         If the Image was not declared smoothed on initialisation, smoothing information can be added with this
         property setter. It will be parsed and the smoothed property will be set to True.
@@ -665,7 +674,7 @@ class Image(BaseProduct):
         self._smoothed = True
 
     @property
-    def smoothed_method(self) -> str:
+    def smoothed_method(self) -> str | None:
         """
         The name of the smoothing method (or kernel) that has been applied.
 
@@ -818,7 +827,7 @@ class Image(BaseProduct):
         return self._regions
 
     @regions.setter
-    def regions(self, new_reg: str | list[SkyRegion | PixelRegion] | np.ndarray | dict | None):
+    def regions(self, new_reg: str | list[SkyRegion | PixelRegion] | np.ndarray | dict | None) -> None:
         """
         A setter for regions associated with this object, a region file path or a list/array/dict of regions is passed,
         then that file/set of regions is processed into the required format. If a list or array of regions is passed, it
@@ -895,7 +904,9 @@ class Image(BaseProduct):
         return self._matched_regions
 
     @matched_regions.setter
-    def matched_regions(self, new_reg: SkyRegion | PixelRegion | dict[str, SkyRegion | PixelRegion | None] | None):
+    def matched_regions(
+        self, new_reg: SkyRegion | PixelRegion | dict[str, SkyRegion | PixelRegion | None] | None
+    ) -> None:
         """
         A setter for matched regions associated with this object, with a new single matched region or dictionary of
         matched regions (with keys being ObsIDs and one entry for each ObsID associated with this object) being passed.
@@ -945,7 +956,7 @@ class Image(BaseProduct):
         return self._data
 
     @data.setter
-    def data(self, new_im_arr: np.ndarray):
+    def data(self, new_im_arr: np.ndarray) -> None:
         """
         Property setter for the image data. As the fits image is loaded in read-only mode,
         this won't alter the file on disk, but it does allow user alterations to the image.
@@ -963,7 +974,7 @@ class Image(BaseProduct):
             self._data = new_im_arr
 
     @data.deleter
-    def data(self):
+    def data(self) -> None:
         """
         Property deleter for data contained in this Image instance, or whatever subclass of the Image class you
         may be using. The self._data array is removed from memory, and then self._data is explicitly set to None
@@ -1000,7 +1011,7 @@ class Image(BaseProduct):
     # These two however, can be none, so the user should be allowed to set add WCS-es to those
     # that don't have them. Will be good for the coordinate transform methods
     @property
-    def skyxy_wcs(self):
+    def skyxy_wcs(self) -> wcs.WCS | None:
         """
         Property getter for the WCS that converts back and forth between pixel values
         and SKY XY coordinates.
@@ -1015,7 +1026,7 @@ class Image(BaseProduct):
         return self._wcs_skyXY
 
     @skyxy_wcs.setter
-    def skyxy_wcs(self, input_wcs: wcs.WCS):
+    def skyxy_wcs(self, input_wcs: wcs.WCS) -> None:
         """
         Property setter for the WCS that converts back and forth between pixel values
         and SKY XY coordinates. This WCS is not guaranteed to be set from the image,
@@ -1036,7 +1047,7 @@ class Image(BaseProduct):
                 self._wcs_skyXY = input_wcs
 
     @property
-    def detxy_wcs(self):
+    def detxy_wcs(self) -> wcs.WCS | None:
         """
         Property getter for the WCS that converts back and forth between pixel values
         and DETXY detector coordinates.
@@ -1051,7 +1062,7 @@ class Image(BaseProduct):
         return self._wcs_detXY
 
     @detxy_wcs.setter
-    def detxy_wcs(self, input_wcs: wcs.WCS):
+    def detxy_wcs(self, input_wcs: wcs.WCS) -> None:
         """
         Property setter for the WCS that converts back and forth between pixel values
         and DETXY detector coordinates. This WCS is not guaranteed to be set from the image,
@@ -1086,7 +1097,7 @@ class Image(BaseProduct):
         return self._header
 
     @header.deleter
-    def header(self):
+    def header(self) -> None:
         """
         Property deleter for the header of this Image instance, or whatever subclass of the Image class you
         may be using. The self._header attribute is removed from memory, and then self._header is explicitly set
@@ -1244,7 +1255,7 @@ class Image(BaseProduct):
         return self._psf_corrected
 
     @psf_corrected.setter
-    def psf_corrected(self, new_val):
+    def psf_corrected(self, new_val: bool) -> None:
         """
         Allows the psf_corrected flag to be altered.
         """
@@ -1262,7 +1273,7 @@ class Image(BaseProduct):
         return self._psf_correction_algorithm
 
     @psf_algorithm.setter
-    def psf_algorithm(self, new_val: str):
+    def psf_algorithm(self, new_val: str) -> None:
         """
         If this object has been PSF corrected, this property setter allows you to set the
         name of the algorithm used. If it hasn't been PSF corrected then an error will be triggered.
@@ -1287,7 +1298,7 @@ class Image(BaseProduct):
         return self._psf_num_bins
 
     @psf_bins.setter
-    def psf_bins(self, new_val: int):
+    def psf_bins(self, new_val: int) -> None:
         """
         If this object has been PSF corrected, this property setter allows you to store the
         number of bins in X and Y for which PSFs were generated. If it hasn't been PSF corrected
@@ -1313,7 +1324,7 @@ class Image(BaseProduct):
         return self._psf_num_iterations
 
     @psf_iterations.setter
-    def psf_iterations(self, new_val: int):
+    def psf_iterations(self, new_val: int) -> None:
         """
         If this object has been PSF corrected, this property setter allows you to store the
         number of iterations that the algorithm went through to create this image. If it hasn't
@@ -1338,7 +1349,7 @@ class Image(BaseProduct):
         return self._psf_model
 
     @psf_model.setter
-    def psf_model(self, new_val: str):
+    def psf_model(self, new_val: str) -> None:
         """
         If this object has been PSF corrected, this property setter allows you to add the
         name of the PSF model used. If it hasn't been PSF corrected then an error will be triggered.
@@ -1535,7 +1546,7 @@ class Image(BaseProduct):
 
         # If we're showing a RateMap, then we're gonna apply an edge mask to remove all the artificially brightened
         #  pixels that we can - it makes the view look better
-        if type(self) == RateMap and mask_edges:
+        if type(self) is RateMap and mask_edges:
             plot_data *= self.edge_mask
 
         ax.tick_params(axis="both", direction="in", which="both", top=False, right=False)
@@ -1581,8 +1592,8 @@ class Image(BaseProduct):
 
         # Determine the x and y pixel limits when zooming in (either automatically from non-zero image pixels or from
         #  user-supplied manual zoom limits)
-        x_lims = None
-        y_lims = None
+        x_lims: tuple[float, float] | list[int] | None = None
+        y_lims: tuple[float, float] | list[int] | None = None
         if zoom_in:
             if manual_zoom_xlims is None and manual_zoom_ylims is None:
                 from xga.imagetools import data_limits
@@ -2034,14 +2045,14 @@ class Image(BaseProduct):
 
         def __init__(
             self,
-            phot_prod,
+            phot_prod: Image,
             figsize: tuple = (7, 7),
             cmap: str = "gnuplot2",
             reg_save_path: str | None = None,
             cross_hair: Quantity | None = None,
             radial_bins_pix: Quantity | np.ndarray = Quantity(np.array([]), "pix"),
             back_bin_pix: Quantity | np.ndarray | None = None,
-        ):
+        ) -> None:
             """
             The init of the _InteractiveView class, which enables dynamic viewing of XGA photometric products.
 
@@ -2073,7 +2084,7 @@ class Image(BaseProduct):
 
             # Store the passed-in save path for regions in an attribute for later
             if reg_save_path is not None and reg_save_path[-4:] == ".reg":
-                self._reg_save_path = reg_save_path
+                self._reg_save_path: str | None = reg_save_path
             elif reg_save_path is not None and reg_save_path[-4:] != ".reg":
                 raise ValueError(
                     "The last four characters of the save path must be '.reg', as extra strings "
@@ -2086,10 +2097,10 @@ class Image(BaseProduct):
             # This is for storing references to artists with an ObsID key, so we know which artist belongs
             #  to which ObsID. Populated in the first part of _draw_regions. We also construct the reverse so that
             #  an artist instance can be easily used to lookup the ObsID it belongs to
-            self._obsid_artists = {o: [] for o in self._parent_phot_obj.obs_ids}
-            self._artist_obsids = {}
+            self._obsid_artists: dict[str, list] = {o: [] for o in self._parent_phot_obj.obs_ids}
+            self._artist_obsids: dict[Any, str] = {}
             # In the same vein I setup a lookup dictionary for artist to region
-            self._artist_region = {}
+            self._artist_region: dict[Any, Any] = {}
 
             # Setting up the figure within which all the axes (data, buttons, etc.) are placed
             in_fig = plt.figure(figsize=figsize)
@@ -2154,8 +2165,8 @@ class Image(BaseProduct):
             self._cust_src_button.on_clicked(self._toggle_cust)
 
             # These are buttons that can be present depending on the usage of the class
-            self._new_ell_button = None
-            self._new_circ_button = None
+            self._new_ell_button: Button | None = None
+            self._new_circ_button: Button | None = None
 
             # A dictionary describing the current type of regions that are on display
             self._cur_act_reg_type = {"EXT": True, "PNT": True, "OTH": True, "CUST": True}
@@ -2182,25 +2193,25 @@ class Image(BaseProduct):
             #  are. For instance XAPA point source regions are still ellipses, just with the height and width
             #  set equal. So this dictionary is an independent reference point for the shape, with entries for the
             #  original regions made in the first part of _draw_regions, and otherwise set when a new region is added.
-            self._shape_dict = {}
+            self._shape_dict: dict[Any, str] = {}
 
             # I also wish to keep track of whether a particular region has been edited or not, for reference when
             #  outputting the final edited region list (if it is requested). I plan to do this with a similar approach
             #  to the shape_dict, have a dictionary with artists as keys, but then have a boolean as a value. Will
             #  also be initially populated in the first part of _draw_regions.
-            self._edited_dict = {}
+            self._edited_dict: dict[Any, bool] = {}
 
             # This controls whether interacting with regions is allowed - turned off for the dynamic view method
             #  as that is not meant for editing regions
             self._interacting_on = False
             # The currently selected region is referenced in this attribute
-            self._cur_pick = None
+            self._cur_pick: Any = None
             # The last coordinate ON THE IMAGE that was clicked is stored here. Initial value is set to the centre
             self._last_click = (phot_prod.shape[0] / 2, phot_prod.shape[1] / 2)
             # This describes whether the artist stored in _cur_pick (if there is one) is right now being clicked
             #  and held - this is used for enabling clicking and dragging so the method knows when to stop.
             self._select = False
-            self._history = []
+            self._history: list = []
 
             # These store the current settings for colour map, stretch, and scaling
             self._cmap = cmap
@@ -2210,7 +2221,7 @@ class Image(BaseProduct):
             #  access the current stretch instance from stretch_dict more easily (and accompanying buttons etc.)
             self._active_stretch_name = "LOG"
             # This is used to store all the button instances created for controlling stretch
-            self._stretch_buttons = {}
+            self._stretch_buttons: dict[str, Button] = {}
 
             # Here we define attribute to store the data and normalisation in. I copy the data to make sure that
             #  the original information doesn't get changed when smoothing is applied.
@@ -2220,7 +2231,7 @@ class Image(BaseProduct):
             self._norm = self._renorm()
 
             # The output of the imshow command lives in here
-            self._im_plot = None
+            self._im_plot: Any = None
             # Adds the actual image to the axis.
             self._replot_data()
 
@@ -2289,7 +2300,7 @@ class Image(BaseProduct):
             self._kernel_rad = self._smooth_slider.val
 
             # This is a definition for a save button that is used in edit_view
-            self._save_button = None
+            self._save_button: Any = None
 
             # Adding a button to apply a mask generated from the regions, largely to help see if any emission
             #  from an object isn't being properly removed.
@@ -2434,7 +2445,7 @@ class Image(BaseProduct):
                     #  or be able to be modified
                     self._ignore_arts.append(art_reg)
 
-        def dynamic_view(self):
+        def dynamic_view(self) -> None:
             """
             The simplest view method of this class, enables the turning on and off of regions.
             """
@@ -2445,7 +2456,7 @@ class Image(BaseProduct):
             plt.ion()
             plt.show()
 
-        def edit_view(self):
+        def edit_view(self) -> None:
             """
             An extremely useful view method of this class - allows for direct interaction with and editing of
             regions, as well as the ability to add new regions. If a save path for region files was passed on
@@ -2477,7 +2488,7 @@ class Image(BaseProduct):
             plt.ion()
             plt.show(block=True)
 
-        def _replot_data(self):
+        def _replot_data(self) -> None:
             """
             This method updates the currently plotted data using the relevant class attributes. Such attributes
             are updated and edited by other parts of the class. The plot mask is always applied to data, but when
@@ -2510,7 +2521,7 @@ class Image(BaseProduct):
 
             return norm
 
-        def _draw_regions(self):
+        def _draw_regions(self) -> None:
             """
             This method is called by an _InteractiveView instance when regions need to be drawn on top of the
             data view axis (i.e. the image/ratemap). Either for the first time or as an update due to a button
@@ -2540,9 +2551,9 @@ class Image(BaseProduct):
                         self._im_ax.add_artist(art_reg)
                         # Adds an entry to the shape dictionary. If a region from the parent Image is elliptical but
                         #  has the same height and width then I define it as a circle.
-                        if type(art_reg) == Circle or (type(art_reg) == Ellipse and art_reg.height == art_reg.width):
+                        if type(art_reg) is Circle or (type(art_reg) is Ellipse and art_reg.height == art_reg.width):
                             self._shape_dict[art_reg] = "circle"
-                        elif type(art_reg) == Ellipse:
+                        elif type(art_reg) is Ellipse:
                             self._shape_dict[art_reg] = "ellipse"
                         else:
                             raise NotImplementedError(
@@ -2613,7 +2624,7 @@ class Image(BaseProduct):
                     if self._cur_pick is not None and self._cur_pick == artist:
                         self._cur_pick = None
 
-        def _change_stretch(self, stretch_name: str):
+        def _change_stretch(self, stretch_name: str) -> Callable:
             """
             Triggered when any of the stretch change buttons are pressed - acts as a generator for the response
             functions that are actually triggered when the separate buttons are pressed. Written this way to
@@ -2623,7 +2634,7 @@ class Image(BaseProduct):
             :return: A function matching the input stretch_name that will change the stretch applied to the data.
             """
 
-            def gen_func(event):
+            def gen_func(event: Event) -> None:
                 """
                 A generated function to change the data stretch.
 
@@ -2646,7 +2657,7 @@ class Image(BaseProduct):
 
             return gen_func
 
-        def _change_interval(self, boundaries: tuple):
+        def _change_interval(self, boundaries: tuple) -> None:
             """
             This method is called when a change is made to the RangeSlider that controls the interval range
             of the data that is displayed.
@@ -2661,7 +2672,7 @@ class Image(BaseProduct):
             # And finally replot the data.
             self._replot_data()
 
-        def _apply_smooth(self):
+        def _apply_smooth(self) -> None:
             """
             This very simple function simply sets the internal data to a smooth version, making using of the
             currently stored information on the kernel radius. The smoothing is with a 2D Gaussian kernel, but
@@ -2673,7 +2684,7 @@ class Image(BaseProduct):
             #  use and so I don't care much about edge effects
             self._plot_data = convolve_fft(self._plot_data, the_kernel)
 
-        def _toggle_smooth(self, event):
+        def _toggle_smooth(self, event: Event) -> None:
             """
             This method is triggered by toggling the smooth button, and will turn smoothing on or off.
 
@@ -2697,7 +2708,7 @@ class Image(BaseProduct):
             self._renorm()
             self._replot_data()
 
-        def _change_smooth(self, new_rad: float):
+        def _change_smooth(self, new_rad: float) -> None:
             """
             This method is triggered by a change of the slider, and sets a new smoothing kernel radius
             from the slider value. This will trigger a change if smoothing is currently turned on.
@@ -2716,7 +2727,7 @@ class Image(BaseProduct):
                 self._renorm()
                 self._replot_data()
 
-        def _toggle_mask(self, event):
+        def _toggle_mask(self, event: Event) -> None:
             """
             A method triggered by a button press that toggles whether the currently displayed image is
             masked or not.
@@ -2741,7 +2752,7 @@ class Image(BaseProduct):
             self._renorm()
             self._replot_data()
 
-        def _gen_cur_mask(self):
+        def _gen_cur_mask(self) -> np.ndarray:
             """
             Uses the current region list to generate a mask for the parent image that can be applied to the data.
 
@@ -2767,7 +2778,7 @@ class Image(BaseProduct):
 
             return mask
 
-        def _toggle_ext(self, event):
+        def _toggle_ext(self, event: Event) -> None:
             """
             Method triggered by the extended source toggle button, either causes extended sources to be displayed
             or not, depending on the existing state.
@@ -2788,7 +2799,7 @@ class Image(BaseProduct):
             # Then the currently displayed regions are updated with this method
             self._draw_regions()
 
-        def _toggle_pnt(self, event):
+        def _toggle_pnt(self, event: Event) -> None:
             """
             Method triggered by the point source toggle button, either causes point sources to be displayed
             or not, depending on the existing state.
@@ -2804,7 +2815,7 @@ class Image(BaseProduct):
 
             self._draw_regions()
 
-        def _toggle_oth(self, event):
+        def _toggle_oth(self, event: Event) -> None:
             """
             Method triggered by the other source toggle button, either causes other (i.e. not extended,
             point, or custom) sources to be displayed or not, depending on the existing state.
@@ -2820,7 +2831,7 @@ class Image(BaseProduct):
 
             self._draw_regions()
 
-        def _toggle_cust(self, event):
+        def _toggle_cust(self, event: Event) -> None:
             """
             Method triggered by the custom source toggle button, either causes custom sources to be displayed
             or not, depending on the existing state.
@@ -2836,7 +2847,7 @@ class Image(BaseProduct):
 
             self._draw_regions()
 
-        def _new_ell_src(self, event):
+        def _new_ell_src(self, event: Event) -> None:
             """
             Makes a new elliptical region on the data axis.
 
@@ -2864,7 +2875,7 @@ class Image(BaseProduct):
             #  this case the region in question is brand new so the entry will always be True.
             self._edited_dict[new_patch] = True
 
-        def _new_circ_src(self, event):
+        def _new_circ_src(self, event: Event) -> None:
             """
             Makes a new circular region on the data axis.
 
@@ -2891,7 +2902,7 @@ class Image(BaseProduct):
             #  this case the region in question is brand new so the entry will always be True.
             self._edited_dict[new_patch] = True
 
-        def _click_event(self, event):
+        def _click_event(self, event: MouseEvent) -> None:
             """
             This method is triggered by clicking somewhere on the data axis.
 
@@ -2904,7 +2915,7 @@ class Image(BaseProduct):
                 #  to insert a new region there
                 self._last_click = (event.xdata, event.ydata)
 
-        def _on_region_pick(self, event):
+        def _on_region_pick(self, event: PickEvent) -> None:
             """
             This is triggered by selecting a region
 
@@ -2927,7 +2938,7 @@ class Image(BaseProduct):
             # Redraws the regions so that thicker lines are applied to the newly selected region
             self._draw_regions()
 
-        def _on_release(self, event):
+        def _on_release(self, event: Event) -> None:
             """
             Method triggered when button released.
 
@@ -2937,7 +2948,7 @@ class Image(BaseProduct):
             #  (as referenced in self._cur_pick) isn't currently being clicked and held on
             self._select = False
 
-        def _on_motion(self, event):
+        def _on_motion(self, event: MouseEvent) -> None:
             """
             This is triggered when someone clicks and holds an artist, and then drags it around.
 
@@ -2954,7 +2965,7 @@ class Image(BaseProduct):
             # Changes the entry in the edited dictionary to True, as the region in question has been moved
             self._edited_dict[self._cur_pick] = True
 
-        def _key_press(self, event):
+        def _key_press(self, event: KeyEvent) -> None:
             """
             A method triggered by the press of a key (or combination of keys) on the keyboard. For most keys
             this method does absolutely nothing, but it does enable the resizing and rotation of regions.
@@ -2968,7 +2979,7 @@ class Image(BaseProduct):
             #         self._history.pop(-1)
 
             if event.key == "w" and self._cur_pick is not None:
-                if type(self._cur_pick) == Circle:
+                if type(self._cur_pick) is Circle:
                     self._cur_pick.radius += self._size_step
                 # It is possible for actual artist type to be an Ellipse but for the region to be circular when
                 #  it was taken from the parent Image of this instance, and in that case we still want it to behave
@@ -2985,7 +2996,7 @@ class Image(BaseProduct):
             # For comments for the rest of these, see the event key 'w' one, they're the same but either shrinking
             #  or growing different axes
             if event.key == "s" and self._cur_pick is not None:
-                if type(self._cur_pick) == Circle:
+                if type(self._cur_pick) is Circle:
                     self._cur_pick.radius -= self._size_step
                 elif self._shape_dict[self._cur_pick] == "circle":
                     self._cur_pick.height -= self._size_step
@@ -2997,7 +3008,7 @@ class Image(BaseProduct):
                 self._edited_dict[self._cur_pick] = True
 
             if event.key == "d" and self._cur_pick is not None:
-                if type(self._cur_pick) == Circle:
+                if type(self._cur_pick) is Circle:
                     self._cur_pick.radius += self._size_step
                 elif self._shape_dict[self._cur_pick] == "circle":
                     self._cur_pick.height += self._size_step
@@ -3009,7 +3020,7 @@ class Image(BaseProduct):
                 self._edited_dict[self._cur_pick] = True
 
             if event.key == "a" and self._cur_pick is not None:
-                if type(self._cur_pick) == Circle:
+                if type(self._cur_pick) is Circle:
                     self._cur_pick.radius -= self._size_step
                 elif self._shape_dict[self._cur_pick] == "circle":
                     self._cur_pick.height -= self._size_step
@@ -3045,7 +3056,7 @@ class Image(BaseProduct):
                 # Setting up the dictionary to store the altered regions in. We include keys for each of the ObsIDs
                 #  associated with the parent product, and then another list with the key 'new'; for regions
                 #  that have been added during the editing.
-                new_reg_dict = {o: [] for o in self._parent_phot_obj.obs_ids}
+                new_reg_dict: dict[str, list] = {o: [] for o in self._parent_phot_obj.obs_ids}
                 new_reg_dict["new"] = []
 
                 # These artists are the ones that represent regions, the ones in self._ignore_arts are there
@@ -3057,7 +3068,7 @@ class Image(BaseProduct):
                     # Fetches the boolean variable that describes if the region was edited
                     altered = self._edited_dict[artist]
                     # The altered variable is True if an existing region has changed or if a new artist exists
-                    if altered and type(artist) == Ellipse:
+                    if altered and type(artist) is Ellipse:
                         # As instances of this class are always declared internally by an Image class, and I know
                         #  the image class always turns SkyRegions into PixelRegions, we know that its valid to
                         #  output PixelRegions here
@@ -3067,7 +3078,7 @@ class Image(BaseProduct):
                         # Fetches and sets the colour of the region, converting from matplotlib colour
                         new_reg.visual["edgecolor"] = self._colour_convert[artist.get_edgecolor()]
                         new_reg.visual["facecolor"] = self._colour_convert[artist.get_edgecolor()]
-                    elif altered and type(artist) == Circle:
+                    elif altered and type(artist) is Circle:
                         cen = PixCoord(x=artist.center[0], y=artist.center[1])
                         # Creating the equivalent region object from the artist
                         new_reg = CirclePixelRegion(cen, artist.radius)
@@ -3093,7 +3104,7 @@ class Image(BaseProduct):
 
             return new_reg_dict
 
-        def _save_region_files(self, event=None):
+        def _save_region_files(self, event: Event | None = None) -> None:
             """
             This just creates the updated region dictionary from any modifications, converts the separate ObsID
             entries to individual region files, and then saves them to disk. All region files are output in RA-Dec
@@ -3139,8 +3150,9 @@ class ExpMap(Image):
     :param Quantity lo_en: The lower energy bound used to generate this product.
     :param Quantity hi_en: The upper energy bound used to generate this product.
     :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
-        is combined and wasn't made by a mosaic tool like XMM-SAS emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
-        ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
+        is combined and wasn't made by a mosaic tool like XMM-SAS emosaic (e.g. [['0404910601', 'pn'],
+        ['0404910601', 'mos1'], ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'],
+        ['0201901401', 'mos2']].
     :param str telescope: The telescope that this product is derived from. Default is None.
     :param bool check_exists: Controls whether the product instantiation process checks for the file
         path's existence. Default is True, in which case a check will be performed, but if declaring
@@ -3161,7 +3173,7 @@ class ExpMap(Image):
         obs_inst_combs: list[list] | None = None,
         telescope: str | None = None,
         check_exists: bool = True,
-    ):
+    ) -> None:
         """
         Init of the ExpMap class.
 
@@ -3215,7 +3227,7 @@ class ExpMap(Image):
             exp = self.data[pix_coord[:, 1], pix_coord[:, 0]]
         return Quantity(exp, "s")
 
-    def get_count(self, *args, **kwargs) -> None:
+    def get_count(self, *args: object, **kwargs: object) -> None:
         """
         Inherited method from Image superclass, disabled as does not make sense in an exposure map.
         """
@@ -3233,7 +3245,7 @@ class ExpMap(Image):
         return None
 
     @smoothing_info.setter
-    def smoothing_info(self, new_info):
+    def smoothing_info(self, new_info: dict | Kernel) -> NoReturn:
         """
         As exposure maps cannot be smoothed, this property overrides the Image smoothing_info setter, and will
         raise a TypeError if you try to pass any smoothing information to this object.
@@ -3264,8 +3276,8 @@ class RateMap(Image):
         xga_image: Image,
         xga_expmap: ExpMap,
         regs: str | list[SkyRegion | PixelRegion] | np.ndarray | dict = "",
-        matched_regs: SkyRegion | PixelRegion | dict = None,
-    ):
+        matched_regs: SkyRegion | PixelRegion | dict | None = None,
+    ) -> None:
         """
         This initialises a RateMap instance, where a count image is divided by an exposure map, to create a map
         of X-ray count rate.
@@ -3280,7 +3292,7 @@ class RateMap(Image):
             if there is no match. Such a dictionary can be retrieved from a source using the 'matched_regions'
             property. Default is None.
         """
-        if type(xga_image) != Image or type(xga_expmap) != ExpMap:
+        if type(xga_image) is not Image or type(xga_expmap) is not ExpMap:
             raise TypeError("'xga_image' must be an XGA Image object, and 'xga_expmap' must be an XGA ExpMap object.")
 
         if xga_image.obs_id != xga_expmap.obs_id:
@@ -3294,12 +3306,12 @@ class RateMap(Image):
             )
         elif xga_image.energy_bounds != xga_expmap.energy_bounds:
             raise RateMapPairError(
-                f"The energy bounds of xga_image ({xga_image.energy_bounds}) and xga_expmap ({xga_expmap.energy_bounds}) "
-                "do not match"
+                f"The energy bounds of xga_image ({xga_image.energy_bounds}) and "
+                f"xga_expmap ({xga_expmap.energy_bounds}) do not match"
             )
 
-        # This path nonsense is to support the smoothing of RateMaps with general_smooth(..., ratemap_smooth_im=True) and
-        #  will become unnecessary once the RateMap/wider 2D data product redesign is implemented.
+        # This path nonsense is to support the smoothing of RateMaps with general_smooth(..., ratemap_smooth_im=True)
+        #  and will become unnecessary once the RateMap/wider 2D data product redesign is implemented.
         pass_path = xga_image.path if xga_image.path is not None else xga_expmap.path
 
         # Call the superclass's init.
@@ -3335,8 +3347,8 @@ class RateMap(Image):
 
         self._data = None
         # TODO Could I combine these two, and just make edges = 2, on sensor = 1 etc?
-        self._edge_mask = None
-        self._on_sensor_mask = None
+        self._edge_mask: np.ndarray | None = None
+        self._on_sensor_mask: np.ndarray | None = None
 
         # If explicit regions were passed to RateMap.__init__, assign them via the RateMap.regions setter (which also
         #  propagates them to the underlying Image); otherwise copy any regions already associated with xga_image
@@ -3353,7 +3365,7 @@ class RateMap(Image):
         else:
             self._matched_regions = deepcopy(xga_image.matched_regions)
 
-    def _construct_on_demand(self):
+    def _construct_on_demand(self) -> None:
         """
         This method is complimentary to the _read_on_demand method of the base Image class, and ensures that
         the ratemap array is only created if the user actually asks for it. Otherwise a lot of time is wasted
@@ -3430,7 +3442,7 @@ class RateMap(Image):
         return self._data.copy()
 
     @data.setter
-    def data(self, new_rt_arr: np.ndarray):
+    def data(self, new_rt_arr: np.ndarray) -> None:
         """
         Property setter for the RateMap data.
 
@@ -3447,7 +3459,7 @@ class RateMap(Image):
             self._data = new_rt_arr
 
     @data.deleter
-    def data(self):
+    def data(self) -> None:
         """
         Property deleter for data contained in this RateMap instance. The self._data array is removed from
         memory, and then self._data is explicitly set to None so that self._construct_on_demand() will
@@ -3651,7 +3663,7 @@ class RateMap(Image):
         return peak_conv, edge_flag, chosen_coord_pairs, other_coord_pairs
 
     def convolved_peak(
-        self, mask: np.ndarray, redshift: float, cosmology, out_unit: UnitBase = deg
+        self, mask: np.ndarray, redshift: float, cosmology: Cosmology, out_unit: UnitBase = deg
     ) -> tuple[Quantity, bool]:
         """
         A very experimental peak finding algorithm, credit for the idea and a lot of the code in this function
@@ -3672,7 +3684,7 @@ class RateMap(Image):
         :rtype: Tuple[Quantity, bool]
         """
 
-        def cartesian(arrays):
+        def cartesian(arrays: list[np.ndarray]) -> np.ndarray:
             arrays = [np.asarray(a) for a in arrays]
             shape = (len(x) for x in arrays)
             ix = np.indices(shape, dtype=int)
@@ -3681,7 +3693,7 @@ class RateMap(Image):
                 ix[:, n] = arrays[n][ix[:, n]]
             return ix
 
-        def projected_king(r, pix_size, beta):
+        def projected_king(r: float, pix_size: float, beta: float) -> np.ndarray:
             n_pix = int(r / pix_size)
             _ = np.arange(-n_pix, n_pix + 1)
             ds = cartesian([_, _])
@@ -4028,7 +4040,7 @@ class RateMap(Image):
         return self._regions
 
     @regions.setter
-    def regions(self, new_reg: str | list[SkyRegion | PixelRegion] | np.ndarray | dict | None):
+    def regions(self, new_reg: str | list[SkyRegion | PixelRegion] | np.ndarray | dict | None) -> None:
         """
         A setter for regions associated with this object, a region file path or a list/array/dict of regions is passed,
         then that file/set of regions is processed into the required format. If a list or array of regions is passed, it
@@ -4055,7 +4067,9 @@ class RateMap(Image):
         return self._matched_regions
 
     @matched_regions.setter
-    def matched_regions(self, new_reg: SkyRegion | PixelRegion | dict[str, SkyRegion | PixelRegion | None] | None):
+    def matched_regions(
+        self, new_reg: SkyRegion | PixelRegion | dict[str, SkyRegion | PixelRegion | None] | None
+    ) -> None:
         """
         A setter for matched regions associated with this object, with a new single matched region or dictionary of
         matched regions (with keys being ObsIDs and one entry for each ObsID associated with this object) being passed.
@@ -4102,7 +4116,7 @@ class PSF(Image):
         gen_cmd: str,
         telescope: str | None = None,
         check_exists: bool = True,
-    ):
+    ) -> None:
         """
         The init method for PSF class.
 
@@ -4135,7 +4149,7 @@ class PSF(Image):
         )
         self._prod_type = "psf"
         self._data_unit = Unit("")
-        self._psf_centre = None
+        self._psf_centre: Quantity | None = None
         self._psf_model = psf_model
 
     def get_val(self, at_coord: Quantity) -> float | np.ndarray:
@@ -4271,7 +4285,7 @@ class PSFGrid(BaseAggregateProduct):
         stderr_str: str,
         gen_cmd: str,
         telescope: str | None = None,
-    ):
+    ) -> None:
         """
         The init of the PSFGrid class - a subclass of BaseAggregateProduct that wraps a set of PSFs that have been
         generated at different points on the detector.
@@ -4292,7 +4306,7 @@ class PSFGrid(BaseAggregateProduct):
         self._psf_model = psf_model
         # Set none here because if I want positions of PSFs and there has been an error during generation, the user
         #  will only see the FileNotFoundError not the SAS error
-        self._grid_loc = None
+        self._grid_loc: Quantity | None = None
         self._nbins = bins
         self._x_bounds = x_bounds
         self._y_bounds = y_bounds

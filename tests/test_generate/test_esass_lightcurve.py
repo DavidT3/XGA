@@ -15,7 +15,7 @@ from ..utils import require_esass
 
 class TestEsassLcFuncs(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         cls.src = get_test_source("erass")
 
         # Specify the lower and upper energy bounds for the light curves generated and
@@ -42,7 +42,7 @@ class TestEsassLcFuncs(unittest.TestCase):
 
         # There should be more than one light curve returned in this test, so the
         #  lc variable should be a list of LightCurve instances
-        assert type(lc) == list
+        assert isinstance(lc, list)
 
         for cur_lc in lc:
             assert isinstance(cur_lc, LightCurve)
@@ -72,7 +72,7 @@ class TestEsassLcFuncs(unittest.TestCase):
 
         # There should be more than one light curve returned in this test, so the
         #  lc variable should be a list of LightCurve instances
-        assert type(lc) == list
+        assert isinstance(lc, list)
 
         for cur_lc in lc:
             assert isinstance(cur_lc, LightCurve)
@@ -117,7 +117,7 @@ class TestEsassLcFuncs(unittest.TestCase):
                 "NoProductAvailableError raised when retrieving combined-ObsID light curves for every separate TM."
             )
 
-        assert type(all_tm_lc) == list
+        assert isinstance(all_tm_lc, list)
 
         for cur_lc in all_tm_lc:
             assert isinstance(cur_lc, LightCurve)
@@ -153,7 +153,7 @@ class TestEsassLcFuncs(unittest.TestCase):
 
         # This MUST be a single LightCurve return, if we're getting multiple instances in a
         #  list then something has gone wrong
-        assert type(lc) == LightCurve
+        assert isinstance(lc, LightCurve)
         assert lc.telescope == "erass"
         assert lc.obs_id == "combined"
         assert lc.instrument == "combined"

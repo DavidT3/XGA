@@ -41,14 +41,14 @@ def luminosity_temperature_pipeline(
     hi_en: Quantity = Quantity(7.9, "keV"),
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
-    over_sample: float = None,
+    min_sn: float | None = None,
+    over_sample: float | None = None,
     back_inn_rad_factor: float = 1.05,
     back_out_rad_factor: float = 1.5,
     clean_obs: bool = True,
     clean_obs_threshold: float = 0.7,
-    save_samp_results_path: str = None,
-    save_rad_history_path: str = None,
+    save_samp_results_path: str | None = None,
+    save_rad_history_path: str | None = None,
     cosmo: Cosmology = DEFAULT_COSMO,
     telescope: str = "xmm",
     search_distance: Quantity = None,
@@ -251,8 +251,8 @@ def luminosity_temperature_pipeline(
         )
     elif rad_temp_rel.telescope != telescope:
         raise ValueError(
-            f"The relation passed for the 'rad_temp_rel' argument was made for the {rad_temp_rel.telescope} telescope, but "
-            f"this pipeline is running for the {telescope} telescope (specified by the 'telescope' "
+            f"The relation passed for the 'rad_temp_rel' argument was made for the {rad_temp_rel.telescope} "
+            f"telescope, but this pipeline is running for the {telescope} telescope (specified by the 'telescope' "
             "argument)."
         )
 
@@ -349,13 +349,13 @@ def luminosity_temperature_pipeline(
     elif freeze_temp and temp_lum_rel.core_radius_fraction != rad_temp_rel.core_radius_fraction:
         raise ValueError(
             "The core radius used to construct the relation passed as the 'temp_lum_rel' "
-            f"argument ({temp_lum_rel.core_radius_fraction}), does not match that of the passed temperature-radius relation "
-            f"({rad_temp_rel.core_radius_fraction})."
+            f"argument ({temp_lum_rel.core_radius_fraction}), does not match that of the passed temperature-radius "
+            f"relation ({rad_temp_rel.core_radius_fraction})."
         )
     elif freeze_temp and rad_temp_rel.telescope != telescope:
         raise ValueError(
-            f"The relation passed for the 'temp_lum_rel' argument was made for the {temp_lum_rel.telescope} telescope, but "
-            f"this pipeline is running for the {telescope} telescope (specified by the 'telescope' "
+            f"The relation passed for the 'temp_lum_rel' argument was made for the {temp_lum_rel.telescope} "
+            f"telescope, but this pipeline is running for the {telescope} telescope (specified by the 'telescope' "
             "argument)."
         )
 

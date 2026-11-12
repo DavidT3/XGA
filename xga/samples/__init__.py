@@ -5,3 +5,5 @@ from .base import BaseSample
 from .extended import ClusterSample
 from .general import ExtendedSample, PointSample
 from .point import StarSample
+
+__all__ = ["BaseSample", "ClusterSample", "ExtendedSample", "PointSample", "StarSample"]

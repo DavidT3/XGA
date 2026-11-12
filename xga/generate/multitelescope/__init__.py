@@ -2,3 +2,5 @@
 #  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 13:40. Copyright (c) The Contributors
 
 from ._common import check_tel_associated
+
+__all__ = ["check_tel_associated"]

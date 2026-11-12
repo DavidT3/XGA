@@ -26,8 +26,8 @@ class KingProfile1D(BaseModel1D):
         self,
         x_unit: str | Unit = "kpc",
         y_unit: str | Unit = Unit("Msun/Mpc^3"),
-        cust_start_pars: list[Quantity] = None,
-    ):
+        cust_start_pars: list[Quantity] | None = None,
+    ) -> None:
         """
         The init of a subclass of the XGA BaseModel1D class, describing a basic model for galaxy cluster gas
         density, the king profile.
@@ -160,8 +160,8 @@ class DoubleKingProfile1D(BaseModel1D):
         self,
         x_unit: str | Unit = "kpc",
         y_unit: str | Unit = Unit("Msun/Mpc^3"),
-        cust_start_pars: list[Quantity] = None,
-    ):
+        cust_start_pars: list[Quantity] | None = None,
+    ) -> None:
         """
         The init of a subclass of the XGA BaseModel1D class, describing a basic model for galaxy cluster gas
         density, the double King profile.
@@ -343,8 +343,8 @@ class SimpleVikhlininDensity1D(BaseModel1D):
         self,
         x_unit: str | Unit = "kpc",
         y_unit: str | Unit = Unit("Msun/Mpc^3"),
-        cust_start_pars: list[Quantity] = None,
-    ):
+        cust_start_pars: list[Quantity] | None = None,
+    ) -> None:
         """
         The init of a subclass of the XGA BaseModel1D class, describing a simplified version of Vikhlinin et al.'s
         model for the gas density profile of a galaxy cluster.
@@ -538,8 +538,8 @@ class VikhlininDensity1D(BaseModel1D):
         self,
         x_unit: str | Unit = "kpc",
         y_unit: str | Unit = Unit("Msun/Mpc^3"),
-        cust_start_pars: list[Quantity] = None,
-    ):
+        cust_start_pars: list[Quantity] | None = None,
+    ) -> None:
         """
         The init of a subclass of the XGA BaseModel1D class, describing the full version of Vikhlinin et al.'s
         model for the gas density profile of a galaxy cluster.

@@ -3,6 +3,7 @@
 
 
 import numpy as np
+from astropy.cosmology import Cosmology
 from astropy.units import Quantity, Unit, UnitBase, UnitConversionError, deg, pix
 from astropy.wcs import WCS
 from fitsio import FITSHDR
@@ -98,8 +99,8 @@ def pix_rad_to_physical(
     pix_rad: Quantity,
     out_unit: UnitBase | str,
     coord: Quantity,
-    z: float | int = None,
-    cosmo=None,
+    z: float | int | None = None,
+    cosmo: Cosmology | None = None,
 ) -> Quantity:
     """
     Pure convenience function to convert a list of pixel radii to whatever unit we might want at the end. Used
@@ -146,7 +147,11 @@ def pix_rad_to_physical(
 
 
 def physical_rad_to_pix(
-    im_prod: Image | RateMap | ExpMap, physical_rad: Quantity, coord: Quantity, z: float | int = None, cosmo=None
+    im_prod: Image | RateMap | ExpMap,
+    physical_rad: Quantity,
+    coord: Quantity,
+    z: float | int | None = None,
+    cosmo: Cosmology | None = None,
 ) -> Quantity:
     """
     Another convenience function, this time to convert physical radii to pixels. It can deal with both angular and

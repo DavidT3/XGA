@@ -6,7 +6,7 @@ import gc
 import os
 from copy import deepcopy
 from multiprocessing import Pool
-from typing import Literal, overload
+from typing import TYPE_CHECKING, Any, Literal, overload
 from warnings import warn
 
 import numpy as np
@@ -30,13 +30,16 @@ from .. import (
 )
 from ..exceptions import NoMatchFoundError, NoProductAvailableError, NoRegionsError
 
+if TYPE_CHECKING:
+    from ..products.phot import ExpMap, Image
+
 # Global variables for worker processes to store pre-calculated coordinates and products
 #  This ensures the indexing and serialization costs are paid only once per worker, not once per chunk.
-WORKER_TEL_COORDS = {}
-WORKER_EXP_MAPS = {}
+WORKER_TEL_COORDS: dict[str, SkyCoord] = {}
+WORKER_EXP_MAPS: dict[str, dict[str, list[ExpMap]]] = {}
 
 
-def _worker_init(census_coords: dict = None, exp_map_dict: dict = None):
+def _worker_init(census_coords: dict | None = None, exp_map_dict: dict | None = None) -> None:
     """
     Initializer for worker processes to store pre-calculated data in global scope.
     """
@@ -48,7 +51,7 @@ def _worker_init(census_coords: dict = None, exp_map_dict: dict = None):
         WORKER_EXP_MAPS = exp_map_dict
 
 
-def _dist_from_source(search_ra: float, search_dec: float, cur_reg: SkyRegion):
+def _dist_from_source(search_ra: float, search_dec: float, cur_reg: SkyRegion) -> float:
     """
     Calculates the distance between the centre of a supplied region, and the position of the source. We use the
     Haversine formula to determine the separation on the surface of a sphere.
@@ -81,7 +84,7 @@ def _vectorized_separation_match(
     src_indices: np.ndarray,
     telescope: list[str],
     distance: dict,
-    census_coords: dict = None,
+    census_coords: dict | None = None,
     return_flat: bool = False,
 ) -> tuple[dict, dict]:
     """
@@ -103,8 +106,8 @@ def _vectorized_separation_match(
     """
     # Sparse results: {telescope: {global_index: matches_df}}
     if not return_flat:
-        tel_matches = {tel: {} for tel in telescope}
-        tel_bl = {tel: {} for tel in telescope}
+        tel_matches: Any = {tel: {} for tel in telescope}
+        tel_bl: Any = {tel: {} for tel in telescope}
     else:
         tel_matches = []
         tel_bl = []
@@ -130,7 +133,8 @@ def _vectorized_separation_match(
             fully_bl_df = DataFrame(columns=rel_bl.columns)
             fully_bl_obsids = set()
 
-        # We determine the coordinates for the census entries - either from passed argument, worker global, or manual calc
+        # We determine the coordinates for the census entries - either from passed argument, worker global,
+        #  or manual calc
         if census_coords is not None and tel in census_coords:
             tel_coords = census_coords[tel]
         elif tel in WORKER_TEL_COORDS:
@@ -203,7 +207,7 @@ def _vectorized_separation_match(
 
 
 def _on_obs_id(
-    ra: float, dec: float, exp_maps: ExpMap | list[ExpMap], s_idx: int = None
+    ra: float, dec: float, exp_maps: ExpMap | list[ExpMap], s_idx: int | None = None
 ) -> tuple[float, float, np.ndarray, int]:
     """
     Internal function used by the on_detector_match function to check whether a passed coordinate falls directly on a
@@ -370,7 +374,7 @@ def _in_region(
     return obs_id, matched
 
 
-def _process_flat_init_match(src_ra: np.ndarray, src_dec: np.ndarray, res_df: DataFrame):
+def _process_flat_init_match(src_ra: np.ndarray, src_dec: np.ndarray, res_df: DataFrame) -> tuple[dict, list, dict]:
     """
     An internal function that takes the flat results of a separation match and assembles the mapping of ObsIDs to
     source coordinates/indices.
@@ -385,8 +389,8 @@ def _process_flat_init_match(src_ra: np.ndarray, src_dec: np.ndarray, res_df: Da
     telescopes = res_df["telescope"].unique().tolist()
     all_indices = list(range(len(src_ra)))
 
-    final_obs_ids = {tel: [] for tel in telescopes}
-    final_obs_id_srcs = {tel: {} for tel in telescopes}
+    final_obs_ids: dict[str, list] = {tel: [] for tel in telescopes}
+    final_obs_id_srcs: dict[str, dict] = {tel: {} for tel in telescopes}
 
     # Group by telescope first to simplify processing
     for tel, tel_group in res_df.groupby("telescope"):
@@ -419,7 +423,9 @@ def _process_flat_init_match(src_ra: np.ndarray, src_dec: np.ndarray, res_df: Da
     return final_obs_ids, all_indices, final_obs_id_srcs
 
 
-def _process_init_match(src_ra: float | np.ndarray, src_dec: float | np.ndarray, initial_results: dict):
+def _process_init_match(
+    src_ra: float | np.ndarray, src_dec: float | np.ndarray, initial_results: dict | list
+) -> tuple[list, dict, list, dict, dict, dict, dict]:
     """
     An internal function that takes the results of a separation match and assembles the lists of unique ObsIDs for
     the requested telescopes which are of interest to the coordinate(s) we're searching for data for. Sets of RA
@@ -603,7 +609,7 @@ def census_match(
     return results, bl_results
 
 
-def _vectorized_separation_match_wrapper(args):
+def _vectorized_separation_match_wrapper(args: tuple) -> tuple[dict | DataFrame, dict | DataFrame]:
     """
     Wrapper for _vectorized_separation_match to be used with multiprocessing.imap.
     """
@@ -682,14 +688,14 @@ def separation_match(
         distance = {t: DEFAULT_TELE_SEARCH_DIST[t] for t in telescope}
     # Whereas if the user has passed a dictionary of values and NONE of the keys are for the requested telescopes,
     #  then I think they're probably confused, and we throw an error
-    elif type(distance) == dict and all([t not in distance for t in telescope]):
+    elif isinstance(distance, dict) and all([t not in distance for t in telescope]):
         raise KeyError(
             "When it is a dictionary, the 'distance' argument must contain an entry for every mission "
             "specified by 'telescope'."
         )
     # However if the passed dictionary contains SOME of the requested telescopes, then we fill in the rest with the
     #  default values - I think it is probably more convenient
-    elif type(distance) == dict and any([t not in distance for t in telescope]):
+    elif isinstance(distance, dict) and any([t not in distance for t in telescope]):
         if show_warnings:
             warn(
                 "A dictionary of search distances that did not contain all requested telescopes has been "
@@ -711,7 +717,7 @@ def separation_match(
         src_dec = np.array([src_dec])
         num_cores = 1
     # Don't want one input being a single number and one being an array
-    elif type(src_ra) != type(src_dec):
+    elif type(src_ra) is not type(src_dec):
         raise TypeError("src_ra and src_dec must be the same type, either both floats or both arrays.")
 
     # The prog_dis variable controls whether the tqdm progress bar is displayed or not, don't want it to be there
@@ -876,7 +882,7 @@ def separation_match(
 
 
 def _vectorized_on_detector_match(
-    telescope: list[str], obs_id_chunks: dict, obs_to_src_indices: dict, exp_map_dict: dict = None
+    telescope: list[str], obs_id_chunks: dict, obs_to_src_indices: dict, exp_map_dict: dict | None = None
 ) -> list:
     """
     Internal function that performs vectorized detector matching for a set of ObsIDs.
@@ -957,7 +963,7 @@ def _vectorized_on_detector_match(
     return matches
 
 
-def _vectorized_on_detector_match_wrapper(args):
+def _vectorized_on_detector_match_wrapper(args: tuple) -> list:
     """
     Wrapper for _vectorized_on_detector_match to be used with multiprocessing.imap.
     """
@@ -967,8 +973,8 @@ def _vectorized_on_detector_match_wrapper(args):
 def on_detector_match(
     src_ra: float | np.ndarray,
     src_dec: float | np.ndarray,
-    distance: Quantity | dict = None,
-    telescope: str | list[str] = None,
+    distance: Quantity | dict | None = None,
+    telescope: str | list[str] | None = None,
     num_cores: int = NUM_CORES,
 ) -> dict | np.ndarray:
     """
@@ -1043,7 +1049,7 @@ def on_detector_match(
     # We retrieve all ExpMap objects and organize them into a lookup dictionary
     # format: {tel: {obs_id: [ExpMaps]}}
     # We retrieve them in bulk per telescope to avoid many get_products calls
-    exp_map_dict = {tel: {} for tel in obs_src.telescopes}
+    exp_map_dict: dict[str, dict[str, list]] = {tel: {} for tel in obs_src.telescopes}
     for tel in obs_src.telescopes:
         all_exps = obs_src.get_products("expmap", telescope=tel, just_obj=False)
         for out in all_exps:
@@ -1076,9 +1082,9 @@ def on_detector_match(
         map_args = []
         for chunk in pair_chunks:
             # Group pairs back into {tel: [obs_ids]} for the worker
-            chunk_obs_id_dict = {}
-            chunk_obs_to_src = {}
-            chunk_exp_maps = {}
+            chunk_obs_id_dict: dict[str, list] = {}
+            chunk_obs_to_src: dict[str, dict] = {}
+            chunk_exp_maps: dict[str, dict] = {}
             for tel, o in chunk:
                 if tel not in chunk_obs_id_dict:
                     chunk_obs_id_dict[tel] = []
@@ -1176,8 +1182,8 @@ def region_match(
     src_ra: float | np.ndarray,
     src_dec: float | np.ndarray,
     src_type: str | list[str],
-    distance: Quantity | dict = None,
-    telescope: str | list = None,
+    distance: Quantity | dict | None = None,
+    telescope: str | list | None = None,
     num_cores: int = NUM_CORES,
 ) -> np.ndarray:
     """
@@ -1231,7 +1237,7 @@ def region_match(
 
     # We ensure that the RA and Decs are in arrays, even if there is only one coordinate - also in the case of a
     #  single coordinate we set the number of cores to one
-    if type(src_ra) != type(src_dec):
+    if type(src_ra) is not type(src_dec):
         raise TypeError("'src_ra' and 'src_dec' arguments must be the same type; either floats or arrays.")
     elif isinstance(src_ra, float):
         src_ra = np.array([src_ra])
@@ -1275,7 +1281,7 @@ def region_match(
 
     # This is the dictionary in which matching information is stored
     # Top level keys are now source indices
-    reg_match_info = {idx: {} for idx in all_repr}
+    reg_match_info: dict[int, dict] = {idx: {} for idx in all_repr}
     # If the user only wants us to use one core, then we don't make a Pool because that would just add overhead
     if num_cores == 1:
         for tel in obs_src.telescopes:
@@ -1299,8 +1305,8 @@ def region_match(
                         rel_im = obs_src.get_images(cur_obs_id, telescope=tel)[0]
                     except NoProductAvailableError:
                         warn(
-                            f"No pre-existing image can be found for {tel}-{cur_obs_id}; this is required for checking if regions "
-                            "and coordinates intersect.",
+                            f"No pre-existing image can be found for {tel}-{cur_obs_id}; this is required for "
+                            "checking if regions and coordinates intersect.",
                             stacklevel=2,
                         )
                         onwards.update(1)
@@ -1332,7 +1338,7 @@ def region_match(
                 Pool(num_cores) as pool,
             ):
                 # This is called when a match process finished successfully, and the results need storing
-                def match_loop_callback(match_info):
+                def match_loop_callback(match_info: tuple[str, dict]) -> None:
                     nonlocal onwards  # The progress bar will need updating
                     nonlocal reg_match_info
                     # Adds to the match storage dictionary, but so that the top keys are source indices, and
@@ -1349,7 +1355,7 @@ def region_match(
                     onwards.update(1)
 
                 # This is called when a process errors out.
-                def error_callback(err):
+                def error_callback(err: BaseException) -> None:
                     nonlocal onwards
                     nonlocal search_errors
                     # Stores the exception object in a list for later.
@@ -1372,15 +1378,17 @@ def region_match(
                         rel_im = obs_src.get_images(cur_obs_id, telescope=tel)[0]
                     except NoProductAvailableError:
                         warn(
-                            f"No pre-existing image can be found for {tel}-{cur_obs_id}; this is required for checking if regions "
-                            "and coordinates intersect.",
+                            f"No pre-existing image can be found for {tel}-{cur_obs_id}; this is required for "
+                            "checking if regions and coordinates intersect.",
                             stacklevel=2,
                         )
                         onwards.update(1)
                         continue
 
                     # Runs the matching function
-                    # match_inf = _in_region(cur_ra_arr, cur_dec_arr, cur_idx_arr, cur_obs_id, tel, rel_im, allowed_colours)
+                    # match_inf = _in_region(
+                    #     cur_ra_arr, cur_dec_arr, cur_idx_arr, cur_obs_id, tel, rel_im, allowed_colours
+                    # )
                     pool.apply_async(
                         _in_region,
                         args=(cur_ra_arr, cur_dec_arr, cur_idx_arr, cur_obs_id, tel, rel_im, allowed_colours),

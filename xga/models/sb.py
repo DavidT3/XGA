@@ -28,8 +28,8 @@ class BetaProfile1D(BaseModel1D):
         self,
         x_unit: str | Unit = "kpc",
         y_unit: str | Unit = Unit("ct/(s*arcmin**2)"),
-        cust_start_pars: list[Quantity] = None,
-    ):
+        cust_start_pars: list[Quantity] | None = None,
+    ) -> None:
         """
         The init of a subclass of the XGA BaseModel1D class, describing the surface brightness beta profile model.
         """
@@ -149,7 +149,7 @@ class BetaProfile1D(BaseModel1D):
             * np.power((1 + (np.power(x / r_core, 2))), ((-3 * beta) - 0.5))
         )
 
-    def inverse_abel(self, x: Quantity, use_par_dist: bool = False, method="analytical") -> Quantity:
+    def inverse_abel(self, x: Quantity, use_par_dist: bool = False, method: str = "analytical") -> Quantity:
         """
         This overrides the inverse abel method of the model superclass, as there is an analytical solution to the
         inverse abel transform of the single beta model. The form of the inverse abel transform is that of the
@@ -169,7 +169,7 @@ class BetaProfile1D(BaseModel1D):
         :rtype: Quantity
         """
 
-        def transform(x_val: Quantity, beta: Quantity, r_core: Quantity, norm: Quantity):
+        def transform(x_val: Quantity, beta: Quantity, r_core: Quantity, norm: Quantity) -> Quantity:
             """
             The function that calculates the inverse abel transform of this beta profile.
 
@@ -228,8 +228,8 @@ class DoubleBetaProfile1D(BaseModel1D):
         self,
         x_unit: str | Unit = "kpc",
         y_unit: str | Unit = Unit("ct/(s*arcmin**2)"),
-        cust_start_pars: list[Quantity] = None,
-    ):
+        cust_start_pars: list[Quantity] | None = None,
+    ) -> None:
         """
         The init of a subclass of the XGA BaseModel1D class, describing the surface brightness double-beta
         profile model.
@@ -406,7 +406,7 @@ class DoubleBetaProfile1D(BaseModel1D):
         )
         return p1 + p2
 
-    def inverse_abel(self, x: Quantity, use_par_dist: bool = False, method="analytical") -> Quantity:
+    def inverse_abel(self, x: Quantity, use_par_dist: bool = False, method: str = "analytical") -> Quantity:
         """
         This overrides the inverse abel method of the model superclass, as there is an analytical solution to the
         inverse abel transform of the double beta model. The form of the inverse abel transform is that of two summed
@@ -434,7 +434,7 @@ class DoubleBetaProfile1D(BaseModel1D):
             beta_two: Quantity,
             r_core_two: Quantity,
             norm_two: Quantity,
-        ):
+        ) -> Quantity:
             """
             The function that calculates the inverse abel transform of this double beta profile.
 

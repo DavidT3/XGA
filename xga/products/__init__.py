@@ -21,3 +21,25 @@ PROD_MAP = {
     "badpix": BaseProduct,
     "attitude": BaseProduct,
 }
+
+__all__ = [
+    "PROD_MAP",
+    "PSF",
+    "AggregateLightCurve",
+    "AnnularSpectra",
+    "BadPixels",
+    "BaseAggregateProduct",
+    "BaseAggregateProfile1D",
+    "BaseProduct",
+    "BaseProfile1D",
+    "EventList",
+    "ExpMap",
+    "Image",
+    "LightCurve",
+    "MissionAttitude",
+    "MissionMask",
+    "PSFGrid",
+    "RateMap",
+    "ScalingRelation",
+    "Spectrum",
+]

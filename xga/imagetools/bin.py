@@ -59,9 +59,9 @@ def _fill_reg_mask(outline_mask: np.ndarray) -> np.ndarray:
 
 def contour_bin_masks(
     prod: RateMap,
-    src_mask: np.ndarray = None,
-    bck_mask: np.ndarray = None,
-    start_pos: Quantity = None,
+    src_mask: np.ndarray | None = None,
+    bck_mask: np.ndarray | None = None,
+    start_pos: Quantity | None = None,
     max_masks: int = 20,
     metric: str = "counts",
     max_val: Quantity = Quantity(1000, "ct"),
@@ -113,7 +113,7 @@ def contour_bin_masks(
 
     # We use type here rather than isinstance because ExpMaps are also a subclass of Image, so would get through
     #  that check
-    if type(prod) != RateMap:
+    if type(prod) is not RateMap:
         raise TypeError("Only XGA RateMap products can be binned with this function.")
 
     # I do warn the user in this case, because it seems like a strange choice

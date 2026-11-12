@@ -12,7 +12,7 @@ from ..utils import require_esass
 
 class TestEsassSpecFuncs(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         cls.src = get_test_source("erass")
 
     @require_esass

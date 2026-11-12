@@ -128,7 +128,7 @@ def ann_radii(
     im_prod: Image,
     centre: Quantity,
     rad: Quantity,
-    z: float = None,
+    z: float | None = None,
     pix_step: int = 1,
     rad_units: UnitBase = arcsec,
     cosmo: Cosmology = DEFAULT_COSMO,
@@ -482,10 +482,10 @@ def pizza_brightness(
     centre: Quantity,
     rad: Quantity,
     num_slices: int = 4,
-    z: float = None,
+    z: float | None = None,
     pix_step: int = 1,
     cen_rad_units: UnitBase = arcsec,
-    cosmo=DEFAULT_COSMO,
+    cosmo: Cosmology = DEFAULT_COSMO,
 ) -> tuple[np.ndarray, Quantity, Quantity, np.float64, np.ndarray, np.ndarray]:
 
     raise NotImplementedError(

@@ -14,9 +14,10 @@ parsing data from line 79 onwards, as specified.
 import json
 import os
 import sys
+from typing import Any
 
 
-def _convert_to_proper_type(value):
+def _convert_to_proper_type(value: Any) -> Any:
     """
     Attempts to convert a string value to its correct type (int, float, bool, None).
     If conversion fails, the original string is returned.
@@ -50,7 +51,7 @@ def _convert_to_proper_type(value):
     return value
 
 
-def parse_xselect_file(filepath):
+def parse_xselect_file(filepath: str) -> tuple[dict[str, Any], set[str], list[str]]:
     """
     Parses a file with colon-separated key-value pairs into a nested dictionary.
 
@@ -63,9 +64,9 @@ def parse_xselect_file(filepath):
             - A set of all unique telescope names found.
             - A list of error messages for any lines that could not be parsed.
     """
-    telescope_data = {}
-    telescope_names = set()
-    errors = []
+    telescope_data: dict[str, Any] = {}
+    telescope_names: set[str] = set()
+    errors: list[str] = []
     data_start_line = 79
 
     try:

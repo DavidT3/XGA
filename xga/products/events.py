@@ -95,7 +95,7 @@ class EventList(BaseProduct):
         evt_tab_name: str | None = None,
         imaging_evts: bool | None = None,
         check_exists: bool = True,
-    ):
+    ) -> None:
         """
         The init method of the EventList class, a product class for event lists, it stores information about
         the event list.
@@ -159,10 +159,10 @@ class EventList(BaseProduct):
         self._prod_type = "events"
         # These store the header of the event list fits file (if read in), as well as the main table of event
         #  information (again if read in).
-        self._header = None
-        self._data = None
+        self._header: fits.Header | None = None
+        self._data: pd.DataFrame | None = None
         # Also include another header attribute, specifically for the event table header
-        self._event_header = None
+        self._event_header: fits.Header | None = None
 
         # These store the user-provided column and table names, as well as WCS key overrides
         self._sky_x_col = sky_x_col
@@ -195,9 +195,9 @@ class EventList(BaseProduct):
         #  memory usage.
         # This will be a boolean flag, if True then only a subset of columns from the event list table has
         #  been loaded, if False then they all have.
-        self._data_col_subset = None
+        self._data_col_subset: bool | None = None
         # Contains the names of ALL the columns in the events table that could be loaded
-        self._all_col_names = None
+        self._all_col_names: list[str] | None = None
 
         # We attempt to automatically derive the telescope, ObsID, and instrument (if they haven't been
         #  passed by the user) from the event list header
@@ -304,7 +304,7 @@ class EventList(BaseProduct):
 
         # The user may want to use WCSes to convert between different coordinate systems (sky to RA-Dec for
         #  instance), so when they are constructed they will be assigned to these attributes
-        self._radec_sky_wcs = None
+        self._radec_sky_wcs: WCS | None = None
 
         # We allow the user to specify an energy per channel, which is used to convert between event channel and
         #  event energy, when performing operations such as generating images. If the user doesn't specify it
@@ -346,7 +346,7 @@ class EventList(BaseProduct):
         return self._header
 
     @header.deleter
-    def header(self):
+    def header(self) -> None:
         """
         Property deleter for the header of this EventList instance. The self._header attribute is removed from
         memory, and then self._header is explicitly set to None so that self._read_header_on_demand() will be
@@ -369,7 +369,7 @@ class EventList(BaseProduct):
         return self._event_header
 
     @event_header.deleter
-    def event_header(self):
+    def event_header(self) -> None:
         """
         Property deleter for the event table header of this EventList instance. The self._event_header attribute is
         removed from memory, and then self._event_header is explicitly set to None so that
@@ -392,7 +392,7 @@ class EventList(BaseProduct):
         return self._data
 
     @data.deleter
-    def data(self):
+    def data(self) -> None:
         """
         Property deleter for the data of this EventList instance. The self._data attribute is removed from
         memory, and then self._data is explicitly set to None so that self._read_data_on_demand() will be
@@ -526,7 +526,7 @@ class EventList(BaseProduct):
         return self._ev_per_channel
 
     @ev_per_channel.setter
-    def ev_per_channel(self, new_val: Quantity | None):
+    def ev_per_channel(self, new_val: Quantity | None) -> None:
         """
         The mapping between channel values in the energy column of the event list and an absolute energy
         value in eV. This is used in the construction of images and lightcurves from event lists.
@@ -566,7 +566,7 @@ class EventList(BaseProduct):
         return self._sky_x_col
 
     @sky_x_col.setter
-    def sky_x_col(self, value: str):
+    def sky_x_col(self, value: str) -> None:
         self._sky_x_col = value
         # Clear the cached radec WCS as the columns have changed
         self._radec_sky_wcs = None
@@ -591,7 +591,7 @@ class EventList(BaseProduct):
         return self._sky_y_col
 
     @sky_y_col.setter
-    def sky_y_col(self, value: str):
+    def sky_y_col(self, value: str) -> None:
         self._sky_y_col = value
         # Clear the cached radec WCS as the columns have changed
         self._radec_sky_wcs = None
@@ -616,7 +616,7 @@ class EventList(BaseProduct):
         return self._det_x_col
 
     @det_x_col.setter
-    def det_x_col(self, value: str):
+    def det_x_col(self, value: str) -> None:
         self._det_x_col = value
 
     @property
@@ -639,7 +639,7 @@ class EventList(BaseProduct):
         return self._det_y_col
 
     @det_y_col.setter
-    def det_y_col(self, value: str):
+    def det_y_col(self, value: str) -> None:
         self._det_y_col = value
 
     @property
@@ -662,7 +662,7 @@ class EventList(BaseProduct):
         return self._raw_x_col
 
     @raw_x_col.setter
-    def raw_x_col(self, value: str):
+    def raw_x_col(self, value: str) -> None:
         self._raw_x_col = value
 
     @property
@@ -685,7 +685,7 @@ class EventList(BaseProduct):
         return self._raw_y_col
 
     @raw_y_col.setter
-    def raw_y_col(self, value: str):
+    def raw_y_col(self, value: str) -> None:
         self._raw_y_col = value
 
     @property
@@ -708,7 +708,7 @@ class EventList(BaseProduct):
         return self._en_col
 
     @en_col.setter
-    def en_col(self, value: str):
+    def en_col(self, value: str) -> None:
         self._en_col = value
 
     @property
@@ -790,7 +790,7 @@ class EventList(BaseProduct):
             return self._imaging
 
     @imaging.setter
-    def imaging(self, new_val: bool | str):
+    def imaging(self, new_val: bool | str | None) -> None:
         """
         Setter for the imaging property.
 
@@ -919,21 +919,22 @@ class EventList(BaseProduct):
 
         return out_wcs
 
-    def _read_header_on_demand(self, table: str | None = None):
+    def _read_header_on_demand(self, table: str | None = None) -> None:
         """
         This will read the primary event list header into memory, without loading the data from the event
         list main table. That way the user can get access to the summary information stored in the header
         without wasting a lot of memory.
 
-        :param Optional[str] table: Optionally defines which table's header to read; default is to read the primary header. Other
-            options that may be passed are 'event', which loads and stores the event table header in _event_header.
+        :param Optional[str] table: Optionally defines which table's header to read; default is to read the primary
+            header. Other options that may be passed are 'event', which loads and stores the event table header in
+            _event_header.
         """
         if table is None or table == "primary":
             read_type = "primary"
-            table = 0
+            table_key: int | str | None = 0
         elif table == "event":
             read_type = "event"
-            table = self._evt_tab_name
+            table_key = self._evt_tab_name
         else:
             raise ValueError("The 'table' argument must be either 'primary' or 'event'.")
 
@@ -954,7 +955,7 @@ class EventList(BaseProduct):
                 with fits.open(
                     self.path, lazy_load_hdus=True, use_fsspec=pass_use_fsspec, fsspec_kwargs=pass_fsspec_kw
                 ) as fitso:
-                    out_hdr = fitso[table].header
+                    out_hdr = fitso[table_key].header
                     if read_type == "primary":
                         self._header = out_hdr
                     elif read_type == "event":
@@ -973,7 +974,7 @@ class EventList(BaseProduct):
                         f"with {self.src_name}."
                     )
 
-    def _read_data_on_demand(self, columns: list[str] | None = None):
+    def _read_data_on_demand(self, columns: list[str] | None = None) -> None:
         """
         This will read the event list table into memory, allowing for the loading of a specific subset of columns, as
         well as streaming data from remote files.
@@ -1166,7 +1167,7 @@ class EventList(BaseProduct):
             if hdr_val == y_col and "TTYPE" in hdr_key
         ]
 
-        ret_keys = {cur_prefix: {} for cur_prefix in rel_prefixes}
+        ret_keys: dict[str, dict[str, str]] = {cur_prefix: {} for cur_prefix in rel_prefixes}
         if len(x_ind) == 1 and len(y_ind) == 1:
             for cur_prefix in rel_prefixes:
                 cur_all_x_key_attempts = []

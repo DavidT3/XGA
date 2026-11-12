@@ -2,13 +2,18 @@
 #  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:21. Copyright (c) The Contributors
 
 
+from collections.abc import Callable
+from typing import Any
+
 import numpy as np
 
 # This set of functions is to support the MCMC fitting found in the BaseProfile class(es) - its here because
 #  local functions can't be pickled
 
 
-def log_likelihood(theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.ndarray, m_func) -> np.ndarray:
+def log_likelihood(
+    theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.ndarray, m_func: Callable[..., Any]
+) -> np.ndarray:
     """
     Uses a simple Gaussian likelihood function, returns the logged value.
 
@@ -55,7 +60,9 @@ def log_uniform_prior(theta: np.ndarray, pr: list) -> float:
     return ret_val
 
 
-def log_prob(theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.ndarray, m_func, pr) -> np.ndarray:
+def log_prob(
+    theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.ndarray, m_func: Callable[..., Any], pr: list
+) -> np.ndarray:
     """
     The combination of the log prior and log likelihood.
 

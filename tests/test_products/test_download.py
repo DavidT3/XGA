@@ -17,7 +17,7 @@ class TestDownloadProducts(unittest.TestCase):
     """
 
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         rel_info_pn = TEST_EVTS["XMM_PN"]
         rel_info_m1 = TEST_EVTS["XMM_MOS1"]
         cls.url_evt_path = os.path.join(HTTPS_ROOT, rel_info_pn["path"])
@@ -28,7 +28,7 @@ class TestDownloadProducts(unittest.TestCase):
         cls.shared_td = tempfile.TemporaryDirectory()
 
     @classmethod
-    def tearDownClass(cls):
+    def tearDownClass(cls) -> None:
         cls.shared_td.cleanup()
 
     def test_download_products_url(self) -> None:

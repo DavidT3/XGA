@@ -1,6 +1,9 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/11/26, 1:16 PM. Copyright (c) The Contributors.
 
+from collections.abc import Callable
+from typing import Any
+
 from xga import CALDB_AVAIL, CIAO_AVAIL
 from xga.exceptions import CALDBNotFoundError, CIAONotFoundError
 from xga.generate.common import mission_software_call
@@ -17,7 +20,7 @@ def ciao_avail_check() -> None:
         raise CALDBNotFoundError("No CALDB installation has been found on this machine.")
 
 
-def ciao_call(ciao_func):
+def ciao_call(ciao_func: Callable[..., Any]) -> Callable[..., Any]:
     """
     This is used as a decorator for functions that produce CIAO command strings. Depending on the
     system that XGA is running on (and whether the user requests parallel execution), the method of

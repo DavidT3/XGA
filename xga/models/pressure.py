@@ -24,8 +24,11 @@ class SimpleGNFWThermalPressure(BaseModel1D):
     """
 
     def __init__(
-        self, x_unit: str | Unit = "kpc", y_unit: str | Unit = Unit("keV cm^-3"), cust_start_pars: list[Quantity] = None
-    ):
+        self,
+        x_unit: str | Unit = "kpc",
+        y_unit: str | Unit = Unit("keV cm^-3"),
+        cust_start_pars: list[Quantity] | None = None,
+    ) -> None:
         """
         The init of a subclass of the XGA BaseModel1D class, describing a model of how thermal pressure changes
         with radius.
@@ -140,8 +143,11 @@ class GNFWThermalPressure(BaseModel1D):
     """
 
     def __init__(
-        self, x_unit: str | Unit = "kpc", y_unit: str | Unit = Unit("keV cm^-3"), cust_start_pars: list[Quantity] = None
-    ):
+        self,
+        x_unit: str | Unit = "kpc",
+        y_unit: str | Unit = Unit("keV cm^-3"),
+        cust_start_pars: list[Quantity] | None = None,
+    ) -> None:
         """
         The init of a subclass of the XGA BaseModel1D class, describing a model of how thermal pressure changes
         with radius.

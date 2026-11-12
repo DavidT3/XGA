@@ -16,7 +16,7 @@ from ..utils import require_esass
 
 class TestEsassPhotFuncs(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         cls.src = get_test_source("erass")
 
         # Set the lower and upper energy bounds of the phot products generated and retrieved
@@ -39,11 +39,11 @@ class TestEsassPhotFuncs(unittest.TestCase):
             self.fail("NoProductAvailableError raised.")
 
         # We should have retrieved multiple images, so the return should be a list
-        assert type(im) == list
+        assert isinstance(im, list)
 
         # Cycle through and check some properties of what was returned
         for cur_im in im:
-            assert type(cur_im) == Image
+            assert type(cur_im) is Image
             assert cur_im.telescope == "erass"
             assert cur_im.energy_bounds[0] == self._phot_lo_en
             assert cur_im.energy_bounds[1] == self._phot_hi_en
@@ -62,7 +62,7 @@ class TestEsassPhotFuncs(unittest.TestCase):
             self.fail("NoProductAvailableError raised.")
 
         # Single combined-obs combined-TM image should have been generated/fetched
-        assert type(im) == Image
+        assert type(im) is Image
         assert im.telescope == "erass"
         assert im.energy_bounds[0] == self._phot_lo_en
         assert im.energy_bounds[1] == self._phot_hi_en
@@ -85,7 +85,7 @@ class TestEsassPhotFuncs(unittest.TestCase):
 
         # We know that multiple exposure maps should be retrieved, so check that
         #  the return is a list
-        assert type(exp) == list
+        assert isinstance(exp, list)
 
         # Cycle through and check the exposure maps
         for cur_ex in exp:

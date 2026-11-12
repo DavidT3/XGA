@@ -218,14 +218,14 @@ def rl_psf(
                     # Sets up a multiprocessing pool
                     with Pool(num_cores) as pool:
                         # This is what is triggered when each rl_step call is done
-                        def callback(results_in):
+                        def callback(results_in: tuple[np.ndarray, int]) -> None:
                             nonlocal storage
                             # Reading out results
                             proc_chunk, stor_ind = results_in
                             # Storing the results in the storage listss
                             storage[stor_ind].append(proc_chunk)
 
-                        def err_callback(err):
+                        def err_callback(err: BaseException) -> None:
                             raise err
 
                         # Starts a deconvolution function for each spatial PSF, adding them to the
@@ -279,7 +279,8 @@ def rl_psf(
                     f"{obs_id}_{inst}_{bins}bin_{iterations}iter_{psf_model}mod_rlalgo_{lo_en.value}-"
                     f"{hi_en.value}keVpsfcorr_datacube.fits"
                 )
-                # Define this one because emosaic can't deal with fits datacubes, and thats what I use to combine images.
+                # Define this one because emosaic can't deal with fits datacubes, and thats what I use to
+                #  combine images.
                 im_name = (
                     f"{obs_id}_{inst}_{bins}bin_{iterations}iter_{psf_model}mod_rlalgo_{lo_en.value}-"
                     f"{hi_en.value}keVpsfcorr_img.fits"

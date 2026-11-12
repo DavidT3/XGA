@@ -236,10 +236,10 @@ runs tests evidently doesn't define xmm_sky.
 """
 @pytest.mark.simple
 @pytest.mark.data
-@pytest.mark.parametrize("test_im, test_rad, out_unit, expected", [(Image(*A907_IM_PN_INFO), Quantity(103, 'pix'), 'deg',
-                                                                    Quantity(0.12445828250153926, 'deg')),
-                                                                   (Image(*A907_IM_PN_INFO), Quantity(103, 'pix'), 'kpc',
-                                                                    Quantity(1275.5389422602298, 'kpc'))])
+@pytest.mark.parametrize("test_im, test_rad, out_unit, expected", [
+    (Image(*A907_IM_PN_INFO), Quantity(103, 'pix'), 'deg', Quantity(0.12445828250153926, 'deg')),
+    (Image(*A907_IM_PN_INFO), Quantity(103, 'pix'), 'kpc', Quantity(1275.5389422602298, 'kpc'))
+])
 """
 # def test_pix_rad_to_physical(test_im, test_rad, out_unit, expected):
 """

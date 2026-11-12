@@ -22,12 +22,12 @@ def _fit_initialise(
     y_values: Quantity,
     y_errs: Quantity,
     x_values: Quantity,
-    x_errs: Quantity = None,
-    y_norm: Quantity = None,
-    x_norm: Quantity = None,
+    x_errs: Quantity | None = None,
+    y_norm: Quantity | None = None,
+    x_norm: Quantity | None = None,
     log_data: bool = False,
-    point_names: np.ndarray | list = None,
-    third_dim: np.ndarray | Quantity | list = None,
+    point_names: np.ndarray | list | None = None,
+    third_dim: np.ndarray | Quantity | list | None = None,
 ) -> tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity, np.ndarray, Quantity]:
     """
     A handy little function that prepares the data for fitting with the chosen method.
@@ -44,7 +44,8 @@ def _fit_initialise(
         default is False as it isn't likely to be used often - its included because LIRA wants logged data.
     :param np.ndarray/list point_names: A possible set of source names associated with all the data points.
     :param np.ndarray/Quantity/list third_dim: A possible set of extra data used to colour data points.
-    :return: The x data, x errors, y data, and y errors. Also the x_norm, y_norm, the names of non-NaN points, and the third dimension data.
+    :return: The x data, x errors, y data, and y errors. Also the x_norm, y_norm, the names of non-NaN points, and the
+        third dimension data.
     :rtype: Tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity, np.ndarray, Quantity]
     """
     # Check the lengths of the value and uncertainty quantities, as well as the extra information that can also
@@ -184,19 +185,19 @@ def scaling_relation_curve_fit(
     y_values: Quantity,
     y_errs: Quantity,
     x_values: Quantity,
-    x_errs: Quantity = None,
-    y_norm: Quantity = None,
-    x_norm: Quantity = None,
-    x_lims: Quantity = None,
-    start_pars: list = None,
+    x_errs: Quantity | None = None,
+    y_norm: Quantity | None = None,
+    x_norm: Quantity | None = None,
+    x_lims: Quantity | None = None,
+    start_pars: list | None = None,
     y_name: str = "Y",
     x_name: str = "X",
-    dim_hubb_ind: float | int = None,
-    point_names: np.ndarray | list = None,
-    third_dim_info: np.ndarray | Quantity = None,
-    third_dim_name: str = None,
-    x_en_bounds: Quantity = None,
-    y_en_bounds: Quantity = None,
+    dim_hubb_ind: float | int | None = None,
+    point_names: np.ndarray | list | None = None,
+    third_dim_info: np.ndarray | Quantity | None = None,
+    third_dim_name: str | None = None,
+    x_en_bounds: Quantity | None = None,
+    y_en_bounds: Quantity | None = None,
 ) -> ScalingRelation:
     """
     A function to fit a scaling relation with the scipy non-linear least squares implementation (curve fit), generate
@@ -280,19 +281,19 @@ def scaling_relation_odr(
     y_values: Quantity,
     y_errs: Quantity,
     x_values: Quantity,
-    x_errs: Quantity = None,
-    y_norm: Quantity = None,
-    x_norm: Quantity = None,
-    x_lims: Quantity = None,
-    start_pars: list = None,
+    x_errs: Quantity | None = None,
+    y_norm: Quantity | None = None,
+    x_norm: Quantity | None = None,
+    x_lims: Quantity | None = None,
+    start_pars: list | None = None,
     y_name: str = "Y",
     x_name: str = "X",
-    dim_hubb_ind: float | int = None,
-    point_names: np.ndarray | list = None,
-    third_dim_info: np.ndarray | Quantity = None,
-    third_dim_name: str = None,
-    x_en_bounds: Quantity = None,
-    y_en_bounds: Quantity = None,
+    dim_hubb_ind: float | int | None = None,
+    point_names: np.ndarray | list | None = None,
+    third_dim_info: np.ndarray | Quantity | None = None,
+    third_dim_name: str | None = None,
+    x_en_bounds: Quantity | None = None,
+    y_en_bounds: Quantity | None = None,
 ) -> ScalingRelation:
     """
     A function to fit a scaling relation with the scipy orthogonal distance regression implementation, generate
@@ -411,21 +412,21 @@ def scaling_relation_lira(
     y_values: Quantity,
     y_errs: Quantity,
     x_values: Quantity,
-    x_errs: Quantity = None,
-    y_norm: Quantity = None,
-    x_norm: Quantity = None,
-    x_lims: Quantity = None,
+    x_errs: Quantity | None = None,
+    y_norm: Quantity | None = None,
+    x_norm: Quantity | None = None,
+    x_lims: Quantity | None = None,
     y_name: str = "Y",
     x_name: str = "X",
     num_steps: int = 100000,
     num_chains: int = 4,
     num_burn_in: int = 10000,
-    dim_hubb_ind: float | int = None,
-    point_names: np.ndarray | list = None,
-    third_dim_info: np.ndarray | Quantity = None,
-    third_dim_name: str = None,
-    x_en_bounds: Quantity = None,
-    y_en_bounds: Quantity = None,
+    dim_hubb_ind: float | int | None = None,
+    point_names: np.ndarray | list | None = None,
+    third_dim_info: np.ndarray | Quantity | None = None,
+    third_dim_name: str | None = None,
+    x_en_bounds: Quantity | None = None,
+    y_en_bounds: Quantity | None = None,
 ) -> ScalingRelation:
     """
     A function to fit a power law scaling relation with the excellent R fitting package LIRA
@@ -579,7 +580,7 @@ def scaling_relation_lira(
     return sr
 
 
-def scaling_relation_emcee():
+def scaling_relation_emcee() -> None:
     raise NotImplementedError(
         "This fitting method has not yet been implemented, please consider LIRA as an alternative."
     )

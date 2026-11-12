@@ -14,7 +14,7 @@ from .. import get_test_source
 
 class TestProductRetrievalCorrectness(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         cls.src = get_test_source("xmm")
 
     def test_xmm_image_retrieval_specificity(self) -> None:

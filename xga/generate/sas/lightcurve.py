@@ -3,6 +3,7 @@
 
 import os
 from random import randint
+from typing import Any
 
 import numpy as np
 from astropy.units import Quantity, UnitConversionError
@@ -28,7 +29,7 @@ def _lc_cmds(
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
     force_gen: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     This is an internal function which sets up the commands necessary to generate light curves from XMM data - and
     can be used both to generate them from simple circular regions and also from annular regions. The light curves
@@ -141,9 +142,9 @@ def _lc_cmds(
     sources_extras = []
     sources_types = []
     for s_ind, source in enumerate(sources):
-        cmds = []
-        final_paths = []
-        extra_info = []
+        cmds: list[str] = []
+        final_paths: list[str] = []
+        extra_info: list[dict[str, Any]] = []
 
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
         #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to
@@ -289,24 +290,24 @@ def _lc_cmds(
             if "pn" in inst:
                 lc_storage_name = f"_pattern{pn_patt_name}" + lc_storage_name
                 expr = (
-                    f"expression='#XMMEA_EP && (PATTERN {pn_patt}) && (FLAG .eq. 0) && (PI in [{lo_chan}:{hi_chan}]) && "
-                    f"{reg}'"
+                    f"expression='#XMMEA_EP && (PATTERN {pn_patt}) && (FLAG .eq. 0) && "
+                    f"(PI in [{lo_chan}:{hi_chan}]) && {reg}'"
                 )
                 b_expr = (
-                    f"expression='#XMMEA_EP && (PATTERN {pn_patt}) && (FLAG .eq. 0) && (PI in [{lo_chan}:{hi_chan}]) && "
-                    f"{b_reg}'"
+                    f"expression='#XMMEA_EP && (PATTERN {pn_patt}) && (FLAG .eq. 0) && "
+                    f"(PI in [{lo_chan}:{hi_chan}]) && {b_reg}'"
                 )
 
             elif "mos" in inst:
                 lc_storage_name = f"_pattern{mos_patt_name}" + lc_storage_name
 
                 expr = (
-                    f"expression='#XMMEA_EM && (PATTERN {mos_patt}) && (FLAG .eq. 0) && (PI in [{lo_chan}:{hi_chan}]) && "
-                    f"{reg}'"
+                    f"expression='#XMMEA_EM && (PATTERN {mos_patt}) && (FLAG .eq. 0) && "
+                    f"(PI in [{lo_chan}:{hi_chan}]) && {reg}'"
                 )
                 b_expr = (
-                    f"expression='#XMMEA_EM && (PATTERN {mos_patt}) && (FLAG .eq. 0) && (PI in [{lo_chan}:{hi_chan}]) && "
-                    f"{b_reg}'"
+                    f"expression='#XMMEA_EM && (PATTERN {mos_patt}) && (FLAG .eq. 0) && "
+                    f"(PI in [{lo_chan}:{hi_chan}]) && {b_reg}'"
                 )
 
             else:
@@ -445,7 +446,7 @@ def evselect_lightcurve(
     mos_patt: str = "<= 12",
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A wrapper for all the SAS processes necessary to generate XMM light curves for a specified region.
      Every observation associated with this source, and every instrument associated with that

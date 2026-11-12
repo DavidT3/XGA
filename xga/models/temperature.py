@@ -24,8 +24,11 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
     """
 
     def __init__(
-        self, x_unit: str | Unit = "kpc", y_unit: str | Unit = Unit("keV"), cust_start_pars: list[Quantity] = None
-    ):
+        self,
+        x_unit: str | Unit = "kpc",
+        y_unit: str | Unit = Unit("keV"),
+        cust_start_pars: list[Quantity] | None = None,
+    ) -> None:
         """
         The init of a subclass of the XGA BaseModel1D class, describing a simple version of the galaxy cluster
         temperature profile model created by Vikhlinin et al.
@@ -219,8 +222,11 @@ class VikhlininTemperature1D(BaseModel1D):
     """
 
     def __init__(
-        self, x_unit: str | Unit = "kpc", y_unit: str | Unit = Unit("keV"), cust_start_pars: list[Quantity] = None
-    ):
+        self,
+        x_unit: str | Unit = "kpc",
+        y_unit: str | Unit = Unit("keV"),
+        cust_start_pars: list[Quantity] | None = None,
+    ) -> None:
         """
         The init of a subclass of the XGA BaseModel1D class, describing the full version of the galaxy cluster
         temperature profile model created by Vikhlinin et al.

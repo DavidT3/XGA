@@ -7,6 +7,7 @@ from collections.abc import Callable
 from functools import wraps
 from multiprocessing.dummy import Pool
 from subprocess import PIPE, Popen
+from typing import Any
 from warnings import warn
 
 import numpy as np
@@ -23,7 +24,9 @@ from ..sources import BaseSource
 from ..sources.base import NullSource
 
 
-def mission_software_call(mission_name: str, avail_check: Callable[[], None]):
+def mission_software_call(
+    mission_name: str, avail_check: Callable[[], None]
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     This is a generic decorator for functions that produce command strings for mission-specific software (like SAS,
     eSASS, or CIAO). It handles the setup of multiprocessing pools, the execution of commands, and the assignment
@@ -38,9 +41,9 @@ def mission_software_call(mission_name: str, avail_check: Callable[[], None]):
 
     disp_name = PRETTY_TELESCOPE_NAMES[mission_name]
 
-    def decorator(func):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: object, **kwargs: object) -> BaseSource | NullSource | BaseSample | list[BaseSource]:
             # Checking software is installed and available on the system
             avail_check()
 
@@ -80,7 +83,7 @@ def mission_software_call(mission_name: str, avail_check: Callable[[], None]):
                     source_rep += [repr(source)] * len(to_run)
 
             # This is what the returned products get stored in before they're assigned to sources
-            results = {s: [] for s in src_lookup}
+            results: dict[str, list[BaseProduct]] = {s: [] for s in src_lookup}
             # Any errors raised shouldn't be software-specific, as they are stored within the product object.
             raised_errors = []
             # Making sure something is defined for this variable
@@ -98,11 +101,12 @@ def mission_software_call(mission_name: str, avail_check: Callable[[], None]):
                     Pool(cores) as pool,
                 ):
 
-                    def callback(results_in: tuple[BaseProduct | list[BaseProduct], str]):
+                    def callback(results_in: tuple[BaseProduct | list[BaseProduct], str]) -> None:
                         """
                         Callback function for the apply_async pool method, gets called when a task finishes
                         and something is returned.
-                        :param Tuple[Union[BaseProduct, List[BaseProduct]], str] results_in: Results of the command call.
+                        :param Tuple[Union[BaseProduct, List[BaseProduct]], str] results_in: Results of the
+                            command call.
                         """
                         nonlocal gen  # The progress bar will need updating
                         nonlocal results  # The dictionary the command call results are added to
@@ -119,7 +123,7 @@ def mission_software_call(mission_name: str, avail_check: Callable[[], None]):
                                     results[rel_src].append(prod_obj)
                             gen.update(1)
 
-                    def err_callback(err):
+                    def err_callback(err: BaseException) -> None:
                         """
                         The callback function for errors that occur inside a task running in the pool.
                         :param err: An error that occurred inside a task.
@@ -176,7 +180,7 @@ def mission_software_call(mission_name: str, avail_check: Callable[[], None]):
             # Now we assign products to source objects
             all_to_raise = []
             # This is for the special case of generating an AnnularSpectra product
-            ann_spec_comps = {k: [] for k in results}
+            ann_spec_comps: dict[str, list[BaseProduct]] = {k: [] for k in results}
             for entry in results:
                 # Made this lookup list earlier, using string representations of source objects.
                 # Finds the ind of the list of sources that we should add this set of products to
@@ -219,8 +223,10 @@ def mission_software_call(mission_name: str, avail_check: Callable[[], None]):
                     # In case they are components of an annular spectrum but they are either none or not usable
                     elif prod_type_str == "annular spectrum set components":
                         warn(
-                            f"An annular spectrum component ({product.storage_key}) for {product.telescope} {product.obs_id}{product.instrument} has not been generated properly (not "
-                            f"usable reason - {product.not_usable_reasons}). The std_err entry is:\n\n {product.unprocessed_stderr}\n\n The std_out entry is:\n\n "
+                            f"An annular spectrum component ({product.storage_key}) for {product.telescope} "
+                            f"{product.obs_id}{product.instrument} has not been generated properly (not "
+                            f"usable reason - {product.not_usable_reasons}). The std_err entry is:\n\n "
+                            f"{product.unprocessed_stderr}\n\n The std_out entry is:\n\n "
                             f"{product.unprocessed_stdout}",
                             stacklevel=2,
                         )
@@ -328,10 +334,10 @@ def execute_cmd(
             std_erro.write(cmd + "\n\n" + err)
 
     # Trying to make sure that any passed arrays get smoothed out into the list type we want
-    if type(p_path) == np.ndarray:
+    if isinstance(p_path, np.ndarray):
         p_path = list(p_path)
 
-    if type(p_type) == np.ndarray:
+    if isinstance(p_type, np.ndarray):
         p_type = list(p_type)
 
     # This is becoming a bit of a hodge podge of fixes to avoid making absolutely sure the inputs are right,
@@ -350,7 +356,7 @@ def execute_cmd(
 
     # Catch any mistakes that will be easy to make in developing new interface functions with
     #  backend telescope software
-    if type(p_type) != type(p_path):
+    if type(p_type) is not type(p_path):
         raise XGADeveloperError(
             "Both the p_type and p_path arguments must be of the same type (both string or both list)."
         )
@@ -543,11 +549,11 @@ def get_annular_esass_region(
     telescope: str,
     output_unit: UnitBase | str = deg,
     rot_angle: Quantity = Quantity(0, "deg"),
-    interloper_regions: np.ndarray = None,
-    central_coord: Quantity = None,
+    interloper_regions: np.ndarray | None = None,
+    central_coord: Quantity | None = None,
     bkg_reg: bool = False,
-    rand_ident: int = None,
-    out_root_path: str = None,
+    rand_ident: int | None = None,
+    out_root_path: str | None = None,
 ) -> str:
     """
     A method to generate an eSASS region string for an arbitrary circular or elliptical annular region, with

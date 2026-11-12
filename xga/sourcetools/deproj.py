@@ -22,11 +22,11 @@ def shell_ann_vol_intersect(
         and shell radii are along the 'y' axis.
     :rtype: Union[np.ndarray, Quantity]
     """
-    if all([type(shell_radii) == Quantity, type(ann_radii) == Quantity]) and shell_radii.unit != ann_radii.unit:
+    if all([type(shell_radii) is Quantity, type(ann_radii) is Quantity]) and shell_radii.unit != ann_radii.unit:
         raise UnitConversionError("If quantities are passed, they must be in the same units.")
-    elif all([type(shell_radii) == Quantity, type(ann_radii) == Quantity]):
+    elif all([type(shell_radii) is Quantity, type(ann_radii) is Quantity]):
         pass
-    elif all([type(shell_radii) == np.ndarray, type(ann_radii) == np.ndarray]):
+    elif all([type(shell_radii) is np.ndarray, type(ann_radii) is np.ndarray]):
         pass
     else:
         raise TypeError(
@@ -60,11 +60,11 @@ def shell_volume(inn_radius: Quantity | np.ndarray, out_radius: Quantity | np.nd
     :return: The volume of the specified shell
     :rtype: Union[Quantity, np.ndarray]
     """
-    if all([type(inn_radius) == Quantity, type(out_radius) == Quantity]) and inn_radius.unit != out_radius.unit:
+    if all([type(inn_radius) is Quantity, type(out_radius) is Quantity]) and inn_radius.unit != out_radius.unit:
         raise UnitConversionError("If quantities are passed, they must be in the same units.")
-    elif all([type(inn_radius) == Quantity, type(out_radius) == Quantity]):
+    elif all([type(inn_radius) is Quantity, type(out_radius) is Quantity]):
         pass
-    elif all([type(inn_radius) == np.ndarray, type(out_radius) == np.ndarray]):
+    elif all([type(inn_radius) is np.ndarray, type(out_radius) is np.ndarray]):
         pass
     else:
         raise TypeError(

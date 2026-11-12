@@ -13,13 +13,13 @@ from .. import get_test_source
 
 class TestMassFuncs(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         cls.src = get_test_source("all")
 
     def test_inv_abel_dens_onion_temp(self) -> None:
         res = inv_abel_dens_onion_temp(
             self.src, Quantity(600, "kpc"), "beta", "king", "vikhlinin_temp", Quantity(600, "kpc"), stacked_spectra=True
         )
-        assert type(res) == dict
+        assert isinstance(res, dict)
         assert set(res.keys()) == {"erass", "xmm"}
-        assert type(res["erass"][0]) == HydrostaticMass
+        assert isinstance(res["erass"][0], HydrostaticMass)

@@ -11,14 +11,14 @@ from .. import get_test_source
 
 class TestDensityFuncs(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         cls.src = get_test_source("all")
 
     def test_inv_abel_fitted_model(self) -> None:
         res = inv_abel_fitted_model(self.src, "beta", use_peak=False, psf_corr=False, stacked_spectra=True)
 
-        assert type(res["erass"][0]) == GasDensity3D
-        assert type(res["xmm"][0]) == GasDensity3D
+        assert isinstance(res["erass"][0], GasDensity3D)
+        assert isinstance(res["xmm"][0], GasDensity3D)
 
 
 #    def test_dens_setup(self):

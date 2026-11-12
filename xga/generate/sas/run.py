@@ -1,6 +1,9 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/11/26, 1:15 PM. Copyright (c) The Contributors.
 
+from collections.abc import Callable
+from typing import Any
+
 from xga import SAS_AVAIL, SAS_VERSION
 from xga.exceptions import SASNotFoundError
 from xga.generate.common import mission_software_call
@@ -18,7 +21,7 @@ def sas_avail_check() -> None:
         )
 
 
-def sas_call(sas_func):
+def sas_call(sas_func: Callable[..., Any]) -> Callable[..., Any]:
     """
     This is used as a decorator for functions that produce SAS command strings. Depending on the
     system that XGA is running on (and whether the user requests parallel execution), the method of

@@ -30,8 +30,9 @@ def general_smooth(
     final smoothed RateMap will be produced by dividing the smoothed Image by the original ExpMap.
 
     Note that, as this function acts directly on XGA data products rather than on XGA sources or samples, the
-    new XGA product instances it produces are NOT added to the storage structure of a source.The returned product
-    instance can be manually added to a source by calling the <source instance>.update_products(<return from this function>) method.
+    new XGA product instances it produces are NOT added to the storage structure of a source. The returned product
+    instance can be manually added to a source by calling the
+    <source instance>.update_products(<return from this function>) method.
 
     :param Image/RateMap prod: The XGA Image/RateMap to be smoothed. If you pass a RateMap, please see the 'sm_im'
         argument for extra options.
@@ -53,7 +54,8 @@ def general_smooth(
     :param float/int fill_value: The value to use outside the array when using` boundary='fill'`, passed through
         to the Astropy convolution function's `fill_value` argument. The default value is 0.0.
     :param str nan_treatment: The method that Astropy uses to handle NaNs in the input array, passed through
-        to the Astropy convolution function's `nan_treatment` argument, see Astropy documentation. The default value is 'interpolate'.
+        to the Astropy convolution function's `nan_treatment` argument, see Astropy documentation. The default
+        value is 'interpolate'.
     :param bool preserve_nan: After performing convolution, should pixels that were originally NaN again become NaN?
         Pass through to the Astropy convolution function's `preserve_nan` argument. The default is False.
     :param float/int normalization_zero_tol: The absolute tolerance on whether the kernel is different from zero. If
@@ -68,7 +70,7 @@ def general_smooth(
     #  to ours at run time.
 
     # First off, we check the type of the product that has been passed in for smoothing
-    if not isinstance(prod, Image) or type(prod) == ExpMap:
+    if not isinstance(prod, Image) or type(prod) is ExpMap:
         raise TypeError("Only an XGA Image or RateMap instance can be passed to the 'prod' argument.")
 
     # Also need to check that the kernel has the right number of dimensions
@@ -97,13 +99,13 @@ def general_smooth(
     # Now we figure out what exactly needs to be smoothed.
     # If the input product is an Image, then it is very straightforward - we just copy
     #  the data array and will apply smoothing to that
-    if type(prod) == Image:
+    if type(prod) is Image:
         data_to_smth = prod.data.copy()
 
     # In this case the user has passed a RateMap for smoothing and also requested that we
     #  directly smooth the count-rate array (as opposed to extracting the image array, smoothing
     #  that, then re-dividing by the exposure map).
-    elif type(prod) == RateMap and not ratemap_smooth_im:
+    elif type(prod) is RateMap and not ratemap_smooth_im:
         raise NotImplementedError(
             "XGA RateMaps can currently only be constructed from separate "
             "Image and ExpMap instances, and as such a new RateMap cannot"
@@ -114,7 +116,7 @@ def general_smooth(
     # In this instance the user has passed a RateMap, but specified that we should smooth
     #  the IMAGE data, then create a new RateMap by dividing the smoothed image by the
     #  original exposure map.
-    elif type(prod) == RateMap and ratemap_smooth_im:
+    elif type(prod) is RateMap and ratemap_smooth_im:
         data_to_smth = prod.image.data.copy()
 
     # Catch all else statement, meant to raise a vaguely useful error if the user
@@ -154,7 +156,7 @@ def general_smooth(
 
     # Now we construct the new XGA product instance that houses the smoothed data
     #  In the case of an Image being passed in, we make an image to send back out
-    if type(prod) == Image:
+    if type(prod) is Image:
         sm_prod = Image(
             {"data": sm_data, "wcs": prod.radec_wcs, "header": prod.header},
             prod.obs_id,
@@ -171,12 +173,12 @@ def general_smooth(
         )
 
     # User requested that the count-rate array of a RateMap be smoothed
-    elif type(prod) == RateMap and not ratemap_smooth_im:
+    elif type(prod) is RateMap and not ratemap_smooth_im:
         raise NotImplementedError("XGA RateMaps can't yet be constructed from a single count-rate array.")
 
     # User requested that the Image of a RateMap be smoothed, and a new RateMap constructed using
     #  the original exposure map.
-    elif type(prod) == RateMap and ratemap_smooth_im:
+    elif type(prod) is RateMap and ratemap_smooth_im:
         # Construct the Image instance
         sm_im_prod = Image(
             {"data": sm_data, "wcs": prod.radec_wcs, "header": prod.header},

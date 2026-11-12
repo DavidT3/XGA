@@ -3,6 +3,8 @@
 
 import os
 import unittest
+from collections.abc import Callable
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -25,13 +27,13 @@ class TestEventListImageGeneration(unittest.TestCase):
     """
 
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         # Event list to use for the more specific image tests.
         xmm_pn_test_info = TEST_EVTS["XMM_PN"]
         cls.evt = EventList(S3_ROOT + xmm_pn_test_info["path"])
         cls.test_evt_name = "XMM_PN"
 
-    def check_missions_evt_init_image_gen(self, name) -> None:
+    def check_missions_evt_init_image_gen(self, name: str) -> None:
         cur_info = TEST_EVTS[name]
 
         # We'll do a subtest of the base event list checks first - no sense
@@ -133,23 +135,26 @@ class TestEventListImageGeneration(unittest.TestCase):
         self.assertIn(
             "LO_EN",
             cur_test_im.header,
-            f"Generated image for {self.test_evt_name} within {lo_en.value}{hi_en.value} keV does not have a LO_EN header entry.",
+            f"Generated image for {self.test_evt_name} within {lo_en.value}{hi_en.value} keV does not have "
+            f"a LO_EN header entry.",
         )
         self.assertIn(
             "HI_EN",
             cur_test_im.header,
-            f"Generated image for {self.test_evt_name} within {lo_en.value}{hi_en.value} keV does not have a HI_EN header entry.",
+            f"Generated image for {self.test_evt_name} within {lo_en.value}{hi_en.value} keV does not have "
+            f"a HI_EN header entry.",
         )
 
     def test_image_gen_en_bounds_failure(self) -> None:
-        """Check that EventList image generation fails when energy bounds are specified, but ev_per_channel is not set."""
+        """Check that EventList image generation fails when energy bounds are set, but ev_per_channel is not set."""
         # Make sure the ev_per_channel property is set to None (another test can modify this).
         self.evt.ev_per_channel = None
 
         # Run the image generation attempt - should fail because the necessary information isn't available.
         with self.assertRaises(
             NotImplementedError,
-            msg="Energy bounded image generation should have failed for EventList with no energy-per-channel information.",
+            msg="Energy bounded image generation should have failed for EventList with no energy-per-channel "
+            "information.",
         ):
             self.evt.generate_image(lo_en=Quantity(0.5, "keV"), hi_en=Quantity(2.0, "keV"))
 
@@ -182,36 +187,44 @@ class TestEventListImageGeneration(unittest.TestCase):
                 cur_test_im.shape[1],
                 expec_size,
                 delta=acc_pix_diff,
-                msg=f"Generated image for {self.test_evt_name} with angular binsize {ang_bin_size.value} arcsec has an X shape ({cur_test_im.shape[0]}) more than {acc_pix_diff} different from expected ({expec_size}) .",
+                msg=f"Generated image for {self.test_evt_name} with angular binsize {ang_bin_size.value} arcsec "
+                f"has an X shape ({cur_test_im.shape[0]}) more than {acc_pix_diff} different from expected "
+                f"({expec_size}) .",
             )
         with self.subTest(check="Y size"):
             self.assertAlmostEqual(
                 cur_test_im.shape[0],
                 expec_size,
                 delta=acc_pix_diff,
-                msg=f"Generated image for {self.test_evt_name} with angular binsize {ang_bin_size.value} arcsec has a Y shape ({cur_test_im.shape[1]}) more than {acc_pix_diff} different from expected ({expec_size}) .",
+                msg=f"Generated image for {self.test_evt_name} with angular binsize {ang_bin_size.value} arcsec "
+                f"has a Y shape ({cur_test_im.shape[1]}) more than {acc_pix_diff} different from expected "
+                f"({expec_size}) .",
             )
 
         self.assertIn(
             "CDELT1",
             cur_test_im.header,
-            f"Generated image for {self.test_evt_name} with angular binsize {ang_bin_size.value} arcsec does not have a CDELT1 header entry.",
+            f"Generated image for {self.test_evt_name} with angular binsize {ang_bin_size.value} arcsec does not "
+            f"have a CDELT1 header entry.",
         )
         self.assertIn(
             "CDELT2",
             cur_test_im.header,
-            f"Generated image for {self.test_evt_name} with angular binsize {ang_bin_size.value} arcsec does not have a CDELT2 header entry.",
+            f"Generated image for {self.test_evt_name} with angular binsize {ang_bin_size.value} arcsec does not "
+            f"have a CDELT2 header entry.",
         )
 
         self.assertEqual(
             cur_test_im.header["CDELT1"],
             -0.0012083333333333,
-            f"Generated image for {self.test_evt_name} with angular binsize {ang_bin_size.value} arcsec has incorrect ({cur_test_im.header['CDELT1']}) CDELT1 header entry (expected -0.0012083333333333).",
+            f"Generated image for {self.test_evt_name} with angular binsize {ang_bin_size.value} arcsec has "
+            f"incorrect ({cur_test_im.header['CDELT1']}) CDELT1 header entry (expected -0.0012083333333333).",
         )
         self.assertEqual(
             cur_test_im.header["CDELT2"],
             0.0012083333333333,
-            f"Generated image for {self.test_evt_name} with angular binsize {ang_bin_size.value} arcsec has incorrect ({cur_test_im.header['CDELT2']}) CDELT2 header entry (expected 0.0012083333333333).",
+            f"Generated image for {self.test_evt_name} with angular binsize {ang_bin_size.value} arcsec has "
+            f"incorrect ({cur_test_im.header['CDELT2']}) CDELT2 header entry (expected 0.0012083333333333).",
         )
 
     def test_image_gen_ang_lims(self) -> None:
@@ -241,7 +254,8 @@ class TestEventListImageGeneration(unittest.TestCase):
         self.assertGreater(
             cur_test_im.data.sum(),
             0,
-            f"Generated image for {self.test_evt_name} with X-limits of {ang_x_lims}, Y-limits of {ang_y_lims}, and angular binsize {ang_bin_size.value} arcsec has no counts.",
+            f"Generated image for {self.test_evt_name} with X-limits of {ang_x_lims}, Y-limits of {ang_y_lims}, "
+            f"and angular binsize {ang_bin_size.value} arcsec has no counts.",
         )
 
         with self.subTest(check="X size"):
@@ -249,7 +263,9 @@ class TestEventListImageGeneration(unittest.TestCase):
                 cur_test_im.shape[1],
                 expec_x_size,
                 delta=acc_pix_diff,
-                msg=f"Generated image for {self.test_evt_name} with X-limits of {ang_x_lims} and angular binsize {ang_bin_size.value} arcsec has an X shape ({cur_test_im.shape[0]}) more than {acc_pix_diff} different from expected ({expec_x_size}) .",
+                msg=f"Generated image for {self.test_evt_name} with X-limits of {ang_x_lims} and angular binsize "
+                f"{ang_bin_size.value} arcsec has an X shape ({cur_test_im.shape[0]}) more than "
+                f"{acc_pix_diff} different from expected ({expec_x_size}) .",
             )
 
         with self.subTest(check="Y size"):
@@ -257,7 +273,9 @@ class TestEventListImageGeneration(unittest.TestCase):
                 cur_test_im.shape[0],
                 expec_y_size,
                 delta=acc_pix_diff,
-                msg=f"Generated image for {self.test_evt_name} with Y-limits of {ang_y_lims} and angular binsize {ang_bin_size.value} arcsec has a Y shape ({cur_test_im.shape[1]}) more than {acc_pix_diff} different from expected ({expec_y_size}) .",
+                msg=f"Generated image for {self.test_evt_name} with Y-limits of {ang_y_lims} and angular binsize "
+                f"{ang_bin_size.value} arcsec has a Y shape ({cur_test_im.shape[1]}) more than "
+                f"{acc_pix_diff} different from expected ({expec_y_size}) .",
             )
 
     def test_image_gen_pix_lims(self) -> None:
@@ -287,7 +305,8 @@ class TestEventListImageGeneration(unittest.TestCase):
         self.assertGreater(
             cur_test_im.data.sum(),
             0,
-            f"Generated image for {self.test_evt_name} with X-limits of {pix_x_lims}, Y-limits of {pix_y_lims}, and angular binsize {sky_bin_size} has no counts.",
+            f"Generated image for {self.test_evt_name} with X-limits of {pix_x_lims}, Y-limits of {pix_y_lims}, "
+            f"and angular binsize {sky_bin_size} has no counts.",
         )
 
         with self.subTest(check="X size"):
@@ -295,7 +314,9 @@ class TestEventListImageGeneration(unittest.TestCase):
                 cur_test_im.shape[1],
                 expec_x_size,
                 delta=acc_pix_diff,
-                msg=f"Generated image for {self.test_evt_name} with X-limits of {pix_x_lims} and sky pixel binsize {sky_bin_size} has an X shape ({cur_test_im.shape[0]}) more than {acc_pix_diff} different from expected ({expec_x_size}) .",
+                msg=f"Generated image for {self.test_evt_name} with X-limits of {pix_x_lims} and sky pixel "
+                f"binsize {sky_bin_size} has an X shape ({cur_test_im.shape[0]}) more than {acc_pix_diff} "
+                f"different from expected ({expec_x_size}) .",
             )
 
         with self.subTest(check="Y size"):
@@ -303,7 +324,9 @@ class TestEventListImageGeneration(unittest.TestCase):
                 cur_test_im.shape[0],
                 expec_y_size,
                 delta=acc_pix_diff,
-                msg=f"Generated image for {self.test_evt_name} with Y-limits of {pix_y_lims} and sky pixel binsize {sky_bin_size} has a Y shape ({cur_test_im.shape[1]}) more than {acc_pix_diff} different from expected ({expec_y_size}) .",
+                msg=f"Generated image for {self.test_evt_name} with Y-limits of {pix_y_lims} and sky pixel "
+                f"binsize {sky_bin_size} has a Y shape ({cur_test_im.shape[1]}) more than {acc_pix_diff} "
+                f"different from expected ({expec_y_size}) .",
             )
 
     def test_donor_image_generation(self) -> None:
@@ -407,7 +430,7 @@ for mission_name in TEST_EVTS:
     # All the tests that check that an EventList can be declared and an image can be generated from them
     gen_method = f"test_evt_init_im_gen_{mission_name}"
 
-    def create_gen_test(m_name):
+    def create_gen_test(m_name: str) -> Callable[[Any], None]:
         return lambda self: self.check_missions_evt_init_image_gen(m_name)
 
     setattr(TestEventListImageGeneration, gen_method, create_gen_test(mission_name))
@@ -417,7 +440,7 @@ class TestEventListFunctionality(unittest.TestCase):
     """General functionality tests using XMM PN as a representative standard spectro-imaging mission."""
 
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         info = TEST_EVTS["XMM_PN"]
         cls.evt = EventList(S3_ROOT + info["path"])
 
@@ -476,7 +499,7 @@ class TestEventListLocalLoad(unittest.TestCase):
     """Verifies that EventList behaviours with local files."""
 
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         rel_info = TEST_EVTS["Suzaku_HXD_PIN"]
         rel_url = os.path.join(HTTPS_ROOT, rel_info["path"])
 
@@ -512,8 +535,17 @@ class TestEventListLocalLoad(unittest.TestCase):
         ):
             cur_test_evt = EventList(cur_test_path, check_exists=True)
 
-        # self.assertEqual(cur_test_evt.usable, False, msg="EventList does not have .usable set to False when the file path does not exist.")
-        # self.assertEqual(cur_test_evt.not_usable_reasons, ["ProductPathDoesNotExist"], msg="EventList does not have .not_usable_reasons set to ['ProductPathDoesNotExist'] when the file path does not exist.")
+        # self.assertEqual(
+        #     cur_test_evt.usable,
+        #     False,
+        #     msg="EventList does not have .usable set to False when the file path does not exist.",
+        # )
+        # self.assertEqual(
+        #     cur_test_evt.not_usable_reasons,
+        #     ["ProductPathDoesNotExist"],
+        #     msg="EventList does not have .not_usable_reasons set to ['ProductPathDoesNotExist'] when the file "
+        #     "path does not exist.",
+        # )
 
 
 if __name__ == "__main__":
