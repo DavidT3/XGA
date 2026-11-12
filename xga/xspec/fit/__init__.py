@@ -5,8 +5,32 @@ Subpackage providing functions for fitting XSPEC spectral models to global and s
 spectra.
 """
 
-from .general import *
-from .models import *
+from .general import (
+    FIT_FUNC_MODEL_NAMES,
+    blackbody,
+    double_temp_apec,
+    general_model_fit,
+    multi_temp_dem_apec,
+    power_law,
+    single_temp_apec,
+    single_temp_mekal,
+)
+from .models import custom_xspec_fit, describe_xspec_model, validate_and_parse_model
 
-# Perhaps this one will be removed
-from .profile import *
+from .profile import PROF_FIT_FUNC_MODEL_NAMES, single_temp_apec_profile
+
+__all__ = [
+    "FIT_FUNC_MODEL_NAMES",
+    "PROF_FIT_FUNC_MODEL_NAMES",
+    "blackbody",
+    "custom_xspec_fit",
+    "describe_xspec_model",
+    "double_temp_apec",
+    "general_model_fit",
+    "multi_temp_dem_apec",
+    "power_law",
+    "single_temp_apec",
+    "single_temp_apec_profile",
+    "single_temp_mekal",
+    "validate_and_parse_model",
+]

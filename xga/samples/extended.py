@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from typing import Any
+from warnings import warn
 
 import numpy as np
 from astropy.cosmology import Cosmology
@@ -22,8 +23,16 @@ from ..exceptions import (
     PeakConvergenceFailedError,
     TelescopeNotAssociatedError,
 )
+from ..models import power_law
 from ..products.profile import GasDensity3D
-from ..relations.fit import *
+from ..products.relation import ScalingRelation
+from ..relations.fit import (
+    ALLOWED_FIT_METHODS,
+    scaling_relation_curve_fit,
+    scaling_relation_emcee,
+    scaling_relation_lira,
+    scaling_relation_odr,
+)
 from ..sources.extended import GalaxyCluster
 from .base import BaseSample
 

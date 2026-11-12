@@ -3,9 +3,9 @@
 """The __init__ for the xga.generate.sas submodule, which wraps XMM-Newton SAS software tools."""
 
 from ._common import region_setup
-from .lightcurve import *
-from .phot import *
-from .spec import *
+from .lightcurve import evselect_lightcurve
+from .phot import eexpmap, emosaic, evselect_image, psfgen
+from .spec import cross_arf, evselect_spectrum, spectrum_set
 
 __all__ = [
     "cross_arf",
