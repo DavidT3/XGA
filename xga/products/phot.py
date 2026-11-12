@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/10/26, 9:57 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 10:42 AM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -1475,23 +1475,22 @@ class Image(BaseProduct):
             hierarchical peak finder.
         :param bool zoom_in: Sets whether the figure limits should be set automatically so that borders with no
             data are reduced.
-        :param tuple manual_zoom_xlims: If set, this will override the automatic zoom in and manually set a part
-            of the x-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
-            lower limit, second the upper limit. Variable zoom_in must still be true for these limits
-            to be applied.
-        :param tuple manual_zoom_ylims: If set, this will override the automatic zoom in and manually set a part
-            of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
-            lower limit, second the upper limit. Variable zoom_in must still be true for these limits
-            to be applied.
+        :param tuple manual_zoom_xlims: If set, this will override the automatic zoom in and manually limit
+            how much of the x-axis to display; default is None. Pass a tuple with two elements, first being the
+            lower limit, second the upper limit. Variable `zoom_in` will be automatically set to True if
+            a `manual_zoom_xlims` or `manual_zoom_ylims` value is passed.
+        :param tuple manual_zoom_ylims: If set, this will override the automatic zoom in and manually limit
+            how much of the y-axis to display; default is None. Pass a tuple with two elements, first being the
+            lower limit, second the upper limit. Variable `zoom_in` will be automatically set to True if
+            a `manual_zoom_ylims` or `manual_zoom_xlims` value is passed.
         :param Quantity/np.ndarray radial_bins_pix: Radii (in units of pixels or angular units convertible to
-            degrees) of annuli to plot on top of the image,
-            will only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
-            of the annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
+            degrees) of annuli to plot on top of the image. Will only be triggered if a `cross_hair` coordinate is
+            also specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates
+            are specified, the first will be used as the centre.
         :param Quantity/np.ndarray back_bin_pix: The inner and outer radii (in pixel or angular units convertible
-            to degrees) of the annulus used to
-            measure the background value for a given profile, will only be triggered if a cross_hair coordinate is also
-            specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
-            specified, the first will be used as the centre.
+            to degrees) of the annulus used to measure the background value for a given profile, will only be
+            triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate of the
+            annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
         :param bool mask_edges: If viewing a RateMap, this variable will control whether the chip edges are masked
             to remove artificially bright pixels, default is True.
@@ -1583,13 +1582,24 @@ class Image(BaseProduct):
         #  user-supplied manual zoom limits)
         x_lims = None
         y_lims = None
+
+        # We now override the value of zoom_in if either the manual_zoom_xlims or manual_zoom_ylims arguments
+        #  have had values passed to them.
+        zoom_in = zoom_in if (manual_zoom_xlims is None and manual_zoom_ylims is None) else True
+
         if zoom_in:
+            # If both the manual zoom arguments are None, but the user wishes to zoom in, we use `data_limits()`
+            #  to find identify the x and y limits where the image turns to only zero values
             if manual_zoom_xlims is None and manual_zoom_ylims is None:
                 from xga.imagetools import data_limits
 
                 x_lims, y_lims = data_limits(plot_data)
-            else:
+
+            # We allow users to pass the x and y manual zoom limits individually, so we handle them
+            #  in separate if statements
+            if manual_zoom_xlims is not None:
                 x_lims = manual_zoom_xlims
+            if manual_zoom_ylims is not None:
                 y_lims = manual_zoom_ylims
 
         # Select the subset of image pixels used to compute the colourbar normalisation. When zooming in, restrict the
@@ -1774,23 +1784,22 @@ class Image(BaseProduct):
         :param Tuple figsize: Allows the user to pass a custom size for the figure produced by this method.
         :param bool zoom_in: Sets whether the figure limits should be set automatically so that borders with no
             data are reduced.
-        :param tuple manual_zoom_xlims: If set, this will override the automatic zoom in and manually set a part
-            of the x-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
-            lower limit, second the upper limit. Variable zoom_in must still be true for these limits
-            to be applied.
-        :param tuple manual_zoom_ylims: If set, this will override the automatic zoom in and manually set a part
-            of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
-            lower limit, second the upper limit. Variable zoom_in must still be true for these limits
-            to be applied.
+        :param tuple manual_zoom_xlims: If set, this will override the automatic zoom in and manually limit
+            how much of the x-axis to display; default is None. Pass a tuple with two elements, first being the
+            lower limit, second the upper limit. Variable `zoom_in` will be automatically set to True if
+            a `manual_zoom_xlims` or `manual_zoom_ylims` value is passed.
+        :param tuple manual_zoom_ylims: If set, this will override the automatic zoom in and manually limit
+            how much of the y-axis to display; default is None. Pass a tuple with two elements, first being the
+            lower limit, second the upper limit. Variable `zoom_in` will be automatically set to True if
+            a `manual_zoom_ylims` or `manual_zoom_xlims` value is passed.
         :param Quantity/np.ndarray radial_bins_pix: Radii (in units of pixels or angular units convertible to
-            degrees) of annuli to plot on top of the image,
-            will only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
-            of the annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
+            degrees) of annuli to plot on top of the image. Will only be triggered if a `cross_hair` coordinate is
+            also specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates
+            are specified, the first will be used as the centre.
         :param Quantity/np.ndarray back_bin_pix: The inner and outer radii (in pixel or angular units convertible
-            to degrees) of the annulus used to
-            measure the background value for a given profile, will only be triggered if a cross_hair coordinate is also
-            specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
-            specified, the first will be used as the centre.
+            to degrees) of the annulus used to measure the background value for a given profile, will only be
+            triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate of the
+            annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
         :param bool mask_edges: If viewing a RateMap, this variable will control whether the chip edges are masked
             to remove artificially bright pixels, default is True.
@@ -1883,23 +1892,22 @@ class Image(BaseProduct):
         :param Tuple figsize: Allows the user to pass a custom size for the figure produced by this method.
         :param bool zoom_in: Sets whether the figure limits should be set automatically so that borders with no
             data are reduced.
-        :param tuple manual_zoom_xlims: If set, this will override the automatic zoom in and manually set a part
-            of the x-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
-            lower limit, second the upper limit. Variable zoom_in must still be true for these limits
-            to be applied.
-        :param tuple manual_zoom_ylims: If set, this will override the automatic zoom in and manually set a part
-            of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
-            lower limit, second the upper limit. Variable zoom_in must still be true for these limits
-            to be applied.
+        :param tuple manual_zoom_xlims: If set, this will override the automatic zoom in and manually limit
+            how much of the x-axis to display; default is None. Pass a tuple with two elements, first being the
+            lower limit, second the upper limit. Variable `zoom_in` will be automatically set to True if
+            a `manual_zoom_xlims` or `manual_zoom_ylims` value is passed.
+        :param tuple manual_zoom_ylims: If set, this will override the automatic zoom in and manually limit
+            how much of the y-axis to display; default is None. Pass a tuple with two elements, first being the
+            lower limit, second the upper limit. Variable `zoom_in` will be automatically set to True if
+            a `manual_zoom_ylims` or `manual_zoom_xlims` value is passed.
         :param Quantity/np.ndarray radial_bins_pix: Radii (in units of pixels or angular units convertible to
-            degrees) of annuli to plot on top of the image,
-            will only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
-            of the annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
+            degrees) of annuli to plot on top of the image. Will only be triggered if a `cross_hair` coordinate is
+            also specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates
+            are specified, the first will be used as the centre.
         :param Quantity/np.ndarray back_bin_pix: The inner and outer radii (in pixel or angular units convertible
-            to degrees) of the annulus used to
-            measure the background value for a given profile, will only be triggered if a cross_hair coordinate is also
-            specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
-            specified, the first will be used as the centre.
+            to degrees) of the annulus used to measure the background value for a given profile, will only be
+            triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate of the
+            annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
         :param bool mask_edges: If viewing a RateMap, this variable will control whether the chip edges are masked
             to remove artificially bright pixels, default is True.
