@@ -421,14 +421,8 @@ def adaptive_smooth(
     #   Used later to specify which numerator index to use when selecting final pixel value.
     kernel_sizes = np.full(num_base.shape, max_size)
 
-    # Cache the "numerator", the result of smoothing the whole image with a kernel of some given width. Used later in
-    #   the function to recover the final pixel values based on which kernel size gave the best SNR.
-    num_cache = np.empty((len(widths),) + num_base.shape)
-
     # Holding arrays for now, will be updated to produce the final image using values from the numerator cache above,
     #   and for the normalisation array to maintain consistent flux before and after smoothing.
-    final_num = np.zeros_like(num_base)
-    final_norm = np.zeros_like(num_base)
     final_image = np.zeros_like(num_base)
     final_snrs = np.zeros_like(num_base)
 
@@ -553,29 +547,6 @@ def adaptive_smooth(
             final_image[better] = num[better] / norm[better]
             kernel_sizes = np.where(better, width, kernel_sizes)
             final_snrs[better] = snr[better]
-
-    # # Assign pixels to widths
-    # nearest_idx = np.argmin(np.abs(kernel_sizes[None] - widths[:, None, None]), axis=0)
-    #
-    # # Iterate over widths again and select the best pixels for the final image
-    # for wid, width in enumerate(tqdm.tqdm(widths)):
-    #     id_mask = (nearest_idx == wid)
-    #     if not np.any(id_mask):
-    #         continue  # if no pixels use this width (unlikely)
-    #     kernel = Gaussian2DKernel(width).array
-    #     final_num[id_mask] = num_cache[wid][id_mask]
-    #     if fft:
-    #         norm = convolve_fft(weight_pad, kernel, mask=mask, normalize_kernel=norm_kernel, boundary=boundary,
-    #                             fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
-    #                             normalization_zero_tol=normalization_zero_tol)
-    #     else:
-    #         norm = convolve(weight_pad, kernel, mask=mask, normalize_kernel=norm_kernel, boundary=boundary,
-    #                         fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
-    #                         normalization_zero_tol=normalization_zero_tol)
-    #     final_norm[id_mask] = norm[id_mask]
-
-    # # Normalise the final image to maintain flux
-    # final_image = final_num / final_norm
 
     # Reinsert smoothed data on final image
     img_pad[ylo : yhi + 2 * pad_width, xlo : xhi + 2 * pad_width] = final_image
