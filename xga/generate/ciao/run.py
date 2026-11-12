@@ -1,12 +1,12 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/11/26, 1:16 PM. Copyright (c) The Contributors.
 
-from xga import CIAO_AVAIL, CALDB_AVAIL
-from xga.exceptions import CIAONotFoundError, CALDBNotFoundError
+from xga import CALDB_AVAIL, CIAO_AVAIL
+from xga.exceptions import CALDBNotFoundError, CIAONotFoundError
 from xga.generate.common import mission_software_call
 
 
-def ciao_avail_check():
+def ciao_avail_check() -> None:
     """
     Check function for the CIAO mission software.
     """
@@ -24,4 +24,4 @@ def ciao_call(ciao_func):
     executing the CIAO command will change.
     :return:
     """
-    return mission_software_call('chandra', ciao_avail_check)(ciao_func)
+    return mission_software_call("chandra", ciao_avail_check)(ciao_func)

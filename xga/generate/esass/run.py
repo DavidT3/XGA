@@ -6,7 +6,7 @@ from xga.exceptions import eSASSNotFoundError
 from xga.generate.common import mission_software_call
 
 
-def esass_avail_check():
+def esass_avail_check() -> None:
     """
     Check function for the eSASS mission software.
     """
@@ -21,4 +21,4 @@ def esass_call(esass_func):
     executing the eSASS command will change. This supports both simple multi-threading.
     :return:
     """
-    return mission_software_call('erosita', esass_avail_check)(esass_func)
+    return mission_software_call("erosita", esass_avail_check)(esass_func)

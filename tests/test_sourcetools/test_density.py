@@ -5,19 +5,21 @@ import unittest
 
 from xga.products.profile import GasDensity3D
 from xga.sourcetools.density import inv_abel_fitted_model
+
 from .. import get_test_source
 
 
 class TestDensityFuncs(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.src = get_test_source('all')
+        cls.src = get_test_source("all")
 
-    def test_inv_abel_fitted_model(self):
-        res = inv_abel_fitted_model(self.src, 'beta', use_peak=False, psf_corr=False, stacked_spectra=True)
+    def test_inv_abel_fitted_model(self) -> None:
+        res = inv_abel_fitted_model(self.src, "beta", use_peak=False, psf_corr=False, stacked_spectra=True)
 
-        assert type(res['erass'][0]) == GasDensity3D
-        assert type(res['xmm'][0]) == GasDensity3D
+        assert type(res["erass"][0]) == GasDensity3D
+        assert type(res["xmm"][0]) == GasDensity3D
+
 
 #    def test_dens_setup(self):
 #        res = _dens_setup(self.src, 'angr',Quantity(0.5, 'keV'), Quantity(2, 'keV'), stacked_spectra=True)

@@ -1,38 +1,55 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 11:55 AM. Copyright (c) The Contributors.
 
-from typing import Union, List, Dict
 from warnings import warn
 
 from astropy.units import Quantity
 from tqdm import tqdm
 
-from ._common import _setup_inv_abel_dens_onion_temp
 from .. import NUM_CORES
 from ..exceptions import XGAFitError
 from ..models import BaseModel1D
 from ..products.profile import HydrostaticMass
 from ..samples import ClusterSample
 from ..sources import GalaxyCluster
+from ._common import _setup_inv_abel_dens_onion_temp
 
 
-def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity],
-                             sb_model: Union[str, List[str], BaseModel1D, List[BaseModel1D]],
-                             dens_model: Union[str, List[str], BaseModel1D, List[BaseModel1D]],
-                             temp_model: Union[str, List[str], BaseModel1D, List[BaseModel1D]], global_radius: Quantity,
-                             fit_method: str = "mcmc", num_walkers: int = 20, num_steps: int = 20000,
-                             sb_pix_step: int = 1, sb_min_snr: Union[int, float] = 0.0, inv_abel_method: str = None,
-                             temp_annulus_method: str = 'min_snr', temp_min_snr: Union[int, float] = 30,
-                             temp_min_cnt: Union[int, Quantity] = Quantity(1000, 'ct'),
-                             temp_min_width: Quantity = Quantity(20, 'arcsec'), temp_use_combined: bool = True,
-                             temp_use_worst: bool = False, freeze_met: bool = True, abund_table: str = "angr",
-                             temp_lo_en: Quantity = Quantity(0.3, 'keV'), temp_hi_en: Quantity = Quantity(7.9, 'keV'),
-                             group_spec: bool = True, spec_min_counts: int = 5, spec_min_sn: Union[int, float] = None,
-                             over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-                             show_warn: bool = True, psf_bins: int = 4, stacked_spectra: bool = False,
-                             telescope: Union[str, List[str]] = None,
-                             global_temp_success_check: bool = False) -> Union[Dict[str, List[HydrostaticMass]],
-                                                                               List[HydrostaticMass]]:
+def inv_abel_dens_onion_temp(
+    sources: GalaxyCluster | ClusterSample,
+    outer_radius: str | Quantity,
+    sb_model: str | list[str] | BaseModel1D | list[BaseModel1D],
+    dens_model: str | list[str] | BaseModel1D | list[BaseModel1D],
+    temp_model: str | list[str] | BaseModel1D | list[BaseModel1D],
+    global_radius: Quantity,
+    fit_method: str = "mcmc",
+    num_walkers: int = 20,
+    num_steps: int = 20000,
+    sb_pix_step: int = 1,
+    sb_min_snr: int | float = 0.0,
+    inv_abel_method: str = None,
+    temp_annulus_method: str = "min_snr",
+    temp_min_snr: int | float = 30,
+    temp_min_cnt: int | Quantity = Quantity(1000, "ct"),
+    temp_min_width: Quantity = Quantity(20, "arcsec"),
+    temp_use_combined: bool = True,
+    temp_use_worst: bool = False,
+    freeze_met: bool = True,
+    abund_table: str = "angr",
+    temp_lo_en: Quantity = Quantity(0.3, "keV"),
+    temp_hi_en: Quantity = Quantity(7.9, "keV"),
+    group_spec: bool = True,
+    spec_min_counts: int = 5,
+    spec_min_sn: int | float = None,
+    over_sample: float = None,
+    one_rmf: bool = True,
+    num_cores: int = NUM_CORES,
+    show_warn: bool = True,
+    psf_bins: int = 4,
+    stacked_spectra: bool = False,
+    telescope: str | list[str] = None,
+    global_temp_success_check: bool = False,
+) -> dict[str, list[HydrostaticMass]] | list[HydrostaticMass]:
     """
     A convenience function that should allow the user to easily measure hydrostatic masses of a sample of galaxy
     clusters, elegantly dealing with any sources that have inadequate data or aren't fit properly. For the sake
@@ -129,19 +146,46 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
     # Call this common function which checks for whether temperature profiles/density profiles exist, if not creates
     #  them, and tries to fit the requested models to them - implemented like this because it is an identical process
     #  to that required by the specific entropy function of similar name
-    setup_res = _setup_inv_abel_dens_onion_temp(sources, outer_radius, sb_model, dens_model, temp_model,
-                                                global_radius, fit_method, num_walkers, num_steps,
-                                                sb_pix_step, sb_min_snr, inv_abel_method, temp_annulus_method,
-                                                temp_min_snr, temp_min_cnt, temp_min_width, temp_use_combined,
-                                                temp_use_worst, freeze_met, abund_table, temp_lo_en,
-                                                temp_hi_en, group_spec, spec_min_counts, spec_min_sn,
-                                                over_sample, one_rmf, num_cores, show_warn, psf_bins,
-                                                stacked_spectra, telescope, global_temp_success_check)
+    setup_res = _setup_inv_abel_dens_onion_temp(
+        sources,
+        outer_radius,
+        sb_model,
+        dens_model,
+        temp_model,
+        global_radius,
+        fit_method,
+        num_walkers,
+        num_steps,
+        sb_pix_step,
+        sb_min_snr,
+        inv_abel_method,
+        temp_annulus_method,
+        temp_min_snr,
+        temp_min_cnt,
+        temp_min_width,
+        temp_use_combined,
+        temp_use_worst,
+        freeze_met,
+        abund_table,
+        temp_lo_en,
+        temp_hi_en,
+        group_spec,
+        spec_min_counts,
+        spec_min_sn,
+        over_sample,
+        one_rmf,
+        num_cores,
+        show_warn,
+        psf_bins,
+        stacked_spectra,
+        telescope,
+        global_temp_success_check,
+    )
     sources, dens_prof_dict, temp_prof_dict, dens_model_dict, temp_model_dict, telescope = setup_res
 
     # So I can a dict of profiles with telescope keys, a tad more elegant than fetching them
     #  from the sources sometimes
-    final_mass_profs = {tel : [None]*len(sources) for tel in telescope}
+    final_mass_profs = {tel: [None] * len(sources) for tel in telescope}
 
     # Better to use a with statement for tqdm, so its shut down if something fails inside
     prog_desc = "Generating {} hydrostatic mass profile"
@@ -153,8 +197,12 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                     continue
 
                 # If every stage of this analysis has worked then we setup the hydro mass profile
-                if (str(src) in dens_prof_dict) and (dens_prof_dict[str(src)][tel] is not None) \
-                    and (str(src) in temp_prof_dict) and (temp_prof_dict[str(src)][tel] is not None):
+                if (
+                    (str(src) in dens_prof_dict)
+                    and (dens_prof_dict[str(src)][tel] is not None)
+                    and (str(src) in temp_prof_dict)
+                    and (temp_prof_dict[str(src)][tel] is not None)
+                ):
                     # This fetches out the correct density and temperature profiles
                     d_prof = dens_prof_dict[str(src)][tel]
                     t_prof = temp_prof_dict[str(src)][tel]
@@ -168,34 +216,50 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                     try:
                         rads = t_prof.radii.copy()[1:]
                         rad_errs = t_prof.radii_err.copy()[1:]
-                        deg_rads = src.convert_radius(rads, 'deg')
-                        hy_mass = HydrostaticMass(t_prof, d_prof, t_model, d_model, rads, rad_errs, deg_rads,
-                                                  fit_method, num_walkers, num_steps, show_warn=show_warn,
-                                                  progress=False, telescope=tel, auto_save=True)
+                        deg_rads = src.convert_radius(rads, "deg")
+                        hy_mass = HydrostaticMass(
+                            t_prof,
+                            d_prof,
+                            t_model,
+                            d_model,
+                            rads,
+                            rad_errs,
+                            deg_rads,
+                            fit_method,
+                            num_walkers,
+                            num_steps,
+                            show_warn=show_warn,
+                            progress=False,
+                            telescope=tel,
+                            auto_save=True,
+                        )
                         # Add the profile to the source storage structure
                         src.update_products(hy_mass)
                         # Also put it into a list for returning
                         final_mass_profs[tel][src_ind] = hy_mass
                     except XGAFitError:
-                        warn("A fit failure occurred in the {t} hydrostatic mass profile "
-                             "definition for {s}.".format(t=tel, s=src.name), stacklevel=2)
+                        warn(
+                            f"A fit failure occurred in the {tel} hydrostatic mass profile definition for {src.name}.",
+                            stacklevel=2,
+                        )
                         final_mass_profs[tel][src_ind] = None
                     except ValueError:
-                        warn("A mass of less than zero was measured by the {t} hydrostatic mass profile "
-                             "for {s}; this is not physical and the profile is not "
-                             "valid.".format(t=tel, s=src.name), stacklevel=2)
+                        warn(
+                            f"A mass of less than zero was measured by the {tel} hydrostatic mass profile "
+                            f"for {src.name}; this is not physical and the profile is not "
+                            "valid.",
+                            stacklevel=2,
+                        )
                         final_mass_profs[tel][src_ind] = None
 
                 # If the density generation failed we give a warning here
                 elif str(src) in dens_prof_dict:
-                    warn("The {t} density profile for {s} could not be "
-                         "generated".format(t=tel, s=src.name), stacklevel=2)
+                    warn(f"The {tel} density profile for {src.name} could not be generated", stacklevel=2)
                     # No density means no mass, so we append None to the list
                     final_mass_profs[tel][src_ind] = None
 
                 elif str(src) in temp_prof_dict:
-                    warn("The {t} temperature profile for {s} could not be "
-                         "generated".format(t=tel, s=src.name), stacklevel=2)
+                    warn(f"The {tel} temperature profile for {src.name} could not be generated", stacklevel=2)
                     # No temp means no mass, so we append None to the list
                     final_mass_profs[tel][src_ind] = None
                 else:
@@ -211,20 +275,3 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
         final_mass_profs = next(iter(final_mass_profs.values()))
 
     return final_mass_profs
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

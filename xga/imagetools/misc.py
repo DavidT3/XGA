@@ -2,19 +2,17 @@
 #  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 5:22 PM. Copyright (c) The Contributors.
 
 
-from typing import Tuple, List, Union
-
 import numpy as np
-from astropy.units import Quantity, pix, deg, UnitConversionError, UnitBase, Unit
+from astropy.units import Quantity, Unit, UnitBase, UnitConversionError, deg, pix
 from astropy.wcs import WCS
 from fitsio import FITSHDR
 
-from ..products.phot import Image, RateMap, ExpMap
+from ..products.phot import ExpMap, Image, RateMap
 from ..sourcetools import ang_to_rad, rad_to_ang
 from ..utils import xmm_sky
 
 
-def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quantity(1, 'arcmin')) -> Quantity:
+def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quantity(1, "arcmin")) -> Quantity:
     """
     Very heavily inspired by the regions module version of this function, just tweaked to work better for
     my use case. Perturbs the given coordinates with the small_offset value, converts the changed ra-dec
@@ -43,21 +41,22 @@ def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quan
         deg_coord = Quantity(input_wcs.all_pix2world(*coord.value, 0), deg)
         pix_coord = coord
     else:
-        raise UnitConversionError('{} is not a recognised position unit'.format(coord.unit.to_string()))
+        raise UnitConversionError(f"{coord.unit.to_string()} is not a recognised position unit")
 
-    perturbed_coord = deg_coord + Quantity([0, small_offset.to("deg").value], 'deg')
+    perturbed_coord = deg_coord + Quantity([0, small_offset.to("deg").value], "deg")
     perturbed_pix_coord = Quantity(input_wcs.all_world2pix(*perturbed_coord.value, 0), pix)
 
     diff = abs(perturbed_pix_coord - pix_coord)
     pix_dist = np.hypot(*diff)
 
-    scale = small_offset.to('deg').value / pix_dist.value
+    scale = small_offset.to("deg").value / pix_dist.value
 
-    return Quantity(scale, 'deg/pix')
+    return Quantity(scale, "deg/pix")
 
 
-def sky_deg_scale(im_prod: Union[Image, RateMap, ExpMap], coord: Quantity,
-                  small_offset: Quantity = Quantity(1, 'arcmin')) -> Quantity:
+def sky_deg_scale(
+    im_prod: Image | RateMap | ExpMap, coord: Quantity, small_offset: Quantity = Quantity(1, "arcmin")
+) -> Quantity:
     """
     This is equivalent to pix_deg_scale, but instead calculates the conversion factor between
     XMM's XY sky coordinate system and degrees.
@@ -83,19 +82,25 @@ def sky_deg_scale(im_prod: Union[Image, RateMap, ExpMap], coord: Quantity,
     deg_coord = im_prod.coord_conv(coord, deg)
     sky_coord = im_prod.coord_conv(coord, xmm_sky)
 
-    perturbed_coord = deg_coord + Quantity([0, small_offset.to("deg").value], 'deg')
+    perturbed_coord = deg_coord + Quantity([0, small_offset.to("deg").value], "deg")
     perturbed_sky_coord = im_prod.coord_conv(perturbed_coord, xmm_sky)
 
     diff = abs(perturbed_sky_coord - sky_coord)
     sky_dist = np.hypot(*diff)
 
-    scale = small_offset.to('deg').value / sky_dist.value
+    scale = small_offset.to("deg").value / sky_dist.value
 
-    return Quantity(scale, deg/xmm_sky)
+    return Quantity(scale, deg / xmm_sky)
 
 
-def pix_rad_to_physical(im_prod: Union[Image, RateMap, ExpMap], pix_rad: Quantity, out_unit: Union[UnitBase, str],
-                        coord: Quantity, z: Union[float, int] = None, cosmo=None) -> Quantity:
+def pix_rad_to_physical(
+    im_prod: Image | RateMap | ExpMap,
+    pix_rad: Quantity,
+    out_unit: UnitBase | str,
+    coord: Quantity,
+    z: float | int = None,
+    cosmo=None,
+) -> Quantity:
     """
     Pure convenience function to convert a list of pixel radii to whatever unit we might want at the end. Used
     quite a lot in the imagetools.profile functions, which is why it was split off into its own function. Redshift
@@ -117,15 +122,16 @@ def pix_rad_to_physical(im_prod: Union[Image, RateMap, ExpMap], pix_rad: Quantit
     if isinstance(out_unit, str):
         out_unit = Unit(out_unit)
 
-    deg_rads = Quantity(pix_deg_scale(coord, im_prod.radec_wcs).value * pix_rad.value, 'deg')
+    deg_rads = Quantity(pix_deg_scale(coord, im_prod.radec_wcs).value * pix_rad.value, "deg")
 
     if out_unit.is_equivalent("kpc") and z is not None and cosmo is not None:
         # Quick convert to kpc with my handy function and then go to whatever unit the user requested
         # Wham bam pixels to proper distance
         conv_rads = ang_to_rad(deg_rads, z, cosmo).to(out_unit)
     elif out_unit.is_equivalent("kpc") and (z is None or cosmo is None):
-        raise ValueError("If you wish to convert to physical units such as kpc, you must supply "
-                         "a redshift and cosmology")
+        raise ValueError(
+            "If you wish to convert to physical units such as kpc, you must supply a redshift and cosmology"
+        )
     elif out_unit.is_equivalent("deg"):
         conv_rads = deg_rads.to(out_unit)
     elif out_unit == pix:
@@ -139,8 +145,9 @@ def pix_rad_to_physical(im_prod: Union[Image, RateMap, ExpMap], pix_rad: Quantit
     return conv_rads
 
 
-def physical_rad_to_pix(im_prod: Union[Image, RateMap, ExpMap], physical_rad: Quantity,
-                        coord: Quantity, z: Union[float, int] = None, cosmo=None) -> Quantity:
+def physical_rad_to_pix(
+    im_prod: Image | RateMap | ExpMap, physical_rad: Quantity, coord: Quantity, z: float | int = None, cosmo=None
+) -> Quantity:
     """
     Another convenience function, this time to convert physical radii to pixels. It can deal with both angular and
     proper radii, so long as redshift and cosmology information is provided for the conversion from proper radii
@@ -154,14 +161,15 @@ def physical_rad_to_pix(im_prod: Union[Image, RateMap, ExpMap], physical_rad: Qu
     :return: The converted radii, in an astropy Quantity with pix units.
     :rtype: Quantity
     """
-
     if physical_rad.unit.is_equivalent("kpc") and z is not None and cosmo is not None:
-        conv_rads = rad_to_ang(physical_rad, z, cosmo).to('deg')
+        conv_rads = rad_to_ang(physical_rad, z, cosmo).to("deg")
     elif physical_rad.unit.is_equivalent("kpc") and (z is None or cosmo is None):
-        raise ValueError("If you wish to convert to convert from proper distance units such as kpc, you must supply "
-                         "a redshift and cosmology")
+        raise ValueError(
+            "If you wish to convert to convert from proper distance units such as kpc, you must supply "
+            "a redshift and cosmology"
+        )
     elif physical_rad.unit.is_equivalent("deg"):
-        conv_rads = physical_rad.to('deg')
+        conv_rads = physical_rad.to("deg")
     elif physical_rad.unit == pix:
         raise UnitConversionError("You are trying to convert from pixel units to pixel units.")
     else:
@@ -169,12 +177,12 @@ def physical_rad_to_pix(im_prod: Union[Image, RateMap, ExpMap], physical_rad: Qu
         raise UnitConversionError("cen_rad_units doesn't appear to be a distance or angular unit.")
 
     phys_to_pix = 1 / pix_deg_scale(coord, im_prod.radec_wcs).value
-    conv_rads = Quantity(conv_rads.value * phys_to_pix, 'pix')
+    conv_rads = Quantity(conv_rads.value * phys_to_pix, "pix")
 
     return conv_rads
 
 
-def data_limits(im_prod: Union[Image, RateMap, ExpMap, np.ndarray]) -> Tuple[List[int], List[int]]:
+def data_limits(im_prod: Image | RateMap | ExpMap | np.ndarray) -> tuple[list[int], list[int]]:
     """
     A function that finds the pixel coordinates that bound where data is present in
     Image or RateMap object.
@@ -207,8 +215,7 @@ def data_limits(im_prod: Union[Image, RateMap, ExpMap, np.ndarray]) -> Tuple[Lis
     return [x_min, x_max], [y_min, y_max]
 
 
-def edge_finder(data: Union[RateMap, ExpMap, np.ndarray], keep_corners: bool = True,
-                border: bool = False) -> np.ndarray:
+def edge_finder(data: RateMap | ExpMap | np.ndarray, keep_corners: bool = True, border: bool = False) -> np.ndarray:
     """
     A simple edge finding algorithm designed to locate 'edges' in binary data, or in special cases produce a detector
     map of an instrument using an exposure map. The algorithm takes the difference of one column from the next, over
@@ -227,10 +234,13 @@ def edge_finder(data: Union[RateMap, ExpMap, np.ndarray], keep_corners: bool = T
     :return: An array of 0s and 1s. 1s indicate a detected edge.
     :rtype: np.ndarray
     """
-    if not isinstance(data, (RateMap, ExpMap, np.ndarray)) or (isinstance(data, np.ndarray)
-                                                               and np.where((data != 1) & (data != 0))[0].any()):
-        raise TypeError("This simple edge-finding algorithm only works on exposure maps (whether passed directly or "
-                        "accessed from a RateMap), or arrays of ones and zeros.")
+    if not isinstance(data, (RateMap, ExpMap, np.ndarray)) or (
+        isinstance(data, np.ndarray) and np.where((data != 1) & (data != 0))[0].any()
+    ):
+        raise TypeError(
+            "This simple edge-finding algorithm only works on exposure maps (whether passed directly or "
+            "accessed from a RateMap), or arrays of ones and zeros."
+        )
     elif isinstance(data, ExpMap):
         dat_map = data.data.copy()
         # Turn the exposure map into something simpler, either on a detector or not
@@ -292,12 +302,12 @@ def edge_finder(data: Union[RateMap, ExpMap, np.ndarray], keep_corners: bool = T
     # We alter the datatype of the combined array, seeing as the elements are low-value integers, we might as well
     #  take up a little less memory (particularly relevant for large input arrays, such as those that can originate
     #  from eROSITA)
-    comb = comb.astype('int8')
+    comb = comb.astype("int8")
 
     return comb
 
 
-def find_all_wcs(hdr: FITSHDR) -> List[WCS]:
+def find_all_wcs(hdr: FITSHDR) -> list[WCS]:
     """
     A play on the function of the same name in astropy.io.fits, except this one will take a fitsio header object
     as an argument, and construct astropy wcs objects. Very simply looks for different WCS entries in the
@@ -319,22 +329,22 @@ def find_all_wcs(hdr: FITSHDR) -> List[WCS]:
     wcses = []
     for key in wcs_keys:
         w = WCS(naxis=2)
-        w.wcs.crpix = [hdr["CRPIX1{}".format(key)], hdr["CRPIX2{}".format(key)]]
-        w.wcs.cdelt = [hdr["CDELT1{}".format(key)], hdr["CDELT2{}".format(key)]]
-        w.wcs.crval = [hdr["CRVAL1{}".format(key)], hdr["CRVAL2{}".format(key)]]
-        w.wcs.ctype = [hdr["CTYPE1{}".format(key)], hdr["CTYPE2{}".format(key)]]
+        w.wcs.crpix = [hdr[f"CRPIX1{key}"], hdr[f"CRPIX2{key}"]]
+        w.wcs.cdelt = [hdr[f"CDELT1{key}"], hdr[f"CDELT2{key}"]]
+        w.wcs.crval = [hdr[f"CRVAL1{key}"], hdr[f"CRVAL2{key}"]]
+        w.wcs.ctype = [hdr[f"CTYPE1{key}"], hdr[f"CTYPE2{key}"]]
 
         # We also ensure that the equinox and coordinate system information is captured, so that
         #  transformations (e.g. for donor image projection) are frame-aware.
-        if 'EQUINOX' in hdr:
-            w.wcs.equinox = hdr['EQUINOX']
-        elif 'EPOCH' in hdr:
-            w.wcs.equinox = hdr['EPOCH']
+        if "EQUINOX" in hdr:
+            w.wcs.equinox = hdr["EQUINOX"]
+        elif "EPOCH" in hdr:
+            w.wcs.equinox = hdr["EPOCH"]
 
-        if 'RADECSYS' in hdr:
-            w.wcs.radesys = hdr['RADECSYS']
-        elif 'RADESYS' in hdr:
-            w.wcs.radesys = hdr['RADESYS']
+        if "RADECSYS" in hdr:
+            w.wcs.radesys = hdr["RADECSYS"]
+        elif "RADESYS" in hdr:
+            w.wcs.radesys = hdr["RADESYS"]
 
         wcses.append(w)
 

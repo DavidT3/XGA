@@ -32,4 +32,3 @@ imagetools.smooth module
    :members:
    :undoc-members:
    :show-inheritance:
-

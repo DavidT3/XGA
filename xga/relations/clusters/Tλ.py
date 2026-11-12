@@ -7,9 +7,20 @@ from astropy.units import Quantity
 from ...models.misc import power_law
 from ...products.relation import ScalingRelation
 
-xcs_sdss_r500 = ScalingRelation(np.array([1.01, 1.01]), np.array([0.04, 0.03]), power_law, Quantity(60),
-                                Quantity(4, 'keV'), r"$\lambda$", r"T$_{\rm{x},500}$",
-                                x_lims=Quantity([20, 220]), relation_name='SDSSRM-XCS$_{T_{x},vol}$ 0.5-2.0keV',
-                                relation_author='Giles et al.', relation_year='2022',
-                                relation_doi='https://doi.org/10.1093/mnras/stac2414',
-                                dim_hubb_ind=0, telescope='xmm', outer_aperture='R500')
+xcs_sdss_r500 = ScalingRelation(
+    np.array([1.01, 1.01]),
+    np.array([0.04, 0.03]),
+    power_law,
+    Quantity(60),
+    Quantity(4, "keV"),
+    r"$\lambda$",
+    r"T$_{\rm{x},500}$",
+    x_lims=Quantity([20, 220]),
+    relation_name="SDSSRM-XCS$_{T_{x},vol}$ 0.5-2.0keV",
+    relation_author="Giles et al.",
+    relation_year="2022",
+    relation_doi="https://doi.org/10.1093/mnras/stac2414",
+    dim_hubb_ind=0,
+    telescope="xmm",
+    outer_aperture="R500",
+)

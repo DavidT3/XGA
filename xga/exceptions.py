@@ -17,9 +17,9 @@ class eSASSInputInvalid(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return f"{self.message} "
         else:
-            return 'eSASSInputInvalid has been raised'
+            return "eSASSInputInvalid has been raised"
 
 
 class HeasoftError(Exception):
@@ -37,9 +37,9 @@ class HeasoftError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return f"{self.message} "
         else:
-            return 'HeasoftError has been raised'
+            return "HeasoftError has been raised"
 
 
 class SASNotFoundError(Exception):
@@ -57,9 +57,9 @@ class SASNotFoundError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return f"{self.message} "
         else:
-            return 'SASNotFoundError has been raised'
+            return "SASNotFoundError has been raised"
 
 
 class eSASSNotFoundError(Exception):
@@ -78,9 +78,9 @@ class eSASSNotFoundError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return f"{self.message} "
         else:
-            return 'eSASSNotFoundError has been raised'
+            return "eSASSNotFoundError has been raised"
 
 
 class CIAONotFoundError(Exception):
@@ -98,9 +98,9 @@ class CIAONotFoundError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return f"{self.message} "
         else:
-            return 'CIAONotFoundError has been raised'
+            return "CIAONotFoundError has been raised"
 
 
 class CALDBNotFoundError(Exception):
@@ -118,9 +118,9 @@ class CALDBNotFoundError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return f"{self.message} "
         else:
-            return 'CALDBNotFoundError has been raised'
+            return "CALDBNotFoundError has been raised"
 
 
 class XSPECNotFoundError(Exception):
@@ -138,9 +138,9 @@ class XSPECNotFoundError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return f"{self.message} "
         else:
-            return 'XSPECNotFoundError has been raised'
+            return "XSPECNotFoundError has been raised"
 
 
 class ProductGenerationError(Exception):
@@ -159,9 +159,9 @@ class ProductGenerationError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return f"{self.message} "
         else:
-            return 'ProductGenerationError has been raised'
+            return "ProductGenerationError has been raised"
 
 
 class UnknownCommandlineError(Exception):
@@ -180,9 +180,9 @@ class UnknownCommandlineError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return f"{self.message} "
         else:
-            return 'A generic UnknownCommandlineError has been raised'
+            return "A generic UnknownCommandlineError has been raised"
 
 
 class TelescopeNotAssociatedError(Exception):
@@ -201,9 +201,9 @@ class TelescopeNotAssociatedError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return f"{self.message} "
         else:
-            return 'TelescopeNotAssociatedError has been raised'
+            return "TelescopeNotAssociatedError has been raised"
 
 
 class FailedProductError(Exception):
@@ -222,9 +222,9 @@ class FailedProductError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return f"{self.message} "
         else:
-            return 'FailedProductError has been raised.'
+            return "FailedProductError has been raised."
 
 
 class XGAConfigError(Exception):
@@ -242,9 +242,9 @@ class XGAConfigError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return f"{self.message} "
         else:
-            return 'XGAConfig has been raised'
+            return "XGAConfig has been raised"
 
 
 class NoMatchFoundError(Exception):
@@ -262,9 +262,9 @@ class NoMatchFoundError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return f"{self.message} "
         else:
-            return 'NoMatchFoundError has been raised'
+            return "NoMatchFoundError has been raised"
 
 
 class NotAssociatedError(Exception):
@@ -282,9 +282,9 @@ class NotAssociatedError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return f"{self.message} "
         else:
-            return 'NotAssociatedError has been raised'
+            return "NotAssociatedError has been raised"
 
 
 class UnknownProductError(Exception):
@@ -302,9 +302,9 @@ class UnknownProductError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'UnknownProductTypeError has been raised'
+            return "UnknownProductTypeError has been raised"
 
 
 class NoValidObservationsError(Exception):
@@ -323,9 +323,9 @@ class NoValidObservationsError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'NoValidObservationsError has been raised'
+            return "NoValidObservationsError has been raised"
 
 
 class MultipleMatchError(Exception):
@@ -344,9 +344,9 @@ class MultipleMatchError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'MultipleMatchError has been raised'
+            return "MultipleMatchError has been raised"
 
 
 class NoRegionsError(Exception):
@@ -364,9 +364,9 @@ class NoRegionsError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'NoRegionsError has been raised'
+            return "NoRegionsError has been raised"
 
 
 class NoProductAvailableError(Exception):
@@ -384,9 +384,9 @@ class NoProductAvailableError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'NoProductAvailableError has been raised'
+            return "NoProductAvailableError has been raised"
 
 
 class ModelNotAssociatedError(Exception):
@@ -404,9 +404,9 @@ class ModelNotAssociatedError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'ModelNotAssociatedError has been raised'
+            return "ModelNotAssociatedError has been raised"
 
 
 class ParameterNotAssociatedError(Exception):
@@ -424,9 +424,9 @@ class ParameterNotAssociatedError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'ParameterNotAssociatedError has been raised'
+            return "ParameterNotAssociatedError has been raised"
 
 
 class XSPECFitError(Exception):
@@ -444,9 +444,9 @@ class XSPECFitError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'XSPECFitError has been raised'
+            return "XSPECFitError has been raised"
 
 
 class RateMapPairError(Exception):
@@ -465,9 +465,9 @@ class RateMapPairError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'RateMapPairError has been raised'
+            return "RateMapPairError has been raised"
 
 
 class PeakConvergenceFailedError(Exception):
@@ -486,9 +486,9 @@ class PeakConvergenceFailedError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'PeakConvergenceFailedError has been raised'
+            return "PeakConvergenceFailedError has been raised"
 
 
 class SASInputInvalid(Exception):
@@ -506,9 +506,9 @@ class SASInputInvalid(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'SASInputInvalid has been raised'
+            return "SASInputInvalid has been raised"
 
 
 class NotPSFCorrectedError(Exception):
@@ -527,9 +527,9 @@ class NotPSFCorrectedError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'NotPSFCorrectedError has been raised'
+            return "NotPSFCorrectedError has been raised"
 
 
 class IncompatibleProductError(Exception):
@@ -549,9 +549,9 @@ class IncompatibleProductError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'IncompatibleProductError has been raised'
+            return "IncompatibleProductError has been raised"
 
 
 class XGAFitError(Exception):
@@ -569,9 +569,9 @@ class XGAFitError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'XGAFitError has been raised'
+            return "XGAFitError has been raised"
 
 
 class XGAInvalidModelError(Exception):
@@ -589,9 +589,9 @@ class XGAInvalidModelError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'XGAInvalidModelError has been raised'
+            return "XGAInvalidModelError has been raised"
 
 
 class XGAFunctionConversionError(Exception):
@@ -610,9 +610,9 @@ class XGAFunctionConversionError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'XGAFunctionConversionError has been raised'
+            return "XGAFunctionConversionError has been raised"
 
 
 class XGAOptionalDependencyError(Exception):
@@ -631,9 +631,9 @@ class XGAOptionalDependencyError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'XGAOptionalDependencyError has been raised'
+            return "XGAOptionalDependencyError has been raised"
 
 
 class XGASetIDError(Exception):
@@ -651,9 +651,9 @@ class XGASetIDError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'XGASetIDError has been raised'
+            return "XGASetIDError has been raised"
 
 
 class XGAPoorDataError(Exception):
@@ -670,9 +670,9 @@ class XGAPoorDataError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'XGAPoorDataError has been raised'
+            return "XGAPoorDataError has been raised"
 
 
 class InvalidProductError(Exception):
@@ -689,9 +689,9 @@ class InvalidProductError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'InvalidProductError has been raised'
+            return "InvalidProductError has been raised"
 
 
 class NotSampleMemberError(Exception):
@@ -709,9 +709,9 @@ class NotSampleMemberError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'NotSampleMemberError has been raised'
+            return "NotSampleMemberError has been raised"
 
 
 class NoTelescopeDataError(Exception):
@@ -729,9 +729,9 @@ class NoTelescopeDataError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'NoTelescopeDataError has been raised'
+            return "NoTelescopeDataError has been raised"
 
 
 class InvalidTelescopeError(Exception):
@@ -748,9 +748,9 @@ class InvalidTelescopeError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'InvalidTelescopeError has been raised'
+            return "InvalidTelescopeError has been raised"
 
 
 class XGADeveloperError(Exception):
@@ -768,9 +768,9 @@ class XGADeveloperError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return f"{self.message} "
         else:
-            return 'XGADeveloperError has been raised'
+            return "XGADeveloperError has been raised"
 
 
 class ProductNotUsableError(Exception):
@@ -789,9 +789,9 @@ class ProductNotUsableError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return f"{self.message} "
         else:
-            return 'ProductNotUsableError has been raised'
+            return "ProductNotUsableError has been raised"
 
 
 class FitConfNotAssociatedError(Exception):
@@ -808,6 +808,6 @@ class FitConfNotAssociatedError(Exception):
 
     def __str__(self):
         if self.message:
-            return '{}'.format(self.message)
+            return f"{self.message}"
         else:
-            return 'FitConfNotAssociatedError has been raised'
+            return "FitConfNotAssociatedError has been raised"

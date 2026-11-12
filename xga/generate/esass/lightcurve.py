@@ -4,28 +4,36 @@
 import os
 from copy import deepcopy
 from random import randint
-from typing import Union
 from warnings import warn
 
 import numpy as np
 from astropy.units import Quantity, UnitConversionError
 
+from ... import ESASS_VERSION, NUM_CORES, OUTPUT
+from ...exceptions import NoProductAvailableError, TelescopeNotAssociatedError
+from ...samples.base import BaseSample
+from ...sources import BaseSource
+from ..common import get_annular_esass_region
+from ..sas._common import region_setup
 from ._common import T_STEP_POINT, T_STEP_SURVEY
 from .phot import evtool_combine_evts
 from .run import esass_call
-from ..common import get_annular_esass_region
-from ..sas._common import region_setup
-from ... import OUTPUT, NUM_CORES, ESASS_VERSION
-from ...exceptions import TelescopeNotAssociatedError, NoProductAvailableError
-from ...samples.base import BaseSample
-from ...sources import BaseSource
 
 
-def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-             inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
-             hi_en: Quantity = Quantity(2.0, 'keV'), time_bin_size: Quantity = Quantity(100, 's'),
-             patt: int = 15, num_cores: int = NUM_CORES, disable_progress: bool = False, combine_tm: bool = True,
-             combine_obs: bool = True, force_gen: bool = False):
+def _lc_cmds(
+    sources: BaseSource | BaseSample,
+    outer_radius: str | Quantity,
+    inner_radius: str | Quantity = Quantity(0, "arcsec"),
+    lo_en: Quantity = Quantity(0.5, "keV"),
+    hi_en: Quantity = Quantity(2.0, "keV"),
+    time_bin_size: Quantity = Quantity(100, "s"),
+    patt: int = 15,
+    num_cores: int = NUM_CORES,
+    disable_progress: bool = False,
+    combine_tm: bool = True,
+    combine_obs: bool = True,
+    force_gen: bool = False,
+):
     """
     This is an internal function which sets up the commands necessary to generate light curves from eROSITA
     data - and can be used both to generate them from simple circular regions and also from annular regions. The
@@ -51,9 +59,10 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
     :param bool combine_tm: Create lightcurves for individual ObsIDs that are a combination of the data from all the
         telescope modules utilized for that ObsID. This can help to offset the low signal-to-noise nature of the
         survey data eROSITA takes. Default is True.
-    :param bool combine_obs: Setting this to False will generate an lightcurve for each associated observation, 
+    :param bool combine_obs: Setting this to False will generate an lightcurve for each associated observation,
         instead of for one combined observation.
     """
+
     def _make_lc_cmd_info(cur_evt_list):
         """
         Internal function to get prepare the commands required to generate light curves
@@ -69,9 +78,11 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
         # Then we have to account for the two different modes this function can be used in - generating light curves
         #  for individual telescope models, or generating a single stacked spectrum for all telescope modules
         if combine_tm:
-            inst_names = ['combined']
-            inst_nums = ['"' + ' '.join([tm[-1] for tm in list(source.num_inst_obs[cur_evt_list.telescope].keys())]) + '"']
-            inst_srctool_id = ['0']
+            inst_names = ["combined"]
+            inst_nums = [
+                '"' + " ".join([tm[-1] for tm in list(source.num_inst_obs[cur_evt_list.telescope].keys())]) + '"'
+            ]
+            inst_srctool_id = ["0"]
         else:
             inst_names = deepcopy(list(source.num_inst_obs[cur_evt_list.telescope].keys()))
             inst_nums = [tm[-1] for tm in list(source.num_inst_obs[cur_evt_list.telescope].keys())]
@@ -99,26 +110,29 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
 
             try:
                 if use_combine_obs and (len(source.obs_ids[cur_evt_list.telescope]) > 1):
-                    check_lc = source.get_combined_lightcurves(outer_radii[s_ind],
-                                                               inner_radii[s_ind],
-                                                               lo_en,
-                                                               hi_en,
-                                                               time_bin_size,
-                                                               patt,
-                                                               cur_evt_list.telescope)
-
+                    check_lc = source.get_combined_lightcurves(
+                        outer_radii[s_ind],
+                        inner_radii[s_ind],
+                        lo_en,
+                        hi_en,
+                        time_bin_size,
+                        patt,
+                        cur_evt_list.telescope,
+                    )
 
                 else:
                     # Got to check if this light curve already exists
-                    check_lc = source.get_lightcurves(outer_radii[s_ind],
-                                                      cur_evt_list.obs_id,
-                                                      inst,
-                                                      inner_radii[s_ind],
-                                                      lo_en,
-                                                      hi_en,
-                                                      time_bin_size,
-                                                      patt,
-                                                      cur_evt_list.telescope)
+                    check_lc = source.get_lightcurves(
+                        outer_radii[s_ind],
+                        cur_evt_list.obs_id,
+                        inst,
+                        inner_radii[s_ind],
+                        lo_en,
+                        hi_en,
+                        time_bin_size,
+                        patt,
+                        cur_evt_list.telescope,
+                    )
 
                 exists = True
 
@@ -131,28 +145,29 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             # eROSITA observations have the potential to be in pointed or survey/scan modes - we change the time step
             #  based on that. We suspect that the time step is almost irrelevant for pointed mode observations, as
             #  the pointing of the spacecraft won't be changing appreciably
-            if cur_evt_list.header['OBS_MODE'] == 'POINTING':
+            if cur_evt_list.header["OBS_MODE"] == "POINTING":
                 t_step = t_step_point
-            elif cur_evt_list.header['OBS_MODE'] in ['SURVEY', 'SCAN']:
+            elif cur_evt_list.header["OBS_MODE"] in ["SURVEY", "SCAN"]:
                 t_step = t_step_survey
             else:
-                warn("XGA does not recognise the eROSITA OBS_MODE '{om}' - the timestep is defaulting to the "
-                     "survey mode value ({ts})".format(om=cur_evt_list.header['OBS_MODE'], ts=t_step_survey),
-                     stacklevel=2)
+                warn(
+                    "XGA does not recognise the eROSITA OBS_MODE '{om}' - the timestep is defaulting to the "
+                    "survey mode value ({ts})".format(om=cur_evt_list.header["OBS_MODE"], ts=t_step_survey),
+                    stacklevel=2,
+                )
                 t_step = t_step_survey
 
             # The following code will set up the path and file names for output files,
             #  with the first step involving the creation of temporary directories.
             # First, we define the path to the directory where our generated products
             #  are going to live at the end of the process.
-            final_dest_dir = os.path.join(OUTPUT, cur_evt_list.telescope,
-                                          cur_evt_list.obs_id)
+            final_dest_dir = os.path.join(OUTPUT, cur_evt_list.telescope, cur_evt_list.obs_id)
 
             # Generate a random number to use as a unique addition to the working
             #  directory name - ensures there won't be any clashes
             rand_ident = randint(0, 100_000_000)
             # This is the name of the working directory for the generation process
-            ddir_name = "temp_srctool_{i}_{r}".format(i=inst, r=rand_ident)
+            ddir_name = f"temp_srctool_{inst}_{rand_ident}"
             # And the full path
             dest_dir = os.path.join(final_dest_dir, ddir_name)
 
@@ -166,54 +181,70 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             os.symlink(cur_evt_list.path, os.path.join(dest_dir, evt_symlink_name))
 
             # This constructs the eSASS strings/region files
-            reg = get_annular_esass_region(source, src_inn_rad, src_out_rad, cur_evt_list.obs_id, er_miss,
-                                           interloper_regions=interloper_regions, central_coord=source.default_coord,
-                                           rand_ident=rand_ident, out_root_path=final_dest_dir)
-            b_reg = get_annular_esass_region(source, bck_inn_rad, bck_out_rad, cur_evt_list.obs_id, er_miss,
-                                             interloper_regions=back_inter_reg, central_coord=source.default_coord,
-                                             bkg_reg=True, rand_ident=rand_ident, out_root_path=final_dest_dir)
+            reg = get_annular_esass_region(
+                source,
+                src_inn_rad,
+                src_out_rad,
+                cur_evt_list.obs_id,
+                er_miss,
+                interloper_regions=interloper_regions,
+                central_coord=source.default_coord,
+                rand_ident=rand_ident,
+                out_root_path=final_dest_dir,
+            )
+            b_reg = get_annular_esass_region(
+                source,
+                bck_inn_rad,
+                bck_out_rad,
+                cur_evt_list.obs_id,
+                er_miss,
+                interloper_regions=back_inter_reg,
+                central_coord=source.default_coord,
+                bkg_reg=True,
+                rand_ident=rand_ident,
+                out_root_path=final_dest_dir,
+            )
 
             # Set up a string describing the central coordinate in addition to the regions
-            coord_str = "icrs;{ra},{dec}".format(ra=source.default_coord[0].value,
-                                                 dec=source.default_coord[1].value)
+            coord_str = f"icrs;{source.default_coord[0].value},{source.default_coord[1].value}"
 
             # The name of the light curve will be different depending on if it is
             #  from a combined event list or a single skytile event list
             if use_combine_obs and (len(source.obs_ids[cur_evt_list.telescope]) > 1):
-                prefix = str(rand_ident) + '_{i}_{n}_'.format(i=inst, n=source.name)
+                prefix = str(rand_ident) + f"_{inst}_{source.name}_"
             else:
-                prefix = "{o}_{i}_{n}_".format(o=cur_evt_list.obs_id,
-                                               i=inst,
-                                               n=source.name)
+                prefix = f"{cur_evt_list.obs_id}_{inst}_{source.name}_"
             # Set up the final name of the output file
             lc_form = prefix + "ra{ra}_dec{dec}_ri{ri}_ro{ro}{ex}_lcurve.fits"
-            lc_name = lc_form.format(ra=source.default_coord[0].value,
-                                     dec=source.default_coord[1].value,
-                                     ri=src_inn_rad.value,
-                                     ro=src_out_rad.value,
-                                     ex=extra_name)
+            lc_name = lc_form.format(
+                ra=source.default_coord[0].value,
+                dec=source.default_coord[1].value,
+                ri=src_inn_rad.value,
+                ro=src_out_rad.value,
+                ex=extra_name,
+            )
 
             # Populate the light curve generation command for the current iteration
-            cmd_str = lc_cmd.format(d=dest_dir,
-                                    ef=evt_symlink_name,
-                                    sc=coord_str,
-                                    reg=reg,
-                                    breg=b_reg,
-                                    i=inst_no,
-                                    ts=t_step,
-                                    lct='REGULAR',
-                                    lcp=str(time_bin_size.to('s').value),
-                                    le=str(lo_en.value),
-                                    lm=str(hi_en.value),
-                                    lcg=str(lc_gamma),
-                                    pat=patt,
-                                    wi=cur_inst_srctool_id)
+            cmd_str = lc_cmd.format(
+                d=dest_dir,
+                ef=evt_symlink_name,
+                sc=coord_str,
+                reg=reg,
+                breg=b_reg,
+                i=inst_no,
+                ts=t_step,
+                lct="REGULAR",
+                lcp=str(time_bin_size.to("s").value),
+                le=str(lo_en.value),
+                lm=str(hi_en.value),
+                lcg=str(lc_gamma),
+                pat=patt,
+                wi=cur_inst_srctool_id,
+            )
 
             # Command to rename the output light curve file to the file name
             #  that we want, rather than that which comes out of the srctool command
-            rename_lc = rename_cmd.format(i_no=cur_inst_srctool_id,
-                                          type='LightCurve',
-                                          nn=lc_name)
+            rename_lc = rename_cmd.format(i_no=cur_inst_srctool_id, type="LightCurve", nn=lc_name)
             cmd_str += rename_lc
 
             # We make sure to remove the 'merged lightcurve' output of srctool - which is identical to the
@@ -226,7 +257,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
 
             # Adds symlink-removal command - we don't want to be moving them along
             #  with every else in the temporary working directory
-            cmd_str += "; rm {esym}".format(esym=evt_symlink_name)
+            cmd_str += f"; rm {evt_symlink_name}"
 
             # Depending on the eSASS version, we may have built up a ';;' somewhere in the command string,
             #  which is very bad - this is introduced because some versions of eSASS have a null string
@@ -235,28 +266,30 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             cmd_str = cmd_str.replace(";;", ";")
 
             # Adds clean up commands to move all generated files and remove temporary directory
-            cmd_str += "; find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {{}} ../ \\;; cd ..; rm -r {d}".format(
-                d=dest_dir
-            )
+            cmd_str += f"; find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {{}} ../ \\;; cd ..; rm -r {dest_dir}"
 
             # If temporary region files were made, they will be here
-            if os.path.exists(os.path.join(final_dest_dir, '/temp_regs_{i}'.format(i=rand_ident))):
+            if os.path.exists(os.path.join(final_dest_dir, f"/temp_regs_{rand_ident}")):
                 # Removing this directory
-                cmd_str += ";rm -r temp_regs_{i}".format(i=rand_ident)
+                cmd_str += f";rm -r temp_regs_{rand_ident}"
 
             cur_cmds.append(cmd_str)  # Adds the full command to the set
             cur_fin_paths.append(os.path.join(final_dest_dir, lc_name))
-            cur_ex_info.append({"inner_radius": src_inn_rad,
-                                "outer_radius": src_out_rad,
-                                "time_bin": time_bin_size,
-                                "pattern": patt,
-                                "obs_id": cur_evt_list.obs_id,
-                                "instrument": inst,
-                                "central_coord": source.default_coord,
-                                "from_region": False,
-                                "lo_en": lo_en,
-                                "hi_en": hi_en,
-                                "telescope": cur_evt_list.telescope})
+            cur_ex_info.append(
+                {
+                    "inner_radius": src_inn_rad,
+                    "outer_radius": src_out_rad,
+                    "time_bin": time_bin_size,
+                    "pattern": patt,
+                    "obs_id": cur_evt_list.obs_id,
+                    "instrument": inst,
+                    "central_coord": source.default_coord,
+                    "from_region": False,
+                    "lo_en": lo_en,
+                    "hi_en": hi_en,
+                    "telescope": cur_evt_list.telescope,
+                }
+            )
 
         return cur_cmds, cur_fin_paths, cur_ex_info
 
@@ -265,18 +298,22 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
     #  of spectra within user-specified regions will be possible, but it will be
     #  implemented differently. The original way was bad because the detection region
     #  could/almost certainly would be different for each observation
-    if outer_radius == 'region':
-        raise ValueError("The string 'region' is no longer a valid option for "
-                         "the 'outer_radius' argument.")
+    if outer_radius == "region":
+        raise ValueError("The string 'region' is no longer a valid option for the 'outer_radius' argument.")
 
     # We check to see whether there is an eROSITA entry in the 'telescopes' property. If sources is a Source
     #  object, then that property contains the telescopes associated with that source, and if it is a Sample object
     #  then 'telescopes' contains the list of unique telescopes that are associated with at least one member source.
     # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
-    if ((not isinstance(sources, list) and ('erosita' not in sources.telescopes and 'erass' not in sources.telescopes)) or
-            (isinstance(sources, list) and ('erosita' not in sources[0].telescopes and 'erass' not in sources[0].telescopes))):
-        raise TelescopeNotAssociatedError("There are no eROSITA data associated with the source/sample, as such "
-                                          "eROSITA lightcurves cannot be generated.")
+    if (
+        not isinstance(sources, list) and ("erosita" not in sources.telescopes and "erass" not in sources.telescopes)
+    ) or (
+        isinstance(sources, list) and ("erosita" not in sources[0].telescopes and "erass" not in sources[0].telescopes)
+    ):
+        raise TelescopeNotAssociatedError(
+            "There are no eROSITA data associated with the source/sample, as such "
+            "eROSITA lightcurves cannot be generated."
+        )
 
     # TODO This will change in a future release, so that the user can control it - see issue #1113. The definitions
     #  are up the top of the function as a reminder
@@ -290,9 +327,8 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
 
     # At one point we allowed the 'outer_radius' argument to be 'region', but we
     #  no longer support that
-    if outer_radius == 'region':
-        raise ValueError("The string 'region' is no longer a valid option for "
-                         "the 'outer_radius' argument.")
+    if outer_radius == "region":
+        raise ValueError("The string 'region' is no longer a valid option for the 'outer_radius' argument.")
 
     # In this case the user wants to combine separate sky tiles, so we have to make
     #  sure that combined event lists exist for each source
@@ -300,22 +336,25 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
         evtool_combine_evts(sources, num_cores)
 
     # Sets up the inner and outer radii arrays for the passed sources
-    sources, inner_radii, outer_radii = region_setup(sources, outer_radius, inner_radius, disable_progress,
-                                                     '', num_cores)
+    sources, inner_radii, outer_radii = region_setup(
+        sources, outer_radius, inner_radius, disable_progress, "", num_cores
+    )
 
     # Check the input time bin size type, we're going to assume that it is in
     #  seconds if the value is an integer or a float
     if not isinstance(time_bin_size, Quantity) and isinstance(time_bin_size, (float, int)):
-        time_bin_size = Quantity(time_bin_size, 's')
+        time_bin_size = Quantity(time_bin_size, "s")
     elif not isinstance(time_bin_size, (Quantity, float, int)):
-        raise TypeError("The 'time_bin_size' argument must be either an Astropy "
-                        "quantity, or an int/float (assumed to be in seconds).")
+        raise TypeError(
+            "The 'time_bin_size' argument must be either an Astropy "
+            "quantity, or an int/float (assumed to be in seconds)."
+        )
 
     # Make sure the time bin size can be converted to seconds and then do so
-    if not time_bin_size.unit.is_equivalent('s'):
+    if not time_bin_size.unit.is_equivalent("s"):
         raise UnitConversionError("The 'time_bin_size' argument must be in units convertible to seconds.")
     else:
-        time_bin_size = time_bin_size.to('s')
+        time_bin_size = time_bin_size.to("s")
 
     # Convert the integer pattern to a string
     patt = str(patt)
@@ -324,18 +363,18 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
     if lo_en >= hi_en:
         raise ValueError("The 'lo_en' argument cannot be greater than 'hi_en'.")
     else:
-        lo_en = lo_en.to('keV')
-        hi_en = hi_en.to('keV')
+        lo_en = lo_en.to("keV")
+        hi_en = hi_en.to("keV")
 
-    extra_name = "_timebin{tb}_{l}-{u}keV".format(tb=time_bin_size.value,
-                                                  l=lo_en.value,
-                                                  u=hi_en.value)
+    extra_name = f"_timebin{time_bin_size.value}_{lo_en.value}-{hi_en.value}keV"
 
     # Define a template eSASS command to generate light curves
-    lc_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="LC LCCORR" ' \
-             'srcreg="{reg}" exttype="POINT" tstep={ts} insts={i} psftype="2D_PSF" ' \
-             'lctype="{lct}" lcpars="{lcp}" lcemin="{le}" lcemax="{lm}" ' \
-             'lcgamma="{lcg}" backreg="{breg}" pat_sel="{pat}"'
+    lc_cmd = (
+        'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="LC LCCORR" '
+        'srcreg="{reg}" exttype="POINT" tstep={ts} insts={i} psftype="2D_PSF" '
+        'lctype="{lct}" lcpars="{lcp}" lcemin="{le}" lcemax="{lm}" '
+        'lcgamma="{lcg}" backreg="{breg}" pat_sel="{pat}"'
+    )
 
     # From eSASS documentation:
     # "LC gamma - this parameter gives the photon index of the nominal power-law spectrum that will be used to
@@ -345,7 +384,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
     # Not really sure whether to give the user control of this, so for now we are
     #  setting the variable to the value stated in the srctool documentation, which
     #  we assume is the default - gamma=1.9
-    lc_gamma = '1.9'
+    lc_gamma = "1.9"
 
     # The DR1 version of eSASS has an additional argument that can be passed to specify
     #  which instruments should be written to output files - we want to be able to
@@ -364,13 +403,13 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
         lc_cmd += ";"
         # Having a string to remove the 'merged' lightcurves that srctool outputs, even when you only
         #  request one instrument
-        remove_merged_cmd = 'rm *srctoolout_0*;'
+        remove_merged_cmd = "rm *srctoolout_0*;"
         # We also set up a command that will remove all lightcurves BUT the combined one, for when that is all the
         #  user wants
         remove_all_but_merged_cmd = "rm *srctoolout_*;"
 
     # You can't control the whole name of the output of srctool, so this renames it to the XGA format
-    rename_cmd = 'mv srctoolout_{i_no}??_{type}* {nn};'
+    rename_cmd = "mv srctoolout_{i_no}??_{type}* {nn};"
 
     stack = False  # This tells the esass_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
@@ -392,7 +431,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
         #  cmds, paths, extra_info, and ptypes to the final output, so that the
         #  cmd_list and input argument 'sources' have the same length, which avoids
         #  bugs occurring in the esass_call wrapper
-        if 'erosita' not in source.telescopes and 'erass' not in source.telescopes:
+        if "erosita" not in source.telescopes and "erass" not in source.telescopes:
             sources_cmds.append(np.array(cmds))
             sources_paths.append(np.array(final_paths))
             # This contains any other information that will be needed to
@@ -403,7 +442,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             # Now we can continue with the rest of the sources
             continue
 
-        for er_miss in ['erosita', 'erass']:
+        for er_miss in ["erosita", "erass"]:
             # Skip this iteration if the current skew of eROSITA isn't associated
             #  with the current source
             if er_miss not in source.telescopes:
@@ -422,26 +461,22 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             src_out_rad = outer_radii[s_ind]
             # Finding interloper regions within the radii we have specified has been put here because it all works in
             #  degrees and as such only needs to be run once for all the different observations.
-            interloper_regions = source.regions_within_radii(src_inn_rad,
-                                                             src_out_rad,
-                                                             er_miss,
-                                                             source.default_coord)
+            interloper_regions = source.regions_within_radii(src_inn_rad, src_out_rad, er_miss, source.default_coord)
 
             # We repeat the exercise for the background region
             bck_inn_rad = outer_radii[s_ind] * source.background_radius_factors[0]
             bck_out_rad = outer_radii[s_ind] * source.background_radius_factors[1]
             # This finds any contaminating regions within the background area
-            back_inter_reg = source.regions_within_radii(bck_inn_rad,
-                                                         bck_out_rad,
-                                                         er_miss,
-                                                         source.default_coord)
+            back_inter_reg = source.regions_within_radii(bck_inn_rad, bck_out_rad, er_miss, source.default_coord)
 
             # The key under which these light curves will be stored
             lc_storage_name = "ra{ra}_dec{dec}_ri{ri}_ro{ro}"
-            lc_storage_name = lc_storage_name.format(ra=source.default_coord[0].value,
-                                                     dec=source.default_coord[1].value,
-                                                     ri=src_inn_rad.value,
-                                                     ro=src_out_rad.value)
+            lc_storage_name = lc_storage_name.format(
+                ra=source.default_coord[0].value,
+                dec=source.default_coord[1].value,
+                ri=src_inn_rad.value,
+                ro=src_out_rad.value,
+            )
 
             # Adds on the extra information about time binning to the storage key
             lc_storage_name += extra_name
@@ -486,12 +521,20 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
 
 
 @esass_call
-def srctool_lightcurve(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-                       inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
-                       lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
-                       time_bin_size: Quantity = Quantity(100, 's'), patt: int = 15,
-                       num_cores: int = NUM_CORES, disable_progress: bool = False, combine_tm: bool = True,
-                       combine_obs: bool = True, force_gen: bool = False):
+def srctool_lightcurve(
+    sources: BaseSource | BaseSample,
+    outer_radius: str | Quantity,
+    inner_radius: str | Quantity = Quantity(0, "arcsec"),
+    lo_en: Quantity = Quantity(0.5, "keV"),
+    hi_en: Quantity = Quantity(2.0, "keV"),
+    time_bin_size: Quantity = Quantity(100, "s"),
+    patt: int = 15,
+    num_cores: int = NUM_CORES,
+    disable_progress: bool = False,
+    combine_tm: bool = True,
+    combine_obs: bool = True,
+    force_gen: bool = False,
+):
     """
     A wrapper for all the SAS processes necessary to generate eROSITA light curves for a specified region.
      Every observation associated with this source, and every instrument associated with that
@@ -520,9 +563,21 @@ def srctool_lightcurve(sources: Union[BaseSource, BaseSample], outer_radius: Uni
     :param bool combine_tm: Create lightcurves for individual ObsIDs that are a combination of the data from all the
         telescope modules utilized for that ObsID. This can help to offset the low signal-to-noise nature of the
         survey data eROSITA takes. Default is True.
-    :param bool combine_obs: Setting this to False will generate an lightcurve for each associated observation, 
+    :param bool combine_obs: Setting this to False will generate an lightcurve for each associated observation,
         instead of for one combined observation.
     :param bool force_gen: This boolean flag will force the regeneration of lightcurves, even if they already exist.
     """
-    return _lc_cmds(sources, outer_radius, inner_radius, lo_en, hi_en, time_bin_size, patt, num_cores,
-                    disable_progress, combine_tm, combine_obs, force_gen)
+    return _lc_cmds(
+        sources,
+        outer_radius,
+        inner_radius,
+        lo_en,
+        hi_en,
+        time_bin_size,
+        patt,
+        num_cores,
+        disable_progress,
+        combine_tm,
+        combine_obs,
+        force_gen,
+    )

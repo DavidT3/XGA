@@ -1,36 +1,51 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 2:44 PM. Copyright (c) The Contributors.
 
-from inspect import signature, Parameter
+from inspect import Parameter, signature
 from random import randint
-from typing import List, Union, Dict
 
 import astropy.units as u
 from astropy.units import Quantity
 
-from ._common import _write_xspec_script, _check_inputs, _pregen_annular_spectra
-from ..fitconfgen import _gen_fit_conf, FIT_FUNC_ARGS
-from ..run import xspec_call
 from ... import NUM_CORES
-from ...exceptions import ModelNotAssociatedError, XGADeveloperError, FitConfNotAssociatedError
+from ...exceptions import FitConfNotAssociatedError, ModelNotAssociatedError, XGADeveloperError
 from ...products import Spectrum
 from ...samples.base import BaseSample
 from ...sources import BaseSource
+from ..fitconfgen import FIT_FUNC_ARGS, _gen_fit_conf
+from ..run import xspec_call
+from ._common import _check_inputs, _pregen_annular_spectra, _write_xspec_script
 
 
 @xspec_call
-def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Union[Quantity,
-                             List[Quantity], Dict[str, Quantity], Dict[str, List[Quantity]]],
-                             start_temp: Quantity = Quantity(3.0, "keV"), start_met: float = 0.3,
-                             lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), freeze_nh: bool = True,
-                             freeze_met: bool = True, lo_en: Quantity = Quantity(0.3, "keV"),
-                             hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
-                             abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
-                             min_counts: int = 5, min_sn: Union[int, float] = None, over_sample: float = None, one_rmf: bool = True,
-                             num_cores: int = NUM_CORES, spectrum_checking: bool = True,
-                             timeout: Quantity = Quantity(1, 'hr'), use_cross_arf: bool = False,
-                             first_fit_start_pars: bool = True, detmap_bin: int = 200, stacked_spectra: bool = False,
-                             telescope: Union[str, List[str]] = None):
+def single_temp_apec_profile(
+    sources: BaseSource | BaseSample,
+    radii: Quantity | list[Quantity] | dict[str, Quantity] | dict[str, list[Quantity]],
+    start_temp: Quantity = Quantity(3.0, "keV"),
+    start_met: float = 0.3,
+    lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
+    freeze_nh: bool = True,
+    freeze_met: bool = True,
+    lo_en: Quantity = Quantity(0.3, "keV"),
+    hi_en: Quantity = Quantity(7.9, "keV"),
+    par_fit_stat: float = 1.0,
+    lum_conf: float = 68.0,
+    abund_table: str = "angr",
+    fit_method: str = "leven",
+    group_spec: bool = True,
+    min_counts: int = 5,
+    min_sn: int | float = None,
+    over_sample: float = None,
+    one_rmf: bool = True,
+    num_cores: int = NUM_CORES,
+    spectrum_checking: bool = True,
+    timeout: Quantity = Quantity(1, "hr"),
+    use_cross_arf: bool = False,
+    first_fit_start_pars: bool = True,
+    detmap_bin: int = 200,
+    stacked_spectra: bool = False,
+    telescope: str | list[str] = None,
+):
     """
     A function that allows for the fitting of sets of annular spectra (generated from objects such as galaxy
     clusters) with an absorbed plasma emission model (tbabs*apec). This function fits the annuli completely
@@ -97,23 +112,55 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     #  spectrum fit to be the start values for the cross-arf-ENABLED fit we're about to do. So we will recursively
     #  call this function and fix the fit config information.
     if use_cross_arf and first_fit_start_pars:
-        single_temp_apec_profile(sources, radii, start_temp, start_met, lum_en, freeze_nh, freeze_met,
-                                 lo_en, hi_en, par_fit_stat, lum_conf, abund_table, fit_method, group_spec, min_counts,
-                                 min_sn, over_sample, one_rmf, num_cores, spectrum_checking, timeout, False,
-                                 first_fit_start_pars, detmap_bin)
+        single_temp_apec_profile(
+            sources,
+            radii,
+            start_temp,
+            start_met,
+            lum_en,
+            freeze_nh,
+            freeze_met,
+            lo_en,
+            hi_en,
+            par_fit_stat,
+            lum_conf,
+            abund_table,
+            fit_method,
+            group_spec,
+            min_counts,
+            min_sn,
+            over_sample,
+            one_rmf,
+            num_cores,
+            spectrum_checking,
+            timeout,
+            False,
+            first_fit_start_pars,
+            detmap_bin,
+        )
         # We can recreate the fit_conf key that will have been assigned to the preceding non-cross-arf fit here, which
         #  will make it rather easier to retrieve the fit results we need to use as starting values later on
-        rel_args = FIT_FUNC_ARGS['single_temp_apec_profile']
+        rel_args = FIT_FUNC_ARGS["single_temp_apec_profile"]
         in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
-        in_fit_conf['use_cross_arf'] = False
+        in_fit_conf["use_cross_arf"] = False
         prefit_fit_conf = _gen_fit_conf(in_fit_conf)
 
     # This makes sure that the annular spectra we need to exist for the requested fit to be performed, have
     #  been generated
-    sources, radii, telescope = _pregen_annular_spectra(sources, radii, group_spec, min_counts, min_sn, over_sample,
-                                                        one_rmf, num_cores, gen_cross_arf=use_cross_arf,
-                                                        cross_arf_detmap_bin=detmap_bin,
-                                                        stacked_spectra=stacked_spectra, telescope=telescope)
+    sources, radii, telescope = _pregen_annular_spectra(
+        sources,
+        radii,
+        group_spec,
+        min_counts,
+        min_sn,
+        over_sample,
+        one_rmf,
+        num_cores,
+        gen_cross_arf=use_cross_arf,
+        cross_arf_detmap_bin=detmap_bin,
+        stacked_spectra=stacked_spectra,
+        telescope=telescope,
+    )
 
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
@@ -139,7 +186,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
 
     # Here we generate the fit configuration storage key from those arguments to this function that control the fit
     #  and how it behaves
-    rel_args = FIT_FUNC_ARGS['single_temp_apec_profile']
+    rel_args = FIT_FUNC_ARGS["single_temp_apec_profile"]
     sig = signature(single_temp_apec_profile)
     cur_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
 
@@ -147,8 +194,10 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     #  signature of this function is altered.
     if set(list(rel_args.keys())) != set(list(cur_args.keys())):
         problem_pars = set(list(cur_args.keys())) - set(list(rel_args.keys()))
-        raise XGADeveloperError(f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
-                                f"match - unmatched arguments are {", ".join(problem_pars)}.")
+        raise XGADeveloperError(
+            f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
+            f"match - unmatched arguments are {', '.join(problem_pars)}."
+        )
 
     # We generate the fit configuration key - in this case there are no relevant variables that can have different
     #  values for different sources, so we don't need to put this in the loop. Still, we will pass back  a list of
@@ -194,8 +243,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
             # TODO RETURN TO THIS, SEE ISSUE #1513
             # This will fetch the annular_spec, get_annular_spectra will throw an error if no matches
             #  are found, though as we have run spectrum_set that shouldn't happen
-            ann_spec = source.get_annular_spectra(cur_radii, group_spec, min_counts, min_sn, over_sample,
-                                                  telescope=tel)
+            ann_spec = source.get_annular_spectra(cur_radii, group_spec, min_counts, min_sn, over_sample, telescope=tel)
 
             deg_rad[repr(source)][tel] = ann_spec.radii
 
@@ -209,7 +257,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
             #  _write_xspec_script function because we will append annulus identifers to the end of the identifiers, so
             #  we can both easily identify the annulus fits which belong together and still have unique results files for
             #  each annulus
-            rand_ident = randint(0, int(1e+8))
+            rand_ident = randint(0, int(1e8))
 
             # ----------------------- NON-CROSS-ARF SETUP -----------------------
             if not use_cross_arf:
@@ -229,8 +277,9 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                     # Whatever start temperature is passed gets converted to keV, this will be put in the template
                     t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
                     # Another TCL list, this time of the parameter start values for this model.
-                    par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(1., source.nH.to("10^22 cm^-2").value, t, start_met,
-                                                                      source.redshift, 1.)
+                    par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(
+                        1.0, source.nH.to("10^22 cm^-2").value, t, start_met, source.redshift, 1.0
+                    )
 
                     # Set up the TCL list that defines which parameters are frozen, dependant on user input
                     if freeze_nh and freeze_met:
@@ -265,20 +314,42 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                     #  setup, so zeroing one will zero them all.
                     nh_to_zero = "{2}"
 
-                    file_prefix = (spec_objs[0].storage_key + "_ident{}_".format(spec_objs[0].set_ident) +
-                                   str(spec_objs[0].annulus_ident))
+                    file_prefix = (
+                        spec_objs[0].storage_key + f"_ident{spec_objs[0].set_ident}_" + str(spec_objs[0].annulus_ident)
+                    )
 
                     try:
-                        res = ann_spec.get_results(ann_id, model, 'kT', fit_conf)
+                        res = ann_spec.get_results(ann_id, model, "kT", fit_conf)
                     except (ModelNotAssociatedError, FitConfNotAssociatedError):
-                        out_file, script_file, inv_ent = _write_xspec_script(source, file_prefix, model, abund_table,
-                                                                             fit_method, specs, lo_en, hi_en, par_names,
-                                                                             par_values, linking, freezing, par_fit_stat,
-                                                                             lum_low_lims, lum_upp_lims, lum_conf,
-                                                                             source.redshift, spectrum_checking, check_list,
-                                                                             check_lo_lims, check_hi_lims, check_err_lims,
-                                                                             True, tel, fit_conf, nh_to_zero,
-                                                                             str(rand_ident) + "_annid" + str(ann_id))
+                        out_file, script_file, inv_ent = _write_xspec_script(
+                            source,
+                            file_prefix,
+                            model,
+                            abund_table,
+                            fit_method,
+                            specs,
+                            lo_en,
+                            hi_en,
+                            par_names,
+                            par_values,
+                            linking,
+                            freezing,
+                            par_fit_stat,
+                            lum_low_lims,
+                            lum_upp_lims,
+                            lum_conf,
+                            source.redshift,
+                            spectrum_checking,
+                            check_list,
+                            check_lo_lims,
+                            check_hi_lims,
+                            check_err_lims,
+                            True,
+                            tel,
+                            fit_conf,
+                            nh_to_zero,
+                            str(rand_ident) + "_annid" + str(ann_id),
+                        )
 
                         script_paths.append(script_file)
                         outfile_paths.append(out_file)
@@ -288,10 +359,9 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
 
             # ----------------------- CROSS-ARF SETUP -----------------------
             elif use_cross_arf:
-
                 # TODO FORMALIZE THIS SOMEHOW - SEE ISSUE #1514
                 # Only XMM currently supports cross-arf generation and assignment to AnnularSpectra
-                if tel not in ['xmm']:
+                if tel not in ["xmm"]:
                     continue
 
                 ca_start_temp = []
@@ -304,25 +374,25 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                     if first_fit_start_pars:
                         try:
                             # We retrieve all the results from the previous fit to the current annulus
-                            cur_res = ann_spec.get_results(ann_id, 'constant*tbabs*apec', fit_conf=prefit_fit_conf)
+                            cur_res = ann_spec.get_results(ann_id, "constant*tbabs*apec", fit_conf=prefit_fit_conf)
                             # Now we start reading them out, note that we're checking to see if the user is running this
                             #  with metallicity free before we try to read out a measured metallicity value
-                            ca_start_temp.append(cur_res['kT'][0])
-                            ca_start_norm.append(cur_res['norm'][0])
+                            ca_start_temp.append(cur_res["kT"][0])
+                            ca_start_norm.append(cur_res["norm"][0])
                             if not freeze_met:
-                                ca_start_met.append(cur_res['Abundanc'][0])
+                                ca_start_met.append(cur_res["Abundanc"][0])
                             else:
                                 ca_start_met.append(start_met)
                         except ModelNotAssociatedError:
                             ca_start_temp.append(start_temp)
-                            ca_start_norm.append(Quantity(1, 'cm^-5'))
+                            ca_start_norm.append(Quantity(1, "cm^-5"))
                             ca_start_met.append(start_met)
                     else:
                         # If the user doesn't want to use pre-fit parameter results then we revert to the default
                         #  values. The default temperature and metallicity values can be set by the user, but default
                         #  normalisation will currently always be one
                         ca_start_temp.append(start_temp)
-                        ca_start_norm.append(Quantity(1, 'cm^-5'))
+                        ca_start_norm.append(Quantity(1, "cm^-5"))
                         ca_start_met.append(start_met)
 
                 # We assign them to the 'start_temp' and 'start_met' variables now because the fit_conf generator will
@@ -340,15 +410,14 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
 
                 # This creates the string which is formatted into the XSPEC script template that is a list of lists of
                 #  start values for the different annuli
-                par_values = "{{{c} {nh} {t} {a} {z} {n}}}".format(c="{" + " ".join([str(c) for c in start_con]) + "}",
-                                                                   nh="{" + " ".join([str(nh) for nh in start_nh]) + "}",
-                                                                   t="{" + " ".join([str(t)
-                                                                                     for t in start_temp.value]) + "}",
-                                                                   a="{" + " ".join([str(a)
-                                                                                     for a in start_met.value]) + "}",
-                                                                   z="{" + " ".join([str(z) for z in start_z]) + "}",
-                                                                   n="{" + " ".join([str(n)
-                                                                                     for n in start_norm.value]) + "}")
+                par_values = "{{{c} {nh} {t} {a} {z} {n}}}".format(
+                    c="{" + " ".join([str(c) for c in start_con]) + "}",
+                    nh="{" + " ".join([str(nh) for nh in start_nh]) + "}",
+                    t="{" + " ".join([str(t) for t in start_temp.value]) + "}",
+                    a="{" + " ".join([str(a) for a in start_met.value]) + "}",
+                    z="{" + " ".join([str(z) for z in start_z]) + "}",
+                    n="{" + " ".join([str(n) for n in start_norm.value]) + "}",
+                )
 
                 # This helps us run through the different ObsID-instrument combinations that are present in the
                 #  annular spectrum we're dealing with
@@ -364,11 +433,13 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                 for ann_id in ann_spec.annulus_ids:
                     # We can just fetch the annular spectra paths from the annular spectrum object we fetched earlier,
                     #  for the current source annulus defined by ann_id
-                    ann_spec_paths.append("{" + " ".join([ann_spec.get_spectra(ann_id, oi[0], oi[1]).path
-                                                          for oi in oi_combos]) + "}")
+                    ann_spec_paths.append(
+                        "{" + " ".join([ann_spec.get_spectra(ann_id, oi[0], oi[1]).path for oi in oi_combos]) + "}"
+                    )
                     # Same deal with the RMFs
-                    cross_arf_rmf_paths.append("{" + " ".join([ann_spec.get_spectra(ann_id, oi[0], oi[1]).rmf
-                                                               for oi in oi_combos]) + "}")
+                    cross_arf_rmf_paths.append(
+                        "{" + " ".join([ann_spec.get_spectra(ann_id, oi[0], oi[1]).rmf for oi in oi_combos]) + "}"
+                    )
                     # As each source annulus has a list of cross-arfs associated with it, we need another for loop here to
                     #  go through them - this list will store lists of cross-arfs for each ObsID-instrument combo, as they
                     #  have to be generated separately for each instrument of each observation
@@ -390,7 +461,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                 cross_arf_paths = "{" + " ".join(cross_arf_paths) + "}"
 
                 # Set up the TCL list that defines which parameters are frozen, dependent on user input
-                freezing = "{{F {n} F {ab} T F}}".format(n='T' if freeze_nh else 'F', ab='T' if freeze_met else 'F')
+                freezing = "{{F {n} F {ab} T F}}".format(n="T" if freeze_nh else "F", ab="T" if freeze_met else "F")
 
                 # Set up the TCL list that defines which parameters are linked across different spectra
                 linking = "{F T T T T T}"
@@ -415,19 +486,42 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                 #  setup, so zeroing one will zero them all.
                 nh_to_zero = "{2}"
 
-                file_prefix = ann_spec.storage_key + "_ident{}_".format(ann_spec.set_ident) + str('all')
+                file_prefix = ann_spec.storage_key + f"_ident{ann_spec.set_ident}_" + "all"
 
                 try:
-                    res = ann_spec.get_results(0, model, 'kT', fit_conf)
+                    res = ann_spec.get_results(0, model, "kT", fit_conf)
                 except (ModelNotAssociatedError, FitConfNotAssociatedError):
-                    out_file, script_file, inv_ent = _write_xspec_script(source, file_prefix, model, abund_table,
-                                                                         fit_method, ann_spec_paths, lo_en, hi_en, par_names,
-                                                                         par_values, linking, freezing, par_fit_stat,
-                                                                         lum_low_lims, lum_upp_lims, lum_conf,
-                                                                         source.redshift, spectrum_checking, check_list,
-                                                                         check_lo_lims, check_hi_lims, check_err_lims,
-                                                                         True, tel, fit_conf, nh_to_zero, str(rand_ident),
-                                                                         cross_arf_paths, cross_arf_rmf_paths)
+                    out_file, script_file, inv_ent = _write_xspec_script(
+                        source,
+                        file_prefix,
+                        model,
+                        abund_table,
+                        fit_method,
+                        ann_spec_paths,
+                        lo_en,
+                        hi_en,
+                        par_names,
+                        par_values,
+                        linking,
+                        freezing,
+                        par_fit_stat,
+                        lum_low_lims,
+                        lum_upp_lims,
+                        lum_conf,
+                        source.redshift,
+                        spectrum_checking,
+                        check_list,
+                        check_lo_lims,
+                        check_hi_lims,
+                        check_err_lims,
+                        True,
+                        tel,
+                        fit_conf,
+                        nh_to_zero,
+                        str(rand_ident),
+                        cross_arf_paths,
+                        cross_arf_rmf_paths,
+                    )
 
                     script_paths.append(script_file)
                     outfile_paths.append(out_file)
@@ -440,4 +534,4 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
 
 
 # This allows us to make a link between the model that was fit to a profile and the XGA function
-PROF_FIT_FUNC_MODEL_NAMES = {'constant*tbabs*apec': single_temp_apec_profile}
+PROF_FIT_FUNC_MODEL_NAMES = {"constant*tbabs*apec": single_temp_apec_profile}

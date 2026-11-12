@@ -3,10 +3,10 @@
 
 import os
 import sys
+from collections.abc import Callable
 from functools import wraps
 from multiprocessing.dummy import Pool
-from subprocess import Popen, PIPE
-from typing import Tuple, Union, List, Callable
+from subprocess import PIPE, Popen
 from warnings import warn
 
 import numpy as np
@@ -14,8 +14,9 @@ from astropy.units import Quantity, UnitBase, deg
 from regions import EllipseSkyRegion
 from tqdm import tqdm
 
-from xga.exceptions import XGADeveloperError, InvalidTelescopeError, ProductGenerationError
-from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, EventList, AnnularSpectra
+from xga.exceptions import InvalidTelescopeError, ProductGenerationError, XGADeveloperError
+
+from ..products import AnnularSpectra, BaseProduct, EventList, ExpMap, Image, PSFGrid, Spectrum
 from ..products.lightcurve import LightCurve
 from ..samples.base import BaseSample
 from ..sources import BaseSource
@@ -34,6 +35,7 @@ def mission_software_call(mission_name: str, avail_check: Callable[[], None]):
     """
     # Using the standard XGA pretty names for the progress bar
     from xga import PRETTY_TELESCOPE_NAMES
+
     disp_name = PRETTY_TELESCOPE_NAMES[mission_name]
 
     def decorator(func):
@@ -87,9 +89,16 @@ def mission_software_call(mission_name: str, avail_check: Callable[[], None]):
                 # Will run the commands locally in a pool
                 # This flattening logic is necessary for CIAO but safe for all
                 prod_type_str = ", ".join(set(np.array(all_type).flatten().tolist()))
-                with tqdm(total=len(all_run), desc="Generating {} products of type(s) ".format(disp_name) +
-                                                   prod_type_str, disable=disable) as gen, Pool(cores) as pool:
-                    def callback(results_in: Tuple[Union[BaseProduct, List[BaseProduct]], str]):
+                with (
+                    tqdm(
+                        total=len(all_run),
+                        desc=f"Generating {disp_name} products of type(s) " + prod_type_str,
+                        disable=disable,
+                    ) as gen,
+                    Pool(cores) as pool,
+                ):
+
+                    def callback(results_in: tuple[BaseProduct | list[BaseProduct], str]):
                         """
                         Callback function for the apply_async pool method, gets called when a task finishes
                         and something is returned.
@@ -123,14 +132,20 @@ def mission_software_call(mission_name: str, avail_check: Callable[[], None]):
                         if err is not None:
                             # We used a memory address laden source name representation when we adjusted the error
                             # message in execute_cmd, so we'll replace it with an actual name here
-                            if len(err.args) == 1 and isinstance(err.args[0], str) and \
-                                    ' is the associated source' in err.args[0]:
-                                err_src_rep = err.args[0].split(' is the associated source')[0].split('- ')[-1].strip()
+                            if (
+                                len(err.args) == 1
+                                and isinstance(err.args[0], str)
+                                and " is the associated source" in err.args[0]
+                            ):
+                                err_src_rep = err.args[0].split(" is the associated source")[0].split("- ")[-1].strip()
                                 act_src_name = sources[src_lookup[err_src_rep]].name
                                 err.args = (err.args[0].replace(err_src_rep, act_src_name),)
-                            elif len(err.args) > 1 and isinstance(err.args[1], str) and \
-                                    ' is the associated source' in err.args[1]:
-                                err_src_rep = err.args[1].split(' is the associated source')[0].split('- ')[-1].strip()
+                            elif (
+                                len(err.args) > 1
+                                and isinstance(err.args[1], str)
+                                and " is the associated source" in err.args[1]
+                            ):
+                                err_src_rep = err.args[1].split(" is the associated source")[0].split("- ")[-1].strip()
                                 act_src_name = sources[src_lookup[err_src_rep]].name
                                 err.args = (err.args[0], err.args[1].replace(err_src_rep, act_src_name))
 
@@ -145,8 +160,12 @@ def mission_software_call(mission_name: str, avail_check: Callable[[], None]):
                         ext = all_extras[cmd_ind]
                         src = source_rep[cmd_ind]
 
-                        pool.apply_async(execute_cmd, args=(str(cmd), exp_type, exp_path, ext, src),
-                                         error_callback=err_callback, callback=callback)
+                        pool.apply_async(
+                            execute_cmd,
+                            args=(str(cmd), exp_type, exp_path, ext, src),
+                            error_callback=err_callback,
+                            callback=callback,
+                        )
                     pool.close()  # No more tasks can be added to the pool
                     pool.join()  # Joins the pool, the code will only move on once the pool is empty.
 
@@ -165,9 +184,10 @@ def mission_software_call(mission_name: str, avail_check: Callable[[], None]):
                 to_raise = []
                 for product in results[entry]:
                     product: BaseProduct
-                    ext_info = "- {s} is the associated source, the specific data used is " \
-                               "{t} {o}-{i}.".format(s=sources[ind].name, t=product.telescope,
-                                                     o=product.obs_id, i=product.instrument)
+                    ext_info = (
+                        f"- {sources[ind].name} is the associated source, the specific data used is "
+                        f"{product.telescope} {product.obs_id}-{product.instrument}."
+                    )
                     if len(product.gen_errors) == 1:
                         to_raise.append(ProductGenerationError(product.gen_errors[0] + ext_info))
                     elif len(product.gen_errors) > 1:
@@ -181,27 +201,42 @@ def mission_software_call(mission_name: str, avail_check: Callable[[], None]):
                         to_raise += errs
 
                     # If the product type is None we don't store it
-                    if product.type is not None and product.usable and prod_type_str != "annular spectrum set components":
+                    if (
+                        product.type is not None
+                        and product.usable
+                        and prod_type_str != "annular spectrum set components"
+                    ):
                         # For each product produced for this source, we add it to the storage hierarchy
                         sources[ind].update_products(product)
-                    elif product.type is not None and product.usable and prod_type_str == "annular spectrum set components":
+                    elif (
+                        product.type is not None
+                        and product.usable
+                        and prod_type_str == "annular spectrum set components"
+                    ):
                         # Really we're just re-creating the results dictionary here, but I want these products
                         # to go through the error checking stuff like everything else does
                         ann_spec_comps[entry].append(product)
                     # In case they are components of an annular spectrum but they are either none or not usable
                     elif prod_type_str == "annular spectrum set components":
-                        warn("An annular spectrum component ({a}) for {t} {o}{i} has not been generated properly (not "
-                             "usable reason - {nur}). The std_err entry is:\n\n {se}\n\n The std_out entry is:\n\n "
-                             "{so}".format(a=product.storage_key, t=product.telescope, o=product.obs_id,
-                                           i=product.instrument, nur=product.not_usable_reasons,
-                                           se=product.unprocessed_stderr, so=product.unprocessed_stdout), stacklevel=2)
+                        warn(
+                            f"An annular spectrum component ({product.storage_key}) for {product.telescope} {product.obs_id}{product.instrument} has not been generated properly (not "
+                            f"usable reason - {product.not_usable_reasons}). The std_err entry is:\n\n {product.unprocessed_stderr}\n\n The std_out entry is:\n\n "
+                            f"{product.unprocessed_stdout}",
+                            stacklevel=2,
+                        )
                     # Here the generated product was a cross-arf, and needs to be added to the right annular spectrum
                     # object that already exists in our source
                     elif prod_type_str == "cross arfs":
                         ei = product._extra_info
-                        ann_spec = sources[ind].get_annular_spectra(set_id=ei['ann_spec_set_id'])
-                        ann_spec.add_cross_arf(product, ei['obs_id'], ei['inst'], ei['src_ann_id'], ei['cross_ann_id'],
-                                               ei['ann_spec_set_id'])
+                        ann_spec = sources[ind].get_annular_spectra(set_id=ei["ann_spec_set_id"])
+                        ann_spec.add_cross_arf(
+                            product,
+                            ei["obs_id"],
+                            ei["inst"],
+                            ei["src_ann_id"],
+                            ei["cross_ann_id"],
+                            ei["ann_spec_set_id"],
+                        )
 
                 if len(to_raise) != 0:
                     all_to_raise.append(to_raise)
@@ -218,8 +253,11 @@ def mission_software_call(mission_name: str, avail_check: Callable[[], None]):
             if prod_type_str == "annular spectrum set components":
                 for entry in ann_spec_comps:
                     if len(ann_spec_comps[entry]) == 0:
-                        warn(f"Entry {entry} - no annular spectrum components were successfully "
-                             f"generated - contact the developers if you see this warning.", stacklevel=2)
+                        warn(
+                            f"Entry {entry} - no annular spectrum components were successfully "
+                            f"generated - contact the developers if you see this warning.",
+                            stacklevel=2,
+                        )
                         continue
 
                     # So now we pass the list of spectra to a AnnularSpectra definition
@@ -227,7 +265,7 @@ def mission_software_call(mission_name: str, avail_check: Callable[[], None]):
                     ind = src_lookup[entry]
                     if sources[ind].redshift is not None:
                         # If we know the redshift we will add the radii to the annular spectra in proper distance units
-                        ann_spec.proper_radii = sources[ind].convert_radius(ann_spec.radii, 'kpc')
+                        ann_spec.proper_radii = sources[ind].convert_radius(ann_spec.radii, "kpc")
                     # And adding our exciting new set of annular spectra into the storage structure
                     sources[ind].update_products(ann_spec)
 
@@ -235,12 +273,15 @@ def mission_software_call(mission_name: str, avail_check: Callable[[], None]):
             if len(sources) == 1:
                 sources = sources[0]
             return sources
+
         return wrapper
+
     return decorator
 
 
-def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_info: dict,
-                src: str) -> Tuple[Union[BaseProduct, List[BaseProduct]], str]:
+def execute_cmd(
+    cmd: str, p_type: str | list[str], p_path: list, extra_info: dict, src: str
+) -> tuple[BaseProduct | list[BaseProduct], str]:
     """
     This function is called for the local compute option, and runs the passed command in a Popen shell.
     It then creates an appropriate product object, and passes it back to the callback function of the Pool
@@ -256,11 +297,10 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
     :return: The product object(s), and the string representation of the associated source object.
     :rtype: Tuple[Union[BaseProduct, List[BaseProduct]], str]
     """
-
     # This chunk is a fix for problems with eSASS (eROSITA package) finding the correct libraries on Apple ARM based
     #  systems, and just creates a new environment variable so it can locate them, if necessary
     sys_env = os.environ.copy()
-    if sys.platform == 'darwin':
+    if sys.platform == "darwin":
         if "LD_LIBRARY_PATH" in sys_env:
             cmd = f"export LD_LIBRARY_PATH={sys_env['LD_LIBRARY_PATH']} && {cmd}"
         if "DYLD_LIBRARY_PATH" in sys_env:
@@ -269,12 +309,12 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
     # This runs the passed command - it captures the stdout and stderr as well
     out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
     # Captured out/err are byte type, will decode that into str for easier use
-    out = out.decode("UTF-8", errors='ignore')
-    err = err.decode("UTF-8", errors='ignore')
+    out = out.decode("UTF-8", errors="ignore")
+    err = err.decode("UTF-8", errors="ignore")
 
     # We will assume that the first entry in the product path argument is the
     #  primary output file, and will name the log files after it
-    log_stem = p_path[0][:p_path[0].rfind('.')]
+    log_stem = p_path[0][: p_path[0].rfind(".")]
     # One file for out and one for error
     std_out_file = log_stem + "_stdout.log"
     std_err_file = log_stem + "_stderr.log"
@@ -299,11 +339,11 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
     #  is causing some of these woes (at some point) so I don't feel too bad about it
     # This is because the way the XMM call is set up, the passed paths are also in a list of one
     if isinstance(p_path, list) and len(p_path) == 1:
-        # In some instances the type(p_path[0]) can be a numpy string, so Im making it be a normal 
+        # In some instances the type(p_path[0]) can be a numpy string, so Im making it be a normal
         # string so that its type can match type(p_type)
         p_path = str(p_path[0])
-    
-    # In some instances the type(p_type) can be a numpy string, so Im making it be a normal 
+
+    # In some instances the type(p_type) can be a numpy string, so Im making it be a normal
     # string so that its type can match type(p_path)
     if isinstance(p_type, (str, np.str_)):
         p_type = str(p_type)
@@ -311,16 +351,19 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
     # Catch any mistakes that will be easy to make in developing new interface functions with
     #  backend telescope software
     if type(p_type) != type(p_path):
-        raise XGADeveloperError("Both the p_type and p_path arguments must be of the same type (both string or "
-                                "both list).")
+        raise XGADeveloperError(
+            "Both the p_type and p_path arguments must be of the same type (both string or both list)."
+        )
     elif isinstance(p_type, str):
         p_type = [p_type]
         p_path = [p_path]
     # Check again for mistakes made during development, where there are multiple product paths, but they don't each
     #  have a product type as is required
     if len(p_type) != len(p_path):
-        raise XGADeveloperError("Product generation products that produce multiple products to be loaded into "
-                                "different product classes must have one product type entry for each.")
+        raise XGADeveloperError(
+            "Product generation products that produce multiple products to be loaded into "
+            "different product classes must have one product type entry for each."
+        )
 
     # We'll now be iterating through the product paths and their matching types
     prods = []
@@ -332,8 +375,17 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
         #  pre-existing image
         if cur_p_type == "image":
             # Maybe let the user decide not to raise errors detected in stderr
-            prod = Image(cur_p_path, extra_info["obs_id"], extra_info["instrument"], out, err, cmd, extra_info["lo_en"],
-                         extra_info["hi_en"], telescope=extra_info["telescope"])
+            prod = Image(
+                cur_p_path,
+                extra_info["obs_id"],
+                extra_info["instrument"],
+                out,
+                err,
+                cmd,
+                extra_info["lo_en"],
+                extra_info["hi_en"],
+                telescope=extra_info["telescope"],
+            )
             if "psf_corr" in extra_info and extra_info["psf_corr"]:
                 prod.psf_corrected = True
                 prod.psf_bins = extra_info["psf_bins"]
@@ -341,35 +393,99 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
                 prod.psf_iterations = extra_info["psf_iter"]
                 prod.psf_algorithm = extra_info["psf_algo"]
         elif cur_p_type == "expmap":
-            prod = ExpMap(cur_p_path, extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
-                          extra_info["lo_en"], extra_info["hi_en"], telescope=extra_info["telescope"])
+            prod = ExpMap(
+                cur_p_path,
+                extra_info["obs_id"],
+                extra_info["instrument"],
+                out,
+                err,
+                cmd,
+                extra_info["lo_en"],
+                extra_info["hi_en"],
+                telescope=extra_info["telescope"],
+            )
         elif cur_p_type == "ccf" and "NullSource" not in src:
             # ccf files may not be destined to spend life as product objects, but that doesn't mean
             # I can't take momentarily advantage of the error parsing I built into the product classes
-            prod = BaseProduct(cur_p_path, "", "", out, err, cmd, telescope='xmm')
+            prod = BaseProduct(cur_p_path, "", "", out, err, cmd, telescope="xmm")
         elif (cur_p_type == "spectrum" or cur_p_type == "annular spectrum set components") and "NullSource" not in src:
-            prod = Spectrum(cur_p_path, extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
-                            extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],
-                            extra_info["obs_id"], extra_info["instrument"], extra_info["grouped"],
-                            extra_info["min_counts"], extra_info["min_sn"], extra_info["over_sample"], out, err, cmd,
-                            extra_info["from_region"], extra_info["b_rmf_path"], extra_info["b_arf_path"],
-                            telescope=extra_info["telescope"])
+            prod = Spectrum(
+                cur_p_path,
+                extra_info["rmf_path"],
+                extra_info["arf_path"],
+                extra_info["b_spec_path"],
+                extra_info["central_coord"],
+                extra_info["inner_radius"],
+                extra_info["outer_radius"],
+                extra_info["obs_id"],
+                extra_info["instrument"],
+                extra_info["grouped"],
+                extra_info["min_counts"],
+                extra_info["min_sn"],
+                extra_info["over_sample"],
+                out,
+                err,
+                cmd,
+                extra_info["from_region"],
+                extra_info["b_rmf_path"],
+                extra_info["b_arf_path"],
+                telescope=extra_info["telescope"],
+            )
         elif cur_p_type == "psf" and "NullSource" not in src:
-            prod = PSFGrid(extra_info["files"], extra_info["chunks_per_side"], extra_info["model"],
-                           extra_info["x_bounds"], extra_info["y_bounds"], extra_info["obs_id"],
-                           extra_info["instrument"], out, err, cmd, telescope=extra_info['telescope'])
-        elif cur_p_type == 'light curve' and "NullSource" not in src:
-            prod = LightCurve(cur_p_path, extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
-                              extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],
-                              extra_info["lo_en"], extra_info["hi_en"], extra_info['time_bin'], extra_info['pattern'],
-                              extra_info["from_region"], telescope=extra_info['telescope'])
+            prod = PSFGrid(
+                extra_info["files"],
+                extra_info["chunks_per_side"],
+                extra_info["model"],
+                extra_info["x_bounds"],
+                extra_info["y_bounds"],
+                extra_info["obs_id"],
+                extra_info["instrument"],
+                out,
+                err,
+                cmd,
+                telescope=extra_info["telescope"],
+            )
+        elif cur_p_type == "light curve" and "NullSource" not in src:
+            prod = LightCurve(
+                cur_p_path,
+                extra_info["obs_id"],
+                extra_info["instrument"],
+                out,
+                err,
+                cmd,
+                extra_info["central_coord"],
+                extra_info["inner_radius"],
+                extra_info["outer_radius"],
+                extra_info["lo_en"],
+                extra_info["hi_en"],
+                extra_info["time_bin"],
+                extra_info["pattern"],
+                extra_info["from_region"],
+                telescope=extra_info["telescope"],
+            )
         elif cur_p_type == "cross arfs":
-            prod = BaseProduct(cur_p_path, extra_info['obs_id'], extra_info['inst'], out, err, cmd, extra_info,
-                               telescope=extra_info["telescope"])
-        elif cur_p_type == 'events' or cur_p_type == 'combined events':
-            prod = EventList(cur_p_path, extra_info['obs_id'], extra_info['instrument'], out, err, cmd,
-                             telescope=extra_info['telescope'], obs_ids=extra_info['obs_ids'])
-        elif cur_p_type == 'ratemap':
+            prod = BaseProduct(
+                cur_p_path,
+                extra_info["obs_id"],
+                extra_info["inst"],
+                out,
+                err,
+                cmd,
+                extra_info,
+                telescope=extra_info["telescope"],
+            )
+        elif cur_p_type == "events" or cur_p_type == "combined events":
+            prod = EventList(
+                cur_p_path,
+                extra_info["obs_id"],
+                extra_info["instrument"],
+                out,
+                err,
+                cmd,
+                telescope=extra_info["telescope"],
+                obs_ids=extra_info["obs_ids"],
+            )
+        elif cur_p_type == "ratemap":
             # The count-rate map files produced by Chandra software (for instance) cannot yet be read into XGA
             #  ratemap class instances - though we will include this at some point
             prod = None
@@ -404,10 +520,9 @@ def _interloper_esass_string(reg: EllipseSkyRegion) -> str:
     :return: The eSASS string region for this interloper
     :rtype: str
     """
-
-    w = reg.width.to('deg').value
-    h = reg.height.to('deg').value
-    cen = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
+    w = reg.width.to("deg").value
+    h = reg.height.to("deg").value
+    cen = Quantity([reg.center.ra.value, reg.center.dec.value], "deg")
 
     if w == h:
         shape_str = "-circle {cx} {cy} {r}d"
@@ -415,16 +530,25 @@ def _interloper_esass_string(reg: EllipseSkyRegion) -> str:
     else:
         # The rotation angle from the region object is in degrees already
         shape_str = "-ellipse {cx} {cy} {w}d {h}d {rot}"
-        shape_str = shape_str.format(cx=cen[0].value, cy=cen[1].value, w=w,
-                                     h=h, rot=reg.angle.value)
+        shape_str = shape_str.format(cx=cen[0].value, cy=cen[1].value, w=w, h=h, rot=reg.angle.value)
 
     return shape_str
 
 
-def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_radius: Quantity, obs_id: str, telescope: str,
-                             output_unit: Union[UnitBase, str] = deg, rot_angle: Quantity = Quantity(0, 'deg'),
-                             interloper_regions: np.ndarray = None, central_coord: Quantity = None,
-                             bkg_reg: bool = False, rand_ident: int = None, out_root_path: str = None) -> str:
+def get_annular_esass_region(
+    source: BaseSource,
+    inner_radius: Quantity,
+    outer_radius: Quantity,
+    obs_id: str,
+    telescope: str,
+    output_unit: UnitBase | str = deg,
+    rot_angle: Quantity = Quantity(0, "deg"),
+    interloper_regions: np.ndarray = None,
+    central_coord: Quantity = None,
+    bkg_reg: bool = False,
+    rand_ident: int = None,
+    out_root_path: str = None,
+) -> str:
     """
     A method to generate an eSASS region string for an arbitrary circular or elliptical annular region, with
     interloper sources removed.
@@ -457,32 +581,37 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
         contaminating regions.
     :rtype: str
     """
-    if telescope not in ['erosita', 'erass']:
+    if telescope not in ["erosita", "erass"]:
         raise InvalidTelescopeError("Pass either 'erosita' or 'erass' to this function's telescope argument.")
 
     if central_coord is None:
         central_coord = source.default_coord
 
-    inner_radius = source.convert_radius(inner_radius, 'deg')
-    outer_radius = source.convert_radius(outer_radius, 'deg')
+    inner_radius = source.convert_radius(inner_radius, "deg")
+    outer_radius = source.convert_radius(outer_radius, "deg")
 
     # Then we can check to make sure that the outer radius is larger than the inner radius
     if inner_radius.isscalar and inner_radius >= outer_radius:
-        raise ValueError("An eSASS circular region for {s} cannot have an inner_radius larger than or equal to its "
-                         "outer_radius".format(s=source.name))
+        raise ValueError(
+            f"An eSASS circular region for {source.name} cannot have an inner_radius larger than or equal to its "
+            "outer_radius"
+        )
     elif not inner_radius.isscalar and (inner_radius[0] >= outer_radius[0] or inner_radius[1] >= outer_radius[1]):
-        raise ValueError("An eSASS elliptical region for {s} cannot have inner radii larger than or equal to its "
-                         "outer radii".format(s=source.name))
-    
+        raise ValueError(
+            f"An eSASS elliptical region for {source.name} cannot have inner radii larger than or equal to its "
+            "outer radii"
+        )
+
     if output_unit != deg:
-        raise NotImplementedError("Only degree coordinates are currently supported "
-                                  " for generating eSASS region strings.")
-            
+        raise NotImplementedError(
+            "Only degree coordinates are currently supported  for generating eSASS region strings."
+        )
+
     # And just to make sure the central coordinates are in degrees
     # TODO do a conversion instead of raising an error
     if central_coord[0].unit != deg and central_coord[1].unit != deg:
         raise ValueError("Need to convert central coordinates into degrees.")
-    
+
     # If the user doesn't pass any regions, then we have to find them ourselves. I decided to allow this
     #  so that within_radii can just be called once externally for a set of ObsID-instrument combinations,
     #  like in evselect_spectrum for instance.
@@ -497,32 +626,37 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
 
     if inner_radius.isscalar and inner_radius.value != 0:
         esass_source_area = "annulus {cx} {cy} {ri}d {ro}d"
-        esass_source_area = esass_source_area.format(cx=central_coord[0].value,
-                                                     cy=central_coord[1].value,
-                                                     ri=inner_radius.value, ro=outer_radius.value)
+        esass_source_area = esass_source_area.format(
+            cx=central_coord[0].value, cy=central_coord[1].value, ri=inner_radius.value, ro=outer_radius.value
+        )
 
     elif inner_radius.isscalar and inner_radius.value == 0:
         esass_source_area = "circle {cx} {cy} {r}d"
-        esass_source_area = esass_source_area.format(cx=central_coord[0].value,
-                                                     cy=central_coord[1].value, r=outer_radius.value)
-        
+        esass_source_area = esass_source_area.format(
+            cx=central_coord[0].value, cy=central_coord[1].value, r=outer_radius.value
+        )
+
     elif not inner_radius.isscalar and inner_radius[0].value != 0:
         esass_source_area = "ellipse {cx} {cy} {wi} {hi} {wo} {ho} {rot}"
-        esass_source_area = esass_source_area.format(cx=central_coord[0].value,
-                                                     cy=central_coord[1].value,
-                                                     wi=inner_radius[0].value,
-                                                     hi=inner_radius[1].value,
-                                                     wo=outer_radius[0].value,
-                                                     ho=outer_radius[1].value,
-                                                     rot=rot_angle.to('deg').value)
+        esass_source_area = esass_source_area.format(
+            cx=central_coord[0].value,
+            cy=central_coord[1].value,
+            wi=inner_radius[0].value,
+            hi=inner_radius[1].value,
+            wo=outer_radius[0].value,
+            ho=outer_radius[1].value,
+            rot=rot_angle.to("deg").value,
+        )
 
     elif not inner_radius.isscalar and inner_radius[0].value == 0:
         esass_source_area = "ellipse {cx} {cy} {w} {h} {rot}"
-        esass_source_area = esass_source_area.format(cx=central_coord[0].value,
-                                                     cy=central_coord[1].value,
-                                                     w=outer_radius[0].value,
-                                                     h=outer_radius[1].value,
-                                                     rot=rot_angle.to('deg').value)
+        esass_source_area = esass_source_area.format(
+            cx=central_coord[0].value,
+            cy=central_coord[1].value,
+            w=outer_radius[0].value,
+            h=outer_radius[1].value,
+            rot=rot_angle.to("deg").value,
+        )
 
     # Combining the source region with regions we need to cut out
     if len(esass_interloper) == 0:
@@ -530,15 +664,15 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
     else:
         # Multiple regions must be passed to eSASS via an ASCII
         #  file, so we will need somewhere to write them
-        reg_file_path = os.path.join(out_root_path, f'temp_regs_{rand_ident}')
+        reg_file_path = os.path.join(out_root_path, f"temp_regs_{rand_ident}")
 
         reg_str = esass_source_area.replace(" ", "_")  # replacing spaces with underscores for file naming purposes
         reg_str = reg_str.replace(".", "-")  # replacing any dots with dashes
 
-        if bkg_reg: 
+        if bkg_reg:
             # adding backround prefix for background region files
-            reg_str = 'BACK_' + reg_str
-        
+            reg_str = "BACK_" + reg_str
+
         reg_file_name = f"{reg_str}.reg"
 
         # Making a temporary directory to write files into.
@@ -548,15 +682,15 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
         final_reg_path = os.path.join(reg_file_path, reg_file_name)
         # Making the file
         # TODO Decide whether FK5 or ICRS is more appropriate here
-        with open(final_reg_path, 'w') as file:
-            file.write('fk5; ' + esass_source_area + "\n" + "\n".join(esass_interloper))
-        
+        with open(final_reg_path, "w") as file:
+            file.write("fk5; " + esass_source_area + "\n" + "\n".join(esass_interloper))
+
         final_src = final_reg_path
 
     return final_src
 
 
-def check_pattern(pattern: Union[str, int], telescope: str | None = 'xmm') -> Tuple[str, str]:
+def check_pattern(pattern: str | int, telescope: str | None = "xmm") -> tuple[str, str]:
     """
     A very simple (and not exhaustive) checker for pattern expressions.
 
@@ -566,13 +700,14 @@ def check_pattern(pattern: Union[str, int], telescope: str | None = 'xmm') -> Tu
         files with.
     :rtype: Tuple[str, str]
     """
-
-    if telescope == 'xmm':
+    if telescope == "xmm":
         if isinstance(pattern, int):
-            pattern = '==' + str(pattern)
+            pattern = "==" + str(pattern)
         elif not isinstance(pattern, str):
-            raise TypeError("Pattern arguments must be either an integer (we then assume only events with that pattern "
-                            "should be selected) or a SAS selection command (e.g. 'in [1:4]' or '<= 4').")
+            raise TypeError(
+                "Pattern arguments must be either an integer (we then assume only events with that pattern "
+                "should be selected) or a SAS selection command (e.g. 'in [1:4]' or '<= 4')."
+            )
 
         # First off I remove whitespace from the beginning and end of the term
         pattern = pattern.strip()
@@ -580,41 +715,59 @@ def check_pattern(pattern: Union[str, int], telescope: str | None = 'xmm') -> Tu
         # Sometimes we will pass in patterns that have been converted to the 'XGA format', if you want to call it
         #  that. This namely happens when we're reading light curves that have been saved to disk back in. As such we
         #  replace the XGA-isms with their original string meanings
-        pattern = pattern.replace('lteq', '<=').replace('gteq', '>=').replace('eq', '==') \
-            .replace('lteq', '<=').replace('lt', '<').replace('gt', '>')
+        pattern = (
+            pattern.replace("lteq", "<=")
+            .replace("gteq", ">=")
+            .replace("eq", "==")
+            .replace("lteq", "<=")
+            .replace("lt", "<")
+            .replace("gt", ">")
+        )
 
         # Then we check for understandable selection commands; inequalities, equals, and 'in'
-        if pattern[:2] not in ['in', '<=', '>=', '=='] and pattern[:1] not in ['<', '>']:
+        if pattern[:2] not in ["in", "<=", ">=", "=="] and pattern[:1] not in ["<", ">"]:
             raise ValueError("First part of a pattern statement must be either 'in', '<=', '>=', '==', '<', or '>'.")
 
-        if pattern[:2] == 'in' and '[' not in pattern and '(' not in pattern:
-            raise ValueError("If a pattern statement uses 'in', either a '[' (for inclusive lower limit) or '(' (for "
-                             "exclusive lower limit) must be in the statement.")
+        if pattern[:2] == "in" and "[" not in pattern and "(" not in pattern:
+            raise ValueError(
+                "If a pattern statement uses 'in', either a '[' (for inclusive lower limit) or '(' (for "
+                "exclusive lower limit) must be in the statement."
+            )
 
-        if pattern[:2] == 'in' and ']' not in pattern and ')' not in pattern:
-            raise ValueError("If a pattern statement uses 'in', either a ']' (for inclusive upper limit) or ')' (for "
-                             "exclusive upper limit) must be in the statement.")
+        if pattern[:2] == "in" and "]" not in pattern and ")" not in pattern:
+            raise ValueError(
+                "If a pattern statement uses 'in', either a ']' (for inclusive upper limit) or ')' (for "
+                "exclusive upper limit) must be in the statement."
+            )
 
-        if pattern[:2] == 'in' and ':' not in pattern:
-            raise ValueError("If a pattern statement uses 'in', either a ':' must be present in the statement to separate "
-                             "lower and upper limits.")
+        if pattern[:2] == "in" and ":" not in pattern:
+            raise ValueError(
+                "If a pattern statement uses 'in', either a ':' must be present in the statement to separate "
+                "lower and upper limits."
+            )
 
         # SAS doesn't like having file names with special characters, so I am trying to come up with safe replacements
         #  that still convey what the pattern selection was
         # .replace('in', '')
-        patt_file_name = pattern.replace(' ', '').replace('<=', 'lteq').replace('>=', 'gteq').replace('==', 'eq')\
-            .replace('<=', 'lteq').replace('<', 'lt').replace('>', 'gt')
+        patt_file_name = (
+            pattern.replace(" ", "")
+            .replace("<=", "lteq")
+            .replace(">=", "gteq")
+            .replace("==", "eq")
+            .replace("<=", "lteq")
+            .replace("<", "lt")
+            .replace(">", "gt")
+        )
 
-    elif telescope == 'erosita' or telescope == 'erass':
+    elif telescope == "erosita" or telescope == "erass":
         # TODO Add a pattern checker when I actually understand what patterns can be for eROSITA
         patt_file_name = str(pattern)
-    elif telescope == 'chandra':
+    elif telescope == "chandra":
         # TODO Add a pattern checker when I actually understand what patterns can be for Chandra
         patt_file_name = str(pattern)
     else:
         if telescope is not None:
-            warn("Support for the {t} telescope has not yet been added to this function.".format(t=telescope),
-                 stacklevel=2)
+            warn(f"Support for the {telescope} telescope has not yet been added to this function.", stacklevel=2)
         patt_file_name = str(pattern)
 
     return pattern, patt_file_name

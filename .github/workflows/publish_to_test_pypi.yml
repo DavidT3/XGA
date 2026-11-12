@@ -1,9 +1,9 @@
-# Large parts of this are directly copied or adapted from 
+# Large parts of this are directly copied or adapted from
 #  https://packaging.python.org/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/
 
 # This action triggers the first stage of publishing this module. When a new tag is created and pushed to the remote repository, this action
-#  will begin. It builds the module, just as it would for an actual PyPI release, then uploads it to the Test PyPI index. That way I can test install 
-#  the package from the test PyPI and not expose the real PyPI index to a potentially buggered version. When I verify that it works, a real publishing can 
+#  will begin. It builds the module, just as it would for an actual PyPI release, then uploads it to the Test PyPI index. That way I can test install
+#  the package from the test PyPI and not expose the real PyPI index to a potentially buggered version. When I verify that it works, a real publishing can
 #  be triggered by releasing the module.
 
 # As a reminder to myself, the installation from test PyPI has to be done using this command, to make sure the dependancies are installed from the real
@@ -25,7 +25,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags')
     # The build/publishing process runs on the latest version of Ubuntu - not super important what this is for this use case, so long as its not Windows
     runs-on: ubuntu-latest
-    
+
     # This job has several steps
     steps:
       # Checks out the master branch (what we want to build and publish - including the VCS info

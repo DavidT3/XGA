@@ -5,6 +5,7 @@ import unittest
 
 from xga.generate.sas.lightcurve import evselect_lightcurve
 from xga.products.lightcurve import LightCurve
+
 from .. import get_test_source
 from ..utils import require_sas
 
@@ -12,18 +13,15 @@ from ..utils import require_sas
 class TestSasLcFuncs(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.src = get_test_source('xmm')
+        cls.src = get_test_source("xmm")
 
     @require_sas
-    def test_evselect_lc(self):
-        evselect_lightcurve(self.src, 'r500')
+    def test_evselect_lc(self) -> None:
+        evselect_lightcurve(self.src, "r500")
 
-        lc = self.src.get_lightcurves('r500', telescope='xmm')
+        lc = self.src.get_lightcurves("r500", telescope="xmm")
         if isinstance(lc, list):
             lc = lc[0]
 
-        assert lc.telescope == 'xmm'
+        assert lc.telescope == "xmm"
         assert isinstance(lc, LightCurve)
-
-
-

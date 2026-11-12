@@ -9,14 +9,15 @@ from xga.exceptions import NoProductAvailableError
 from xga.generate.esass.phot import evtool_image, expmap
 from xga.products import Image
 from xga.samples import ClusterSample
-from .. import get_test_source, CLUSTER_SMP
+
+from .. import CLUSTER_SMP, get_test_source
 from ..utils import require_esass
 
 
 class TestEsassPhotFuncs(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.src = get_test_source('erass')
+        cls.src = get_test_source("erass")
 
         # Set the lower and upper energy bounds of the phot products generated and retrieved
         #  in the tests implemented in this class
@@ -24,7 +25,7 @@ class TestEsassPhotFuncs(unittest.TestCase):
         cls._phot_hi_en = Quantity(3.0, "keV")
 
     @require_esass
-    def test_evtool_image(self):
+    def test_evtool_image(self) -> None:
         """
         Generates and retrieves one image per eROSITA ObsID (tile), with TMs combined, associated
         with the source - then retrieves the image.
@@ -33,10 +34,7 @@ class TestEsassPhotFuncs(unittest.TestCase):
         evtool_image(self.src, self._phot_lo_en, self._phot_hi_en)
 
         try:
-            im = self.src.get_images(lo_en=self._phot_lo_en,
-                                     hi_en=self._phot_hi_en,
-                                     telescope='erass',
-                                     inst='combined')
+            im = self.src.get_images(lo_en=self._phot_lo_en, hi_en=self._phot_hi_en, telescope="erass", inst="combined")
         except NoProductAvailableError:
             self.fail("NoProductAvailableError raised.")
 
@@ -46,12 +44,12 @@ class TestEsassPhotFuncs(unittest.TestCase):
         # Cycle through and check some properties of what was returned
         for cur_im in im:
             assert type(cur_im) == Image
-            assert cur_im.telescope == 'erass'
+            assert cur_im.telescope == "erass"
             assert cur_im.energy_bounds[0] == self._phot_lo_en
             assert cur_im.energy_bounds[1] == self._phot_hi_en
 
     @require_esass
-    def test_evtool_image_combined_obs(self):
+    def test_evtool_image_combined_obs(self) -> None:
         """
         Generates and retrieves eROSITA images with all available ObsIDs and TMs combined.
         """
@@ -59,20 +57,18 @@ class TestEsassPhotFuncs(unittest.TestCase):
         evtool_image(self.src, self._phot_lo_en, self._phot_hi_en, combine_obs=True)
 
         try:
-            im = self.src.get_combined_images(lo_en=self._phot_lo_en,
-                                              hi_en=self._phot_hi_en,
-                                              telescope='erass')
+            im = self.src.get_combined_images(lo_en=self._phot_lo_en, hi_en=self._phot_hi_en, telescope="erass")
         except NoProductAvailableError:
             self.fail("NoProductAvailableError raised.")
 
         # Single combined-obs combined-TM image should have been generated/fetched
         assert type(im) == Image
-        assert im.telescope == 'erass'
+        assert im.telescope == "erass"
         assert im.energy_bounds[0] == self._phot_lo_en
         assert im.energy_bounds[1] == self._phot_hi_en
 
     @require_esass
-    def test_expmap(self):
+    def test_expmap(self) -> None:
         """
         Test generation and retrieval of eROSITA exposure maps for each Obs associated with
         the source, with TMs combined.
@@ -81,10 +77,9 @@ class TestEsassPhotFuncs(unittest.TestCase):
         expmap(self.src, self._phot_lo_en, self._phot_hi_en)
 
         try:
-            exp = self.src.get_expmaps(lo_en=self._phot_lo_en,
-                                       hi_en=self._phot_hi_en,
-                                       telescope='erass',
-                                       inst='combined')
+            exp = self.src.get_expmaps(
+                lo_en=self._phot_lo_en, hi_en=self._phot_hi_en, telescope="erass", inst="combined"
+            )
         except NoProductAvailableError:
             self.fail("NoProductAvailableError raised.")
 
@@ -94,41 +89,43 @@ class TestEsassPhotFuncs(unittest.TestCase):
 
         # Cycle through and check the exposure maps
         for cur_ex in exp:
-            assert cur_ex.telescope == 'erass'
+            assert cur_ex.telescope == "erass"
             assert cur_ex.energy_bounds[0] == self._phot_lo_en
             assert cur_ex.energy_bounds[1] == self._phot_hi_en
 
     @require_esass
-    def test_expmap_combined_obs(self):
-        expmap(self.src, Quantity(0.5, 'keV'), Quantity(3, 'keV'), combine_obs=True)
+    def test_expmap_combined_obs(self) -> None:
+        expmap(self.src, Quantity(0.5, "keV"), Quantity(3, "keV"), combine_obs=True)
 
         try:
-            exp = self.src.get_combined_expmaps(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(3, 'keV'),
-                                          telescope='erass')
+            exp = self.src.get_combined_expmaps(lo_en=Quantity(0.5, "keV"), hi_en=Quantity(3, "keV"), telescope="erass")
         except NoProductAvailableError:
             self.fail("NoProductAvailableError raised.")
 
-        assert exp.telescope == 'erass'
-        assert exp.energy_bounds[0] == Quantity(0.5, 'keV')
-        assert exp.energy_bounds[1] == Quantity(3, 'keV')
+        assert exp.telescope == "erass"
+        assert exp.energy_bounds[0] == Quantity(0.5, "keV")
+        assert exp.energy_bounds[1] == Quantity(3, "keV")
 
     @require_esass
-    def test_evtool_image_w_sample_w_odd_telescopes(self):
+    def test_evtool_image_w_sample_w_odd_telescopes(self) -> None:
         """
         There was an old bug that occured when product generation functions were run with samples
         with sources that didn't all have the same telescopes. So this is testing that this bug has
         been fixed!
         """
-        test_smp = ClusterSample(CLUSTER_SMP["ra"].values, CLUSTER_SMP["dec"].values,
-                                 CLUSTER_SMP["z"].values, CLUSTER_SMP["name"].values,
-                                 r500=Quantity(CLUSTER_SMP["r500"].values, 'kpc'), use_peak=False,
-                                 search_distance={'erass': Quantity(3.6, 'deg')})
+        test_smp = ClusterSample(
+            CLUSTER_SMP["ra"].values,
+            CLUSTER_SMP["dec"].values,
+            CLUSTER_SMP["z"].values,
+            CLUSTER_SMP["name"].values,
+            r500=Quantity(CLUSTER_SMP["r500"].values, "kpc"),
+            use_peak=False,
+            search_distance={"erass": Quantity(3.6, "deg")},
+        )
 
-        test_smp[0].disassociate_obs('erass')
+        test_smp[0].disassociate_obs("erass")
         evtool_image(test_smp)
 
+
 if __name__ == "__main__":
-     unittest.main()
-
-
-
+    unittest.main()

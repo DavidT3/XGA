@@ -1,21 +1,28 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 3:17 PM. Copyright (c) The Contributors.
 
-from typing import Union, Optional
 
 import numpy as np
 from astropy.convolution import Kernel, convolve, convolve_fft
 
-from xga import OUTPUT
 from xga.exceptions import ProductGenerationError, XGADeveloperError
-from xga.products import Image, RateMap, ExpMap
+from xga.products import ExpMap, Image, RateMap
 
 
-def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[np.ndarray] = None, fft: bool = False,
-                   ratemap_smooth_im: bool = True, force_resmooth: bool = False, norm_kernel: bool = True,
-                   boundary: Union[str, None] = 'fill', fill_value: Union[int, float] = 0.0,
-                   nan_treatment: str = 'interpolate', preserve_nan: bool = False,
-                   normalization_zero_tol: Union[float, int] = 1e-8) -> Union[Image, RateMap]:
+def general_smooth(
+    prod: Image | RateMap,
+    kernel: Kernel,
+    mask: np.ndarray | None = None,
+    fft: bool = False,
+    ratemap_smooth_im: bool = True,
+    force_resmooth: bool = False,
+    norm_kernel: bool = True,
+    boundary: str | None = "fill",
+    fill_value: int | float = 0.0,
+    nan_treatment: str = "interpolate",
+    preserve_nan: bool = False,
+    normalization_zero_tol: float | int = 1e-8,
+) -> Image | RateMap:
     """
     Applies Astropy's smoothing kernels to instances of the XGA Image and RateMap classes, returning a new
     instance of the same class with smoothing applied. If the input is a RateMap instance, then you may choose
@@ -66,8 +73,9 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
 
     # Also need to check that the kernel has the right number of dimensions
     if len(kernel.shape) != 2:
-        raise ValueError("The smoothing kernel must be two-dimensional, e.g. an "
-                         "astropy.convolution.Gaussian2DKernel instance.")
+        raise ValueError(
+            "The smoothing kernel must be two-dimensional, e.g. an astropy.convolution.Gaussian2DKernel instance."
+        )
 
     # While we ask for masks in the style XGA produces (0s where you don't want data, 1s where you do), unfortunately,
     #  the smoothing functions seem to want the opposite, so I'll quickly invert the mask here
@@ -80,9 +88,11 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
     #  we do also include an argument that allows the user to override the
     #  behavior and smooth again.
     if prod.smoothed and not force_resmooth:
-        raise ProductGenerationError("Input XGA Image or RateMap has already been smoothed, and "
-                                     "will not be smoothed again. To override this check you may pass "
-                                     "`force_resmooth=True`.")
+        raise ProductGenerationError(
+            "Input XGA Image or RateMap has already been smoothed, and "
+            "will not be smoothed again. To override this check you may pass "
+            "`force_resmooth=True`."
+        )
 
     # Now we figure out what exactly needs to be smoothed.
     # If the input product is an Image, then it is very straightforward - we just copy
@@ -94,9 +104,11 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
     #  directly smooth the count-rate array (as opposed to extracting the image array, smoothing
     #  that, then re-dividing by the exposure map).
     elif type(prod) == RateMap and not ratemap_smooth_im:
-        raise NotImplementedError("XGA RateMaps can currently only be constructed from separate "
-                                  "Image and ExpMap instances, and as such a new RateMap cannot"
-                                  "yet be created from a smoothed count-rate array.")
+        raise NotImplementedError(
+            "XGA RateMaps can currently only be constructed from separate "
+            "Image and ExpMap instances, and as such a new RateMap cannot"
+            "yet be created from a smoothed count-rate array."
+        )
         data_to_smth = prod.data.copy()
 
     # In this instance the user has passed a RateMap, but specified that we should smooth
@@ -108,28 +120,55 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
     # Catch all else statement, meant to raise a vaguely useful error if the user
     #  has passed some sub-class of Image that we don't directly support here.
     else:
-        raise XGADeveloperError("Only Image and RateMap instances are directly supported, contact "
-                                "the developers if you wish for us to support a sub-class of the Image class.")
-
+        raise XGADeveloperError(
+            "Only Image and RateMap instances are directly supported, contact "
+            "the developers if you wish for us to support a sub-class of the Image class."
+        )
 
     # We now apply the Astropy smoothing kernel to the data, using FFT or non-FFT methods depending
     #  on what the user specified in their call to this function
     if fft:
-        sm_data = convolve_fft(data_to_smth, kernel, mask=mask, normalize_kernel=norm_kernel, boundary=boundary,
-                           fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
-                           normalization_zero_tol=normalization_zero_tol)
+        sm_data = convolve_fft(
+            data_to_smth,
+            kernel,
+            mask=mask,
+            normalize_kernel=norm_kernel,
+            boundary=boundary,
+            fill_value=fill_value,
+            nan_treatment=nan_treatment,
+            preserve_nan=preserve_nan,
+            normalization_zero_tol=normalization_zero_tol,
+        )
     else:
-        sm_data = convolve(data_to_smth, kernel, mask=mask, normalize_kernel=norm_kernel, boundary=boundary,
-                           fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
-                           normalization_zero_tol=normalization_zero_tol)
+        sm_data = convolve(
+            data_to_smth,
+            kernel,
+            mask=mask,
+            normalize_kernel=norm_kernel,
+            boundary=boundary,
+            fill_value=fill_value,
+            nan_treatment=nan_treatment,
+            preserve_nan=preserve_nan,
+            normalization_zero_tol=normalization_zero_tol,
+        )
 
     # Now we construct the new XGA product instance that houses the smoothed data
     #  In the case of an Image being passed in, we make an image to send back out
     if type(prod) == Image:
-        sm_prod = Image({'data': sm_data, 'wcs': prod.radec_wcs, 'header': prod.header}, prod.obs_id,
-                        prod.instrument, "", "", "", lo_en=prod.energy_bounds[0],
-                        hi_en=prod.energy_bounds[1], telescope=prod.telescope, check_exists=False,
-                        smoothed=True, smoothed_info=kernel)
+        sm_prod = Image(
+            {"data": sm_data, "wcs": prod.radec_wcs, "header": prod.header},
+            prod.obs_id,
+            prod.instrument,
+            "",
+            "",
+            "",
+            lo_en=prod.energy_bounds[0],
+            hi_en=prod.energy_bounds[1],
+            telescope=prod.telescope,
+            check_exists=False,
+            smoothed=True,
+            smoothed_info=kernel,
+        )
 
     # User requested that the count-rate array of a RateMap be smoothed
     elif type(prod) == RateMap and not ratemap_smooth_im:
@@ -139,16 +178,28 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
     #  the original exposure map.
     elif type(prod) == RateMap and ratemap_smooth_im:
         # Construct the Image instance
-        sm_im_prod = Image({'data': sm_data, 'wcs': prod.radec_wcs, 'header': prod.header}, prod.obs_id,
-                           prod.instrument, "", "", "", lo_en=prod.energy_bounds[0],
-                           hi_en=prod.energy_bounds[1], telescope=prod.telescope, check_exists=False,
-                           smoothed=True, smoothed_info=kernel)
+        sm_im_prod = Image(
+            {"data": sm_data, "wcs": prod.radec_wcs, "header": prod.header},
+            prod.obs_id,
+            prod.instrument,
+            "",
+            "",
+            "",
+            lo_en=prod.energy_bounds[0],
+            hi_en=prod.energy_bounds[1],
+            telescope=prod.telescope,
+            check_exists=False,
+            smoothed=True,
+            smoothed_info=kernel,
+        )
 
         # Now we make a new RateMap instance using that smoothed image
         sm_prod = RateMap(sm_im_prod, prod.expmap)
 
     else:
-        raise XGADeveloperError("Only Image and RateMap instances are directly supported, contact "
-                                "the developers if you wish for us to support a sub-class of the Image class.")
+        raise XGADeveloperError(
+            "Only Image and RateMap instances are directly supported, contact "
+            "the developers if you wish for us to support a sub-class of the Image class."
+        )
 
     return sm_prod

@@ -8,11 +8,11 @@ from numpy.testing import assert_array_equal
 
 from xga.imagetools.misc import data_limits, edge_finder
 
-OFF_PIX = Quantity([20, 20], 'pix')
+OFF_PIX = Quantity([20, 20], "pix")
 
 
 class TestImageToolsMisc(unittest.TestCase):
-    def test_data_lims_zeros(self):
+    def test_data_lims_zeros(self) -> None:
         """
         Testing that this function fails properly in the absence of any data in an array.
         """
@@ -21,7 +21,7 @@ class TestImageToolsMisc(unittest.TestCase):
         with self.assertRaises(ValueError):
             data_limits(test_arr)
 
-    def test_data_lims_array(self):
+    def test_data_lims_array(self) -> None:
         """
         Testing that a numpy array with some data in it returns the correct limits.
         """
@@ -32,8 +32,7 @@ class TestImageToolsMisc(unittest.TestCase):
 
         assert data_limits(test_arr) == ([66, 401], [3, 501])
 
-
-    def test_edge_finder_array_border_F_keep_corners_F(self):
+    def test_edge_finder_array_border_F_keep_corners_F(self) -> None:
         """
         Tests that the edge finder works for a simple square in an array. Uses a function from the numpy
         testing framework to check whether the two arrays are the same. Checks for different combinations
@@ -72,7 +71,7 @@ class TestImageToolsMisc(unittest.TestCase):
         # Use this numpy function to check whether the arrays are equal
         assert_array_equal(edgy, expected)
 
-    def test_edge_finder_array_border_T_keep_corners_F(self):
+    def test_edge_finder_array_border_T_keep_corners_F(self) -> None:
         """
         Tests that the edge finder works for a simple square in an array. Uses a function from the numpy
         testing framework to check whether the two arrays are the same. Checks for different combinations
@@ -111,7 +110,7 @@ class TestImageToolsMisc(unittest.TestCase):
         # Use this numpy function to check whether the arrays are equal
         assert_array_equal(edgy, expected)
 
-    def test_edge_finder_array_border_T_keep_corners_T(self):
+    def test_edge_finder_array_border_T_keep_corners_T(self) -> None:
         """
         Tests that the edge finder works for a simple square in an array. Uses a function from the numpy
         testing framework to check whether the two arrays are the same. Checks for different combinations
@@ -150,7 +149,7 @@ class TestImageToolsMisc(unittest.TestCase):
         # Use this numpy function to check whether the arrays are equal
         assert_array_equal(edgy, expected)
 
-    def test_edge_finder_array_border_F_keep_corners_T(self):
+    def test_edge_finder_array_border_F_keep_corners_T(self) -> None:
         """
         Tests that the edge finder works for a simple square in an array. Uses a function from the numpy
         testing framework to check whether the two arrays are the same. Checks for different combinations
@@ -206,7 +205,7 @@ class TestImageToolsMisc(unittest.TestCase):
 
                                                                      ])
 """
-#def test_pix_deg_scale(test_coord, test_wcs, test_offset, expected):
+# def test_pix_deg_scale(test_coord, test_wcs, test_offset, expected):
 """
 Testing that the calculation of scale between the pixels and degrees of an image is correct. Tests include
 different coordinate units and different offsets.
@@ -226,7 +225,7 @@ different coordinate units and different offsets.
                                                                          Quantity(1, 'arcmin'),
                                                                          1.3888394987109003e-05)])
 """
-#def test_sky_deg_scale(test_im, test_coord, test_offset, expected):
+# def test_sky_deg_scale(test_im, test_coord, test_offset, expected):
 """
 Testing that the calculation of scale between the degrees and sky coordinates of an XMM image is correct. Tests
 include different coordinate units and different offsets. I check only the values here because the way pytest
@@ -242,7 +241,7 @@ runs tests evidently doesn't define xmm_sky.
                                                                    (Image(*A907_IM_PN_INFO), Quantity(103, 'pix'), 'kpc',
                                                                     Quantity(1275.5389422602298, 'kpc'))])
 """
-#def test_pix_rad_to_physical(test_im, test_rad, out_unit, expected):
+# def test_pix_rad_to_physical(test_im, test_rad, out_unit, expected):
 """
 Testing conversion of radius in pixels to physical units (both proper and angular).
 """
@@ -259,21 +258,16 @@ Testing conversion of radius in pixels to physical units (both proper and angula
                                                          (Image(*A907_IM_PN_INFO), Quantity(1275.5389422602298, 'kpc'),
                                                           Quantity(103, 'pix'))])
 """
-#def test_physical_rad_to_pix(test_im, test_rad, expected):
+# def test_physical_rad_to_pix(test_im, test_rad, expected):
 """
 Testing conversion of radius in physical units to a radius in pixels.
 """
 #    ret_val = physical_rad_to_pix(test_im, test_rad, A907_LOC, 0.16, Planck15)
 #    assert ret_val == expected
 
-#def test_data_lims_array():
+# def test_data_lims_array():
 """
 Testing that an image input results in the correct limits.
 """
 #    test_im = Image(*A907_IM_PN_INFO)
 #    assert data_limits(test_im) == ([25, 436], [67, 482])
-
-
-
-
-

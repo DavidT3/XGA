@@ -6,7 +6,7 @@ from xga.exceptions import SASNotFoundError
 from xga.generate.common import mission_software_call
 
 
-def sas_avail_check():
+def sas_avail_check() -> None:
     """
     Check function for the SAS mission software.
     """
@@ -14,8 +14,8 @@ def sas_avail_check():
         raise SASNotFoundError("No SAS installation has been found on this machine")
     elif not SAS_AVAIL:
         raise SASNotFoundError(
-            "A SAS installation (v{}) has been found, but the SAS_CCFPATH environment variable is"
-            " not set.".format(SAS_VERSION))
+            f"A SAS installation (v{SAS_VERSION}) has been found, but the SAS_CCFPATH environment variable is not set."
+        )
 
 
 def sas_call(sas_func):
@@ -25,4 +25,4 @@ def sas_call(sas_func):
     executing the SAS command will change. This supports simple multi-threading.
     :return:
     """
-    return mission_software_call('xmm', sas_avail_check)(sas_func)
+    return mission_software_call("xmm", sas_avail_check)(sas_func)

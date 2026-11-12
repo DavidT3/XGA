@@ -2,7 +2,6 @@
 #  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:06 PM. Copyright (c) The Contributors.
 import inspect
 from types import FunctionType
-from typing import Tuple, Union
 from warnings import warn
 
 import numpy as np
@@ -19,10 +18,17 @@ from ..products.relation import ScalingRelation
 ALLOWED_FIT_METHODS = ["curve_fit", "odr", "lira", "emcee"]
 
 
-def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_errs: Quantity = None,
-                    y_norm: Quantity = None, x_norm: Quantity = None, log_data: bool = False,
-                    point_names: Union[np.ndarray, list] = None, third_dim: Union[np.ndarray, Quantity, list] = None) \
-        -> Tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity, np.ndarray, Quantity]:
+def _fit_initialise(
+    y_values: Quantity,
+    y_errs: Quantity,
+    x_values: Quantity,
+    x_errs: Quantity = None,
+    y_norm: Quantity = None,
+    x_norm: Quantity = None,
+    log_data: bool = False,
+    point_names: np.ndarray | list = None,
+    third_dim: np.ndarray | Quantity | list = None,
+) -> tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity, np.ndarray, Quantity]:
     """
     A handy little function that prepares the data for fitting with the chosen method.
 
@@ -52,11 +58,14 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
     # Not involved in the fitting process, but comes through here so that the sources dropped due to NaN values
     #  also have the values dropped in these variables
     elif point_names is not None and len(point_names) != len(x_values):
-        ValueError("The 'point_names' argument is a different length ({p}) to the input data "
-                   "({d}).".format(p=len(point_names), d=len(x_values)))
+        ValueError(
+            f"The 'point_names' argument is a different length ({len(point_names)}) to the input data "
+            f"({len(x_values)})."
+        )
     elif third_dim is not None and len(third_dim) != len(x_values):
-        ValueError("The 'third_dim' argument is a different length ({p}) to the input data "
-                   "({d}).".format(p=len(third_dim), d=len(x_values)))
+        ValueError(
+            f"The 'third_dim' argument is a different length ({len(third_dim)}) to the input data ({len(x_values)})."
+        )
     elif y_errs.unit != y_values.unit:
         raise UnitConversionError("Uncertainty quantities must have the same units as value quantities.")
     elif x_errs is not None and x_errs.unit != x_values.unit:
@@ -82,8 +91,9 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
     x_err_are_neg = np.where(x_errs < 0)[0]
     y_err_are_neg = np.where(y_errs < 0)[0]
 
-    all_err_not_neg = np.intersect1d(np.setdiff1d(np.arange(0, len(x_errs)), x_err_are_neg),
-                                     np.setdiff1d(np.arange(0, len(y_errs)), y_err_are_neg))
+    all_err_not_neg = np.intersect1d(
+        np.setdiff1d(np.arange(0, len(x_errs)), x_err_are_neg), np.setdiff1d(np.arange(0, len(y_errs)), y_err_are_neg)
+    )
 
     # Intersect the two selection criteria
     all_acc = np.intersect1d(all_not_nans, all_err_not_neg)
@@ -91,8 +101,7 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
     # And we'll repeat the warning exercise if any were excluded because they have negative uncertainties
     thrown_away = len(x_values) - len(all_acc)
     if thrown_away != 0:
-        warn("{} sources have NaN values or negative uncertainties and have been excluded".format(thrown_away),
-             stacklevel=2)
+        warn(f"{thrown_away} sources have NaN values or negative uncertainties and have been excluded", stacklevel=2)
 
     # Only values that aren't NaN and don't have negative errors will be permitted
     x_values = x_values[all_acc]
@@ -170,13 +179,25 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
     return x_fit_data, x_fit_err, y_fit_data, y_fit_err, x_norm, y_norm, point_names, third_dim
 
 
-def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_errs: Quantity, x_values: Quantity,
-                               x_errs: Quantity = None, y_norm: Quantity = None, x_norm: Quantity = None,
-                               x_lims: Quantity = None, start_pars: list = None, y_name: str = 'Y',
-                               x_name: str = 'X', dim_hubb_ind: Union[float, int] = None,
-                               point_names: Union[np.ndarray, list] = None,
-                               third_dim_info: Union[np.ndarray, Quantity] = None, third_dim_name: str = None,
-                               x_en_bounds: Quantity = None, y_en_bounds: Quantity = None) -> ScalingRelation:
+def scaling_relation_curve_fit(
+    model_func: FunctionType,
+    y_values: Quantity,
+    y_errs: Quantity,
+    x_values: Quantity,
+    x_errs: Quantity = None,
+    y_norm: Quantity = None,
+    x_norm: Quantity = None,
+    x_lims: Quantity = None,
+    start_pars: list = None,
+    y_name: str = "Y",
+    x_name: str = "X",
+    dim_hubb_ind: float | int = None,
+    point_names: np.ndarray | list = None,
+    third_dim_info: np.ndarray | Quantity = None,
+    third_dim_name: str = None,
+    x_en_bounds: Quantity = None,
+    y_en_bounds: Quantity = None,
+) -> ScalingRelation:
     """
     A function to fit a scaling relation with the scipy non-linear least squares implementation (curve fit), generate
     an XGA ScalingRelation product, and return it.
@@ -220,30 +241,59 @@ def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_e
         predict method.
     :rtype: ScalingRelation
     """
-    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, point_names, \
-        third_dim_info = _fit_initialise(y_values, y_errs, x_values, x_errs, y_norm, x_norm, point_names=point_names,
-                                         third_dim=third_dim_info)
+    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, point_names, third_dim_info = _fit_initialise(
+        y_values, y_errs, x_values, x_errs, y_norm, x_norm, point_names=point_names, third_dim=third_dim_info
+    )
 
-    fit_par, fit_cov = curve_fit(model_func, x_fit_data.value, y_fit_data.value, sigma=y_fit_errs.value,
-                                 absolute_sigma=True, p0=start_pars)
+    fit_par, fit_cov = curve_fit(
+        model_func, x_fit_data.value, y_fit_data.value, sigma=y_fit_errs.value, absolute_sigma=True, p0=start_pars
+    )
     fit_par_err = np.sqrt(np.diagonal(fit_cov))
 
-    sr = ScalingRelation(fit_par, fit_par_err, model_func, x_norm, y_norm, x_name, y_name, fit_method='Curve Fit',
-                         x_data=x_fit_data * x_norm, y_data=y_fit_data * y_norm, x_err=x_fit_errs * x_norm,
-                         y_err=y_fit_errs * y_norm, x_lims=x_lims, dim_hubb_ind=dim_hubb_ind, point_names=point_names,
-                         third_dim_info=third_dim_info, third_dim_name=third_dim_name, x_en_bounds=x_en_bounds,
-                         y_en_bounds=y_en_bounds)
+    sr = ScalingRelation(
+        fit_par,
+        fit_par_err,
+        model_func,
+        x_norm,
+        y_norm,
+        x_name,
+        y_name,
+        fit_method="Curve Fit",
+        x_data=x_fit_data * x_norm,
+        y_data=y_fit_data * y_norm,
+        x_err=x_fit_errs * x_norm,
+        y_err=y_fit_errs * y_norm,
+        x_lims=x_lims,
+        dim_hubb_ind=dim_hubb_ind,
+        point_names=point_names,
+        third_dim_info=third_dim_info,
+        third_dim_name=third_dim_name,
+        x_en_bounds=x_en_bounds,
+        y_en_bounds=y_en_bounds,
+    )
 
     return sr
 
 
-def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Quantity, x_values: Quantity,
-                         x_errs: Quantity = None, y_norm: Quantity = None, x_norm: Quantity = None,
-                         x_lims: Quantity = None, start_pars: list = None, y_name: str = 'Y',
-                         x_name: str = 'X', dim_hubb_ind: Union[float, int] = None,
-                         point_names: Union[np.ndarray, list] = None,
-                         third_dim_info: Union[np.ndarray, Quantity] = None, third_dim_name: str = None,
-                         x_en_bounds: Quantity = None, y_en_bounds: Quantity = None) -> ScalingRelation:
+def scaling_relation_odr(
+    model_func: FunctionType,
+    y_values: Quantity,
+    y_errs: Quantity,
+    x_values: Quantity,
+    x_errs: Quantity = None,
+    y_norm: Quantity = None,
+    x_norm: Quantity = None,
+    x_lims: Quantity = None,
+    start_pars: list = None,
+    y_name: str = "Y",
+    x_name: str = "X",
+    dim_hubb_ind: float | int = None,
+    point_names: np.ndarray | list = None,
+    third_dim_info: np.ndarray | Quantity = None,
+    third_dim_name: str = None,
+    x_en_bounds: Quantity = None,
+    y_en_bounds: Quantity = None,
+) -> ScalingRelation:
     """
     A function to fit a scaling relation with the scipy orthogonal distance regression implementation, generate
     an XGA ScalingRelation product, and return it.
@@ -295,9 +345,9 @@ def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Q
         start_pars = np.ones(num_par)
 
     # Standard data preparation
-    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, point_names, \
-        third_dim_info = _fit_initialise(y_values, y_errs, x_values, x_errs, y_norm, x_norm, point_names=point_names,
-                                         third_dim=third_dim_info)
+    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, point_names, third_dim_info = _fit_initialise(
+        y_values, y_errs, x_values, x_errs, y_norm, x_norm, point_names=point_names, third_dim=third_dim_info
+    )
 
     # Immediately faced with a problem, because scipy's ODR is naff and wants functions defined like
     #  blah(par_vector, x_values), which is completely different to my standard definition of models in this module.
@@ -308,9 +358,11 @@ def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Q
     # The first thing I want to do is check that the newly converted function gives the same result for a
     #  simple test as the original model
     if model_func(5, *start_pars) != converted_model_func(start_pars, 5):
-        raise XGAFunctionConversionError('I attempted to convert the input model function to the standard'
-                                         ' required by ODR, but it is not returning the same value as the '
-                                         'original for this test case.')
+        raise XGAFunctionConversionError(
+            "I attempted to convert the input model function to the standard"
+            " required by ODR, but it is not returning the same value as the "
+            "original for this test case."
+        )
 
     # Then we define a scipy odr model
     odr_model = odr.Model(converted_model_func)
@@ -329,21 +381,52 @@ def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Q
     fit_par = fit_results.beta
     fit_par_err = fit_results.sd_beta
 
-    sr = ScalingRelation(fit_par, fit_par_err, model_func, x_norm, y_norm, x_name, y_name, fit_method='ODR',
-                         x_data=x_fit_data * x_norm, y_data=y_fit_data * y_norm, x_err=x_fit_errs * x_norm,
-                         y_err=y_fit_errs * y_norm, x_lims=x_lims, odr_output=fit_results, dim_hubb_ind=dim_hubb_ind,
-                         point_names=point_names, third_dim_info=third_dim_info, third_dim_name=third_dim_name,
-                         x_en_bounds=x_en_bounds, y_en_bounds=y_en_bounds)
+    sr = ScalingRelation(
+        fit_par,
+        fit_par_err,
+        model_func,
+        x_norm,
+        y_norm,
+        x_name,
+        y_name,
+        fit_method="ODR",
+        x_data=x_fit_data * x_norm,
+        y_data=y_fit_data * y_norm,
+        x_err=x_fit_errs * x_norm,
+        y_err=y_fit_errs * y_norm,
+        x_lims=x_lims,
+        odr_output=fit_results,
+        dim_hubb_ind=dim_hubb_ind,
+        point_names=point_names,
+        third_dim_info=third_dim_info,
+        third_dim_name=third_dim_name,
+        x_en_bounds=x_en_bounds,
+        y_en_bounds=y_en_bounds,
+    )
 
     return sr
 
 
-def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_errs: Quantity = None,
-                          y_norm: Quantity = None, x_norm: Quantity = None, x_lims: Quantity = None, y_name: str = 'Y',
-                          x_name: str = 'X', num_steps: int = 100000, num_chains: int = 4, num_burn_in: int = 10000,
-                          dim_hubb_ind: Union[float, int] = None, point_names: Union[np.ndarray, list] = None,
-                          third_dim_info: Union[np.ndarray, Quantity] = None, third_dim_name: str = None,
-                          x_en_bounds: Quantity = None, y_en_bounds: Quantity = None) -> ScalingRelation:
+def scaling_relation_lira(
+    y_values: Quantity,
+    y_errs: Quantity,
+    x_values: Quantity,
+    x_errs: Quantity = None,
+    y_norm: Quantity = None,
+    x_norm: Quantity = None,
+    x_lims: Quantity = None,
+    y_name: str = "Y",
+    x_name: str = "X",
+    num_steps: int = 100000,
+    num_chains: int = 4,
+    num_burn_in: int = 10000,
+    dim_hubb_ind: float | int = None,
+    point_names: np.ndarray | list = None,
+    third_dim_info: np.ndarray | Quantity = None,
+    third_dim_name: str = None,
+    x_en_bounds: Quantity = None,
+    y_en_bounds: Quantity = None,
+) -> ScalingRelation:
     """
     A function to fit a power law scaling relation with the excellent R fitting package LIRA
     (https://doi.org/10.1093/mnras/stv2374), this function requires a valid R installation, along with LIRA (and its
@@ -391,28 +474,32 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
     #  necessary imports here, because the external dependencies are likely to only be used in this function
     #  and as such I don't want to force the user to have them to use XGA.
     try:
-        from rpy2.robjects.packages import importr
         from rpy2 import robjects
-        robjects.r['options'](warn=-1)
+        from rpy2.robjects.packages import importr
+
+        robjects.r["options"](warn=-1)
     except ImportError:
-        raise XGAOptionalDependencyError('LIRA is an R fitting package, and as such you need to have installed '
-                                         'rpy2 to use this function')
+        raise XGAOptionalDependencyError(
+            "LIRA is an R fitting package, and as such you need to have installed rpy2 to use this function"
+        )
 
     # We use the rpy2 module to interface with an underlying R installation, and import the basic R components
-    base_pack = importr('base')
-    utils_pack = importr('utils')
+    base_pack = importr("base")
+    utils_pack = importr("utils")
 
     # Now we import the thing we're actually interested in, the LIRA package
     try:
-        lira_pack = importr('lira')
+        lira_pack = importr("lira")
     except robjects.packages.PackageNotInstalledError:
-        raise XGAOptionalDependencyError('While the rpy2 module is installed, you do not appear to have installed '
-                                         'the LIRA fitting package to your R environment')
+        raise XGAOptionalDependencyError(
+            "While the rpy2 module is installed, you do not appear to have installed "
+            "the LIRA fitting package to your R environment"
+        )
 
     # Slightly different data preparation to the other fitting methods, this one returns logged data and errors
-    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, point_names, \
-        third_dim_info = _fit_initialise(y_values, y_errs, x_values, x_errs, y_norm, x_norm, True, point_names,
-                                         third_dim_info)
+    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, point_names, third_dim_info = _fit_initialise(
+        y_values, y_errs, x_values, x_errs, y_norm, x_norm, True, point_names, third_dim_info
+    )
 
     # And now we have to make some R objects so that we can pass it through our R interface to the LIRA package
     x_fit_data = robjects.FloatVector(x_fit_data.value)
@@ -422,22 +509,31 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
 
     # This runs the LIRA fit and grabs the output data frame, from that I can read the chains for the different
     #  parameters
-    chains = lira_pack.lira(x_fit_data, y_fit_data, delta_x=x_fit_errs, delta_y=y_fit_errs, n_iter=num_steps,
-                            n_chains=num_chains, n_adapt=num_burn_in, export=False, print_summary=False,
-                            print_diagnostic=False)[0][0]
+    chains = lira_pack.lira(
+        x_fit_data,
+        y_fit_data,
+        delta_x=x_fit_errs,
+        delta_y=y_fit_errs,
+        n_iter=num_steps,
+        n_chains=num_chains,
+        n_adapt=num_burn_in,
+        export=False,
+        print_summary=False,
+        print_diagnostic=False,
+    )[0][0]
 
     # Read out the alpha parameter chain and convert to a numpy array
-    alpha_par_chain = np.power(10, np.array(chains.rx2['alpha.YIZ']))
+    alpha_par_chain = np.power(10, np.array(chains.rx2["alpha.YIZ"]))
     alpha_par_val = np.mean(alpha_par_chain)
     alpha_par_err = np.std(alpha_par_chain)
 
     # Read out the beta parameter chain and convert to a numpy array
-    beta_par_chain = np.array(chains.rx2['beta.YIZ'])
+    beta_par_chain = np.array(chains.rx2["beta.YIZ"])
     beta_par_val = np.mean(beta_par_chain)
     beta_par_err = np.std(beta_par_chain)
 
     # Read out the intrinsic scatter chain and convert to a numpy array
-    sigma_par_chain = np.array(chains.rx2['sigma.YIZ.0'])
+    sigma_par_chain = np.array(chains.rx2["sigma.YIZ.0"])
     sigma_par_val = np.mean(sigma_par_chain)
     sigma_par_err = np.std(sigma_par_chain)
 
@@ -446,23 +542,44 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
 
     # This call to the fit initialisation function DOESN'T produce logged data, do this so the plot works
     #  properly - it expects non logged data
-    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, \
-        throw_away, sec_throw_away = _fit_initialise(y_values, y_errs, x_values, x_errs, y_norm, x_norm)
+    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, throw_away, sec_throw_away = _fit_initialise(
+        y_values, y_errs, x_values, x_errs, y_norm, x_norm
+    )
 
     # I'm re-formatting the chains into a shape that the ScalingRelation class will understand.
-    xga_chains = np.concatenate([beta_par_chain.reshape(len(beta_par_chain), 1),
-                                 alpha_par_chain.reshape(len(alpha_par_chain), 1)], axis=1)
+    xga_chains = np.concatenate(
+        [beta_par_chain.reshape(len(beta_par_chain), 1), alpha_par_chain.reshape(len(alpha_par_chain), 1)], axis=1
+    )
 
-    sr = ScalingRelation(fit_par, fit_par_err, power_law, x_norm, y_norm, x_name, y_name, fit_method='LIRA',
-                         x_data=x_fit_data * x_norm, y_data=y_fit_data * y_norm, x_err=x_fit_errs * x_norm,
-                         y_err=y_fit_errs * y_norm, x_lims=x_lims, chains=xga_chains,
-                         scatter_par=np.array([sigma_par_val, sigma_par_err]), scatter_chain=sigma_par_chain,
-                         dim_hubb_ind=dim_hubb_ind, point_names=point_names, third_dim_info=third_dim_info,
-                         third_dim_name=third_dim_name, x_en_bounds=x_en_bounds, y_en_bounds=y_en_bounds)
+    sr = ScalingRelation(
+        fit_par,
+        fit_par_err,
+        power_law,
+        x_norm,
+        y_norm,
+        x_name,
+        y_name,
+        fit_method="LIRA",
+        x_data=x_fit_data * x_norm,
+        y_data=y_fit_data * y_norm,
+        x_err=x_fit_errs * x_norm,
+        y_err=y_fit_errs * y_norm,
+        x_lims=x_lims,
+        chains=xga_chains,
+        scatter_par=np.array([sigma_par_val, sigma_par_err]),
+        scatter_chain=sigma_par_chain,
+        dim_hubb_ind=dim_hubb_ind,
+        point_names=point_names,
+        third_dim_info=third_dim_info,
+        third_dim_name=third_dim_name,
+        x_en_bounds=x_en_bounds,
+        y_en_bounds=y_en_bounds,
+    )
 
     return sr
 
 
 def scaling_relation_emcee():
-    raise NotImplementedError("This fitting method has not yet been implemented, please consider LIRA "
-                              "as an alternative.")
+    raise NotImplementedError(
+        "This fitting method has not yet been implemented, please consider LIRA as an alternative."
+    )

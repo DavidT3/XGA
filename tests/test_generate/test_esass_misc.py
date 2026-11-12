@@ -4,6 +4,7 @@
 import unittest
 
 from xga.generate.esass.misc import evtool_combine_evts
+
 from .. import get_test_source
 from ..utils import require_esass
 
@@ -11,15 +12,16 @@ from ..utils import require_esass
 class TestEsassMiscFuncs(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.src = get_test_source('erass')
+        cls.src = get_test_source("erass")
 
     @require_esass
-    def test_evtool_combine_evts(self):
+    def test_evtool_combine_evts(self) -> None:
         evtool_combine_evts(self.src)
 
-        evtlist = self.src.get_products("combined_events", just_obj=False, telescope='erass')[0][-1]
-        assert evtlist.telescope == 'erass'
-        assert set(evtlist.obs_ids) == set(self.src.obs_ids['erass'])
+        evtlist = self.src.get_products("combined_events", just_obj=False, telescope="erass")[0][-1]
+        assert evtlist.telescope == "erass"
+        assert set(evtlist.obs_ids) == set(self.src.obs_ids["erass"])
+
 
 if __name__ == "__main__":
-     unittest.main()
+    unittest.main()

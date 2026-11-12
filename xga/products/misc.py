@@ -6,5 +6,6 @@ import warnings
 warnings.warn(
     "xga.products.misc is deprecated and will be removed in a future version. "
     "Please import from xga.products.events instead.",
-    DeprecationWarning, stacklevel=2
+    DeprecationWarning,
+    stacklevel=2,
 )

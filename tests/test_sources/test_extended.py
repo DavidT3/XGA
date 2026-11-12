@@ -11,9 +11,7 @@ from .. import get_test_source
 class TestGalaxyCluster(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.src = get_test_source('all')
+        cls.src = get_test_source("all")
 
-    def test_r500(self):
-        assert self.src.r500 == Quantity(500, 'kpc')
-
-
+    def test_r500(self) -> None:
+        assert self.src.r500 == Quantity(500, "kpc")
