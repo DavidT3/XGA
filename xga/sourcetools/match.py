@@ -1,5 +1,7 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 3:12 PM. Copyright (c) The Contributors.
+"""Functions for matching input source coordinates to available X-ray observations and source regions."""
+
 from __future__ import annotations
 
 import gc
@@ -40,9 +42,7 @@ WORKER_EXP_MAPS: dict[str, dict[str, list[ExpMap]]] = {}
 
 
 def _worker_init(census_coords: dict | None = None, exp_map_dict: dict | None = None) -> None:
-    """
-    Initializer for worker processes to store pre-calculated data in global scope.
-    """
+    """Initializer for worker processes to store pre-calculated data in global scope."""
     global WORKER_TEL_COORDS
     global WORKER_EXP_MAPS
     if census_coords is not None:
@@ -610,9 +610,7 @@ def census_match(
 
 
 def _vectorized_separation_match_wrapper(args: tuple) -> tuple[dict | DataFrame, dict | DataFrame]:
-    """
-    Wrapper for _vectorized_separation_match to be used with multiprocessing.imap.
-    """
+    """Wrapper for _vectorized_separation_match to be used with multiprocessing.imap."""
     return _vectorized_separation_match(*args)
 
 
@@ -964,9 +962,7 @@ def _vectorized_on_detector_match(
 
 
 def _vectorized_on_detector_match_wrapper(args: tuple) -> list:
-    """
-    Wrapper for _vectorized_on_detector_match to be used with multiprocessing.imap.
-    """
+    """Wrapper for _vectorized_on_detector_match to be used with multiprocessing.imap."""
     return _vectorized_on_detector_match(*args)
 
 

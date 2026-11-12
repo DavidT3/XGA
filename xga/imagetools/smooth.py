@@ -1,6 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 3:17 PM. Copyright (c) The Contributors.
-
+"""The xga.imagetools.smooth module contains functions for convolving XGA Image and RateMap products with kernels."""
 
 import numpy as np
 from astropy.convolution import Kernel, convolve, convolve_fft

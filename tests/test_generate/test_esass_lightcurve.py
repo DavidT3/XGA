@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 5:49 PM. Copyright (c) The Contributors.
+"""Tests for XGA's eSASS light curve generation wrapper functions."""
 
 import unittest
 
@@ -14,8 +15,11 @@ from ..utils import require_esass
 
 
 class TestEsassLcFuncs(unittest.TestCase):
+    """Test cases for the eROSITA eSASS light curve generation functions."""
+
     @classmethod
     def setUpClass(cls) -> None:
+        """Set up the eROSITA test source and energy bounds for the light curve generation tests."""
         cls.src = get_test_source("erass")
 
         # Specify the lower and upper energy bounds for the light curves generated and
@@ -25,9 +29,7 @@ class TestEsassLcFuncs(unittest.TestCase):
 
     @require_esass
     def test_srctool_lightcurve_combine_insts_f_combine_obs_f(self) -> None:
-        """
-        Testing srctool_lightcurve with the arguments combine_insts=False and combine_obs=False
-        """
+        """Testing srctool_lightcurve with the arguments combine_insts=False and combine_obs=False."""
         # Run the light curve generation - one light curve per eROSITA TM per Obs associated with this source
         srctool_lightcurve(
             self.src, "r500", lo_en=self.lc_lo_en, hi_en=self.lc_hi_en, combine_tm=False, combine_obs=False
@@ -55,9 +57,7 @@ class TestEsassLcFuncs(unittest.TestCase):
 
     @require_esass
     def test_srctool_lightcurve_combine_insts_t_combine_obs_f(self) -> None:
-        """
-        Testing srctool_lightcurve with the arguments combine_insts=True and combine_obs=False
-        """
+        """Testing srctool_lightcurve with the arguments combine_insts=True and combine_obs=False."""
         # Run the light curve generation - one light curve per eROSITA Obs, combining all TMs
         srctool_lightcurve(
             self.src, "r500", lo_en=self.lc_lo_en, hi_en=self.lc_hi_en, combine_tm=True, combine_obs=False
@@ -85,9 +85,7 @@ class TestEsassLcFuncs(unittest.TestCase):
 
     @require_esass
     def test_srctool_lightcurve_combine_insts_f_combine_obs_t(self) -> None:
-        """
-        Testing srctool_lightcurve with the arguments combine_insts=False and combine_obs=True
-        """
+        """Testing srctool_lightcurve with the arguments combine_insts=False and combine_obs=True."""
         # Run the light curve generation - one light curve per eROSITA TM, combining all ObsIDs
         #  associated with this source
         srctool_lightcurve(
@@ -130,9 +128,7 @@ class TestEsassLcFuncs(unittest.TestCase):
 
     @require_esass
     def test_srctool_lightcurve_combine_insts_t_combine_obs_t(self) -> None:
-        """
-        Testing srctool_lightcurve with the arguments combine_insts=True and combine_obs=True
-        """
+        """Testing srctool_lightcurve with the arguments combine_insts=True and combine_obs=True."""
         # Run the light curve generation - this should only result in a single light curve as
         #  we're combining all ObsIDs and all their TMs into a single light curve.
         srctool_lightcurve(

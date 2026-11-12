@@ -1,5 +1,10 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/7/26, 10:21 AM. Copyright (c) The Contributors.
+"""
+The xga.generate.esass.misc module implements miscellaneous wrapper functions for eSASS tools (such as merging
+event lists across overlapping eRASS sky tiles). As these functions wrap eSASS tools specifically, they are only
+compatible with source/sample instances that have eROSITA observations associated.
+"""
 
 import os
 from random import randint

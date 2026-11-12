@@ -1,6 +1,9 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 7/28/26, 11:22 AM. Copyright (c) The Contributors.
-
+"""
+The xga.imagetools.profile module contains functions for generating annular masks and measuring radial surface
+brightness profiles from XGA Image and RateMap products.
+"""
 
 import numpy as np
 from astropy.cosmology import Cosmology
@@ -487,7 +490,24 @@ def pizza_brightness(
     cen_rad_units: UnitBase = arcsec,
     cosmo: Cosmology = DEFAULT_COSMO,
 ) -> tuple[np.ndarray, Quantity, Quantity, np.float64, np.ndarray, np.ndarray]:
+    """
+    A placeholder function for generating azimuthal sector ('pizza') radial surface brightness profiles from an XGA
+    Image or RateMap product. Support for pizza profile product objects has not yet been implemented.
 
+    :param Image/RateMap im_prod: The Image or RateMap product to measure the azimuthal surface brightness profiles
+        from.
+    :param np.ndarray src_mask: Mask array removing interloper sources from the analysis region.
+    :param np.ndarray back_mask: Mask array defining the background region.
+    :param Quantity centre: The central coordinates around which to divide the image into azimuthal sectors.
+    :param Quantity rad: The outer radius of the azimuthal profile analysis region.
+    :param int num_slices: The number of equal azimuthal slices ('pizza' sectors) to divide the region into.
+    :param float z: The redshift of the source, required if physical radius units are requested.
+    :param int pix_step: The width of each annulus in pixels, default is 1.
+    :param UnitBase cen_rad_units: The output units for the profile bin centre radii, default is arcsec.
+    :param Cosmology cosmo: An astropy cosmology instance for converting angular radii to physical units.
+    :return: Azimuthal radial surface brightness profiles and associated radii, background, and masks.
+    :rtype: Tuple[np.ndarray, Quantity, Quantity, np.float64, np.ndarray, np.ndarray]
+    """
     raise NotImplementedError(
         "The supporting infrastructure to allow pizza profile product objects hasn't been written yet sorry!"
     )

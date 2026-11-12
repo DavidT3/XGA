@@ -1,5 +1,7 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 10:29 AM. Copyright (c) The Contributors.
+"""Tests for XGA's miscellaneous imagetools functions."""
+
 import unittest
 
 from astropy.units import Quantity
@@ -12,19 +14,17 @@ OFF_PIX = Quantity([20, 20], "pix")
 
 
 class TestImageToolsMisc(unittest.TestCase):
+    """Test cases for miscellaneous imagetools helper functions such as data_limits and edge_finder."""
+
     def test_data_lims_zeros(self) -> None:
-        """
-        Testing that this function fails properly in the absence of any data in an array.
-        """
+        """Testing that this function fails properly in the absence of any data in an array."""
         test_arr = zeros((512, 512))
 
         with self.assertRaises(ValueError):
             data_limits(test_arr)
 
     def test_data_lims_array(self) -> None:
-        """
-        Testing that a numpy array with some data in it returns the correct limits.
-        """
+        """Testing that a numpy array with some data in it returns the correct limits."""
         test_arr = zeros((512, 512))
         test_arr[34, 67] = 2
         test_arr[500, 400] = 1
@@ -34,8 +34,9 @@ class TestImageToolsMisc(unittest.TestCase):
 
     def test_edge_finder_array_border_F_keep_corners_F(self) -> None:
         """
-        Tests that the edge finder works for a simple square in an array. Uses a function from the numpy
-        testing framework to check whether the two arrays are the same. Checks for different combinations
+        Tests that the edge finder works for a simple square in an array with border=False and keep_corners=False.
+
+        Uses a function from the numpy testing framework to check whether the two arrays are the same.
         """
         border = False
         keep_corners = False
@@ -73,8 +74,9 @@ class TestImageToolsMisc(unittest.TestCase):
 
     def test_edge_finder_array_border_T_keep_corners_F(self) -> None:
         """
-        Tests that the edge finder works for a simple square in an array. Uses a function from the numpy
-        testing framework to check whether the two arrays are the same. Checks for different combinations
+        Tests that the edge finder works for a simple square in an array with border=True and keep_corners=False.
+
+        Uses a function from the numpy testing framework to check whether the two arrays are the same.
         """
         border = True
         keep_corners = False
@@ -112,8 +114,9 @@ class TestImageToolsMisc(unittest.TestCase):
 
     def test_edge_finder_array_border_T_keep_corners_T(self) -> None:
         """
-        Tests that the edge finder works for a simple square in an array. Uses a function from the numpy
-        testing framework to check whether the two arrays are the same. Checks for different combinations
+        Tests that the edge finder works for a simple square in an array with border=True and keep_corners=True.
+
+        Uses a function from the numpy testing framework to check whether the two arrays are the same.
         """
         border = True
         keep_corners = True
@@ -151,8 +154,9 @@ class TestImageToolsMisc(unittest.TestCase):
 
     def test_edge_finder_array_border_F_keep_corners_T(self) -> None:
         """
-        Tests that the edge finder works for a simple square in an array. Uses a function from the numpy
-        testing framework to check whether the two arrays are the same. Checks for different combinations
+        Tests that the edge finder works for a simple square in an array with border=False and keep_corners=True.
+
+        Uses a function from the numpy testing framework to check whether the two arrays are the same.
         """
         border = False
         keep_corners = True

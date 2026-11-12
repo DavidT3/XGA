@@ -1,6 +1,9 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 5:22 PM. Copyright (c) The Contributors.
-
+"""
+The xga.imagetools.misc module contains miscellaneous utility functions for X-ray image analysis, including pixel-to-sky
+and pixel-to-physical scale conversions, data bounding-box limits, and mask edge detection.
+"""
 
 import numpy as np
 from astropy.cosmology import Cosmology

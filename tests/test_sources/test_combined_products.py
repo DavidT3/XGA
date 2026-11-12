@@ -1,6 +1,8 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 6:52 PM. Copyright (c) The Contributors.
 
+"""Tests for differentiating combined observation and combined instrument products on BaseSource."""
+
 import unittest
 
 from astropy.units import Quantity
@@ -12,13 +14,17 @@ from .. import get_test_source
 
 
 class TestCombinedProductDisambiguation(unittest.TestCase):
+    """Tests for retrieving combined and per-instrument products across multiple observations."""
+
     @classmethod
     def setUpClass(cls) -> None:
+        """Initialise the shared multi-mission test GalaxyCluster source."""
         cls.src = get_test_source("all")
 
     def test_erass_multiobs_combined_inst_param(self) -> None:
         """
         Test that inst parameter correctly filters multi-obs combined spectra.
+
         Tests obs='combined' with inst='tm1' vs inst='combined'.
         """
         if "erass" not in self.src.obs_ids or len(self.src.obs_ids.get("erass", [])) <= 1:
@@ -63,10 +69,7 @@ class TestCombinedProductDisambiguation(unittest.TestCase):
         assert spec_comb.instrument == "combined"
 
     def test_get_combined_spectra_wrapper_equivalence(self) -> None:
-        """
-        Test that get_combined_spectra() wrapper behaves identically to
-        get_spectra(obs_id='combined', ...).
-        """
+        """Test that get_combined_spectra() wrapper behaves identically to get_spectra(obs_id='combined', ...)."""
         if "erass" not in self.src.obs_ids or len(self.src.obs_ids.get("erass", [])) <= 1:
             self.skipTest("Need multi-obs eRASS data")
 

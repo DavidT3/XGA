@@ -1,6 +1,9 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:06 PM. Copyright (c) The Contributors.
-
+"""
+The xga.models.pressure module contains analytical 1D models for describing galaxy cluster radial thermal pressure
+profiles (variants of the generalised NFW profile).
+"""
 
 from astropy.units import Quantity, Unit, UnitConversionError, kpc
 

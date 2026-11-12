@@ -1,6 +1,9 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:06 PM. Copyright (c) The Contributors.
-
+"""
+The xga.models.mass module contains analytical 1D models for describing galaxy cluster cumulative radial mass profiles
+(including NFW, isothermal King, and Vikhlinin hydrostatic mass models).
+"""
 
 import numpy as np
 from astropy.units import Quantity, Unit, UnitConversionError, deg, kpc

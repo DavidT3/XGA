@@ -1,6 +1,8 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 7:14 PM. Copyright (c) The Contributors.
 
+"""Tests for automatic loading of existing XGA products upon source initialisation."""
+
 import unittest
 
 from astropy.units import Quantity
@@ -18,14 +20,15 @@ from .. import SRC_INFO, get_test_source
 
 
 class TestProductLoading(unittest.TestCase):
+    """Tests that existing XMM, eRASS, and Chandra products on disk are loaded when a source is declared."""
+
     @classmethod
     def setUpClass(cls) -> None:
+        """Initialise the shared XMM test GalaxyCluster source."""
         cls.src = get_test_source("xmm")
 
     def test_xmm_image_loading(self) -> None:
-        """
-        Test that existing XMM images are correctly identified and loaded.
-        """
+        """Test that existing XMM images are correctly identified and loaded."""
         if "xmm" not in self.src.telescopes:
             self.skipTest("XMM data not associated with test source")
 
@@ -58,9 +61,7 @@ class TestProductLoading(unittest.TestCase):
         self.assertTrue(all(im.telescope == "xmm" for im in imgs))
 
     def test_xmm_expmap_loading(self) -> None:
-        """
-        Test that existing XMM exposure maps are correctly identified and loaded.
-        """
+        """Test that existing XMM exposure maps are correctly identified and loaded."""
         if "xmm" not in self.src.telescopes:
             self.skipTest("XMM data not associated with test source")
 
@@ -92,9 +93,7 @@ class TestProductLoading(unittest.TestCase):
         self.assertTrue(all(isinstance(ex, ExpMap) for ex in exps))
 
     def test_xmm_spectrum_loading(self) -> None:
-        """
-        Test that existing XMM spectra are correctly identified and loaded.
-        """
+        """Test that existing XMM spectra are correctly identified and loaded."""
         if "xmm" not in self.src.telescopes:
             self.skipTest("XMM data not associated with test source")
 
@@ -126,9 +125,7 @@ class TestProductLoading(unittest.TestCase):
         self.assertTrue(all(isinstance(sp, Spectrum) for sp in specs))
 
     def test_erass_image_loading(self) -> None:
-        """
-        Test that existing eRASS images are correctly identified and loaded.
-        """
+        """Test that existing eRASS images are correctly identified and loaded."""
         if "erass" not in self.src.telescopes:
             self.skipTest("eRASS data not associated with test source")
 
@@ -163,9 +160,7 @@ class TestProductLoading(unittest.TestCase):
         self.assertTrue(all(im.telescope == "erass" for im in imgs))
 
     def test_erass_spectrum_loading(self) -> None:
-        """
-        Test that existing eRASS spectra are correctly identified and loaded.
-        """
+        """Test that existing eRASS spectra are correctly identified and loaded."""
         if "erass" not in self.src.telescopes:
             self.skipTest("eRASS data not associated with test source")
 
@@ -200,9 +195,7 @@ class TestProductLoading(unittest.TestCase):
         self.assertTrue(all(sp.telescope == "erass" for sp in specs))
 
     def test_chandra_image_loading(self) -> None:
-        """
-        Test that existing Chandra images are correctly identified and loaded.
-        """
+        """Test that existing Chandra images are correctly identified and loaded."""
         if "chandra" not in self.src.telescopes:
             self.skipTest("Chandra data not associated with test source")
 
@@ -235,9 +228,7 @@ class TestProductLoading(unittest.TestCase):
         self.assertTrue(all(im.telescope == "chandra" for im in imgs))
 
     def test_chandra_spectrum_loading(self) -> None:
-        """
-        Test that existing Chandra spectra are correctly identified and loaded.
-        """
+        """Test that existing Chandra spectra are correctly identified and loaded."""
         if "chandra" not in self.src.telescopes:
             self.skipTest("Chandra data not associated with test source")
 

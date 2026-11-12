@@ -1,5 +1,10 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 1:28 PM. Copyright (c) The Contributors.
+"""
+The xga.generate.esass.phot module implements wrapper functions for eSASS tools that generate 'photometric' (i.e.
+images and things related to images) data products. As these functions wrap eSASS tools specifically, they are only
+compatible with source/sample instances that have eROSITA observations associated.
+"""
 
 import os
 from random import randint

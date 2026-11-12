@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 4:25 PM. Copyright (c) The Contributors.
+"""Tests for the BaseProduct class' file-existence checking and remote file downloading methods."""
 
 import os
 import shutil
@@ -16,12 +17,11 @@ from . import HTTPS_ROOT, S3_ROOT, TEST_EVTS
 
 
 class TestBaseProductFileExists(unittest.TestCase):
-    """
-    Tests that the BaseProduct class' file-exists checking facility works across local and remote files.
-    """
+    """Tests that the BaseProduct class' file-exists checking facility works across local and remote files."""
 
     @classmethod
     def setUpClass(cls) -> None:
+        """Set up local, HTTPS, and S3 event list paths (both valid and broken) for file-exists tests."""
         rel_info = TEST_EVTS["XMM_PN"]
         rel_url = os.path.join(HTTPS_ROOT, rel_info["path"])
 
@@ -49,6 +49,7 @@ class TestBaseProductFileExists(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls) -> None:
+        """Clean up the temporary local event list directory created for the file-exists tests."""
         # We clean up the local file we created for the existence checks.
         test_ext_data_dir = os.path.join(EXTERNAL_TEST_DATA_PATH, "TestBaseProductFileExists")
         if os.path.exists(test_ext_data_dir):
@@ -116,12 +117,11 @@ class TestBaseProductFileExists(unittest.TestCase):
 
 
 class TestBaseProductDownload(unittest.TestCase):
-    """
-    Tests for the BaseProduct.download() method across URL and S3 sources.
-    """
+    """Tests for the BaseProduct.download() method across URL and S3 sources."""
 
     @classmethod
     def setUpClass(cls) -> None:
+        """Set up remote event list paths and a shared temporary directory for the download tests."""
         rel_info = TEST_EVTS["XMM_PN"]
         cls.url_evt_path = os.path.join(HTTPS_ROOT, rel_info["path"])
         cls.s3_evt_path = os.path.join(S3_ROOT, rel_info["path"])
@@ -131,6 +131,7 @@ class TestBaseProductDownload(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls) -> None:
+        """Clean up the shared temporary directory used for the download tests."""
         cls.shared_td.cleanup()
 
     def test_download_url(self) -> None:

@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 9:24 AM. Copyright (c) The Contributors.
+"""Functions for running XSPEC fakeit spectral simulations and count-rate to luminosity conversions."""
 
 import os
 from random import randint

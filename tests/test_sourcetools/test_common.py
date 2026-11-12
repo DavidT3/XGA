@@ -1,6 +1,8 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 6:08 PM. Copyright (c) The Contributors.
 
+"""Tests for internal setup helper functions in xga.sourcetools._common."""
+
 import unittest
 
 from astropy.units import Quantity
@@ -14,19 +16,25 @@ from .. import get_test_source
 
 
 class TestSetupFuncs(unittest.TestCase):
+    """Tests for common sourcetools setup and telescope validation helper functions."""
+
     @classmethod
     def setUpClass(cls) -> None:
+        """Initialise the shared multi-mission test GalaxyCluster source."""
         cls.src = get_test_source("all")
 
     def test_get_all_telescopes_list_input(self) -> None:
+        """Tests that _get_all_telescopes extracts all associated telescopes when passed a list of sources."""
         res = _get_all_telescopes([self.src])
         assert set(res) == {"erass", "xmm"}
 
     def test_get_all_telescopes_source_input(self) -> None:
+        """Tests that _get_all_telescopes extracts all associated telescopes when passed a single source."""
         res = _get_all_telescopes(self.src)
         assert set(res) == {"erass", "xmm"}
 
     def test_setup_global(self) -> None:
+        """Tests that _setup_global prepares the source list, outer radii, and per-telescope return dictionaries."""
         res = _setup_global(
             self.src,
             Quantity(600, "kpc"),
@@ -49,6 +57,7 @@ class TestSetupFuncs(unittest.TestCase):
         assert len(res[2]["erass"]) == 1
 
     def test_setup_inv_abel_dens_onion_temp(self) -> None:
+        """Tests that _setup_inv_abel_dens_onion_temp generates the required 3D gas density and temperature profiles."""
         res = _setup_inv_abel_dens_onion_temp(
             self.src, Quantity(600, "kpc"), "beta", "king", "vikhlinin_temp", Quantity(600, "kpc"), stacked_spectra=True
         )

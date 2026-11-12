@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 11:54 AM. Copyright (c) The Contributors.
+"""Functions for measuring specific entropy profiles of galaxy clusters."""
 
 from warnings import warn
 

@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 7:14 PM. Copyright (c) The Contributors.
+"""Tests for XGA's CIAO photometric product generation wrapper functions."""
 
 import unittest
 
@@ -14,23 +15,22 @@ from ..utils import require_ciao
 
 
 class TestCiaoPhotFuncs(unittest.TestCase):
+    """Test cases for the Chandra CIAO photometric product generation functions."""
+
     @classmethod
     def setUpClass(cls) -> None:
+        """Set up the test source required for the CIAO photometric generation tests."""
         cls.src = get_test_source("all")
 
     @require_ciao
     def test_chandra_image_expmap_no_tel_error(self) -> None:
-        """
-        Testing that TelescopeNotAssociatedError is raised when Chandra isn't associated.
-        """
+        """Testing that TelescopeNotAssociatedError is raised when Chandra isn't associated."""
         with self.assertRaises(TelescopeNotAssociatedError):
             chandra_image_expmap(self.src)
 
     @require_ciao
     def test_chandra_image_expmap_if_available(self) -> None:
-        """
-        Test chandra_image_expmap if Chandra data is available. Will skip if no Chandra observations.
-        """
+        """Test chandra_image_expmap if Chandra data is available. Will skip if no Chandra observations."""
         # Check if Chandra is actually available for this source
         if "chandra" not in self.src.obs_ids or len(self.src.obs_ids.get("chandra", [])) == 0:
             self.skipTest("No Chandra observations available for test source")

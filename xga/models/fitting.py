@@ -1,6 +1,9 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:21. Copyright (c) The Contributors
-
+"""
+The xga.models.fitting module contains log-likelihood, prior, and posterior probability functions used when fitting
+XGA 1D profile models with MCMC samplers.
+"""
 
 from collections.abc import Callable
 from typing import Any

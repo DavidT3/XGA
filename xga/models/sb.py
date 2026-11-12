@@ -1,6 +1,9 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 22:40. Copyright (c) The Contributors
-
+"""
+The xga.models.sb module contains analytical 1D models for describing galaxy cluster radial X-ray surface brightness
+profiles (such as single and double beta profiles).
+"""
 
 import numpy as np
 from astropy.units import Quantity, Unit, UnitConversionError, deg, kpc
@@ -30,9 +33,7 @@ class BetaProfile1D(BaseModel1D):
         y_unit: str | Unit = Unit("ct/(s*arcmin**2)"),
         cust_start_pars: list[Quantity] | None = None,
     ) -> None:
-        """
-        The init of a subclass of the XGA BaseModel1D class, describing the surface brightness beta profile model.
-        """
+        """The init of the XGA BaseModel1D subclass describing the surface brightness beta profile model."""
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
             x_unit = Unit(x_unit)

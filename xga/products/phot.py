@@ -1,5 +1,9 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 11/10/26, 9:57 AM. Copyright (c) The Contributors.
+"""
+This module defines XGA photometric product classes, including Image, ExpMap, RateMap, PSF, and PSFGrid,
+for storing, manipulating, and visualising imaging X-ray data products.
+"""
 
 from __future__ import annotations
 
@@ -625,7 +629,7 @@ class Image(BaseProduct):
         then it must have a) 'method' key with the name of the smoothing method, and b) a 'pars' key with another
         dictionary of all the parameters involved in smoothing;
         e.g. {'method': 'Gaussian2DKernel', 'pars': {'amplitude': 0.63, 'x_mean': 0.0, 'y_mean': 0.0, 'x_stddev': 0.5,
-                                                     'y_stddev': 0.5, 'theta': 0.0}}
+                                                     'y_stddev': 0.5, 'theta': 0.0}}.
 
         :param dict/Kernel info: The information dictionary or astropy kernel used for the smoothing.
         :return: The name of the kernel/method and parameter information
@@ -1256,9 +1260,7 @@ class Image(BaseProduct):
 
     @psf_corrected.setter
     def psf_corrected(self, new_val: bool) -> None:
-        """
-        Allows the psf_corrected flag to be altered.
-        """
+        """Allows the psf_corrected flag to be altered."""
         self._psf_corrected = new_val
 
     @property
@@ -2446,9 +2448,7 @@ class Image(BaseProduct):
                     self._ignore_arts.append(art_reg)
 
         def dynamic_view(self) -> None:
-            """
-            The simplest view method of this class, enables the turning on and off of regions.
-            """
+            """The simplest view method of this class, enables the turning on and off of regions."""
             # Draws on any regions associated with this instance
             self._draw_regions()
 
@@ -2917,7 +2917,7 @@ class Image(BaseProduct):
 
         def _on_region_pick(self, event: PickEvent) -> None:
             """
-            This is triggered by selecting a region
+            This is triggered by selecting a region.
 
             :param event: The event triggered on 'picking' an artist. Contains information about which artist
                 triggered the event, location, etc.
@@ -3228,9 +3228,7 @@ class ExpMap(Image):
         return Quantity(exp, "s")
 
     def get_count(self, *args: object, **kwargs: object) -> None:
-        """
-        Inherited method from Image superclass, disabled as does not make sense in an exposure map.
-        """
+        """Inherited method from Image superclass, disabled as does not make sense in an exposure map."""
         pass
 
     @property
@@ -3977,7 +3975,7 @@ class RateMap(Image):
     @property
     def edge_mask(self) -> np.ndarray:
         """
-        Returns the edge mask calculated for this RateMap in the form of a numpy array
+        Returns the edge mask calculated for this RateMap in the form of a numpy array.
 
         :return: A boolean numpy array in the same shape as the RateMap.
         :rtype: ndarray
@@ -4352,6 +4350,7 @@ class PSFGrid(BaseAggregateProduct):
     def x_bounds(self) -> np.ndarray:
         """
         The x lower (column 0) and x upper (column 1) bounds of the PSFGrid bins.
+
         :return: N x 2 numpy array, where N is the total number of PSFGrid bins.
         :rtype: np.ndarray
         """

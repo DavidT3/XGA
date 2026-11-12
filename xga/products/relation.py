@@ -1,5 +1,9 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:51 PM. Copyright (c) The Contributors.
+"""
+This module defines the XGA ScalingRelation and AggregateScalingRelation product classes for storing, evaluating,
+and visualising fitted scaling relations.
+"""
 
 from __future__ import annotations
 
@@ -1615,6 +1619,15 @@ class ScalingRelation:
     def __add__(
         self, other: ScalingRelation | AggregateScalingRelation | list[ScalingRelation]
     ) -> AggregateScalingRelation:
+        """
+        Combines this scaling relation with another ScalingRelation, an AggregateScalingRelation, or a list of
+        ScalingRelations to produce an AggregateScalingRelation object.
+
+        :param Union[ScalingRelation, AggregateScalingRelation, List[ScalingRelation]] other: The scaling
+            relation(s) to combine with this scaling relation.
+        :return: An AggregateScalingRelation instance containing the combined scaling relations.
+        :rtype: AggregateScalingRelation
+        """
         to_combine = [self]
         if type(other) is list:
             to_combine += other
@@ -1639,6 +1652,9 @@ class AggregateScalingRelation:
     def __init__(self, relations: list[ScalingRelation]) -> None:
         """
         Init method for the AggregateScalingRelation, that allows for the joint viewing of sets of scaling relations.
+
+        :param List[ScalingRelation] relations: A list of ScalingRelation objects to be combined into an
+            AggregateScalingRelation.
         """
         # There aren't specific classes for different types of relations, but I do need to check that whatever
         #  relations are being added together have the same x and y units
@@ -2212,11 +2228,26 @@ class AggregateScalingRelation:
         plt.show()
 
     def __len__(self) -> int:
+        """
+        The length of an AggregateScalingRelation is the number of ScalingRelation objects that make it up.
+
+        :return: The number of component ScalingRelation objects.
+        :rtype: int
+        """
         return len(self._relations)
 
     def __add__(
         self, other: ScalingRelation | AggregateScalingRelation | list[ScalingRelation]
     ) -> AggregateScalingRelation:
+        """
+        Combines this aggregate scaling relation with another ScalingRelation, an AggregateScalingRelation, or a
+        list of ScalingRelations to produce a new AggregateScalingRelation object.
+
+        :param Union[ScalingRelation, AggregateScalingRelation, List[ScalingRelation]] other: The scaling
+            relation(s) to combine with this aggregate scaling relation.
+        :return: An AggregateScalingRelation instance containing the combined scaling relations.
+        :rtype: AggregateScalingRelation
+        """
         to_combine = self.relations
         if type(other) is list:
             to_combine += other

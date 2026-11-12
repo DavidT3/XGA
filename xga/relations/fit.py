@@ -1,5 +1,7 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:06 PM. Copyright (c) The Contributors.
+"""Functions for fitting scaling relations to sample measurements using curve_fit, ODR, or LIRA."""
+
 import inspect
 from types import FunctionType
 from warnings import warn
@@ -581,6 +583,7 @@ def scaling_relation_lira(
 
 
 def scaling_relation_emcee() -> None:
+    """Placeholder function for fitting a scaling relation with emcee (not yet implemented)."""
     raise NotImplementedError(
         "This fitting method has not yet been implemented, please consider LIRA as an alternative."
     )

@@ -1,5 +1,9 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 9:50 PM. Copyright (c) The Contributors.
+"""
+This module defines the XGA Spectrum and AnnularSpectra product classes for storing and interacting with
+X-ray spectra and their associated response and background files.
+"""
 
 import os
 import re
@@ -408,6 +412,7 @@ class Spectrum(BaseProduct):
         """
         Internal method to read the spectrum (or background spectrum) header associated with this Spectrum object into
         memory when it is requested by another method. Doing it on-demand saves on wasting memory. Either the header of
+        the primary table or the SPECTRUM table can be read in.
 
         :param bool src_spec: This parameter controls whether it is the source or background spectrum header that
             is read into memory. If True (the default) then the source spectrum is read, otherwise the background
@@ -715,7 +720,7 @@ class Spectrum(BaseProduct):
     @property
     def back_grouping(self) -> np.ndarray:
         """
-        The grouping information from the background spectrum
+        The grouping information from the background spectrum.
 
         :rtype: np.ndarray
         :return: An array of group IDs.
@@ -748,7 +753,7 @@ class Spectrum(BaseProduct):
     def eff_area(self) -> Quantity:
         """
         The discrete effective area curve of the telescope. These area values correspond to upper and lower energy
-        bounds that can be accessed using the eff_area_lo_en and eff_area_hi_en properties
+        bounds that can be accessed using the eff_area_lo_en and eff_area_hi_en properties.
 
         :rtype: Quantity
         :return: A quantity containing the effective area values in units of cm^-2.
@@ -881,6 +886,7 @@ class Spectrum(BaseProduct):
     def rmf(self, new_path: str) -> None:
         """
         This setter updates the path to the main RMF file, then writes that change to the actual spectrum file.
+
         WARNING: This permanently alters the file, use with caution!
 
         :param str new_path: The path to the new RMF file.
@@ -911,6 +917,7 @@ class Spectrum(BaseProduct):
     def arf(self, new_path: str) -> None:
         """
         This setter updates the path to the main ARF file, then writes that change to the actual spectrum file.
+
         WARNING: This permanently alters the file, use with caution!
 
         :param str new_path: The path to the new ARF file.
@@ -940,6 +947,7 @@ class Spectrum(BaseProduct):
         """
         This method is the setter for the background spectrum. It can be used to change the background
         spectrum file associated with this object, and will write that change to the actual spectrum file.
+
         WARNING: This permanently alters the file, use with caution!
 
         :param str new_path: The path to the new background spectrum.
@@ -4486,10 +4494,18 @@ class AnnularSpectra(BaseAggregateProduct):
     def __len__(self) -> int:
         """
         The length of a AnnularSpectra is the number of annuli, so essentially a proxy for num_annuli.
+
         :return: The num_annuli property.
         :rtype: int
         """
         return self._num_ann
 
     def __getitem__(self, ind: int) -> Spectrum:
+        """
+        Returns the component Spectrum object corresponding to the supplied index.
+
+        :param int ind: The index of the component Spectrum to return.
+        :return: The selected component Spectrum object.
+        :rtype: Spectrum
+        """
         return self.all_spectra[ind]

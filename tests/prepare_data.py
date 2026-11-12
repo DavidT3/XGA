@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 4:53 PM. Copyright (c) The Contributors.
+"""Script to download and process the raw observation data required for XGA's unit test suite via DAXA."""
 
 import os
 import sys

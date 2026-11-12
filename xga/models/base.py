@@ -1,5 +1,10 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:26 PM. Copyright (c) The Contributors.
+"""
+The xga.models.base module defines the BaseModel1D superclass for analytical 1D profile models in XGA, providing
+common functionality for parameter management, unit validation, numerical derivatives, volume/spherical integration,
+and storing fit results.
+"""
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -985,7 +990,7 @@ class BaseModel1D(metaclass=ABCMeta):
         Property that returns the current priors on parameters of the model, these will be used by any
         fitting function that sets priors on parameters. Each entry in this list will be a dictionary with
         two keys 'prior' and 'type'. The value for prior will be an astropy quantity, and the value for type
-        will be a prior type (so uniform, gaussian, etc.)
+        will be a prior type (so uniform, gaussian, etc.).
 
         :return: A list of astropy quantities representing the values of the start parameters of this model.
         :rtype: List[Quantity]
@@ -997,7 +1002,7 @@ class BaseModel1D(metaclass=ABCMeta):
         """
         Property setter for the parameter priors of this model. The user should supply a list of dictionaries
         which describe the characteristic values of the prior and its type, for instance:
-        [{'prior': Quantity([1, 1000], 'kpc'), 'type': 'uniform'}, {'prior': Quantity([0, 3]), 'type': 'uniform'}]
+        [{'prior': Quantity([1, 1000], 'kpc'), 'type': 'uniform'}, {'prior': Quantity([0, 3]), 'type': 'uniform'}].
 
         Which describes a uniform prior between 1 and 1000kpc on the first prior, and a uniform prior
         between 0 and 3 on the second. The types of prior supported by XGA can be accessed using the
@@ -1072,7 +1077,7 @@ class BaseModel1D(metaclass=ABCMeta):
     @x_lims.setter
     def x_lims(self, new_val: Quantity) -> None:
         """
-        Property to set the x limits within which the model is considered valid
+        Property to set the x limits within which the model is considered valid.
 
         :param Quantity new_val: The new x-limits, first element lower, second element upper.
         """
@@ -1225,7 +1230,7 @@ class BaseModel1D(metaclass=ABCMeta):
     def emcee_sampler(self) -> em.EnsembleSampler | None:
         """
         Property getter for the emcee sampler used to fit this model, if applicable. By default this will be
-        None, as the it has to be set externally, as the model won't necessarily be fit by emcee
+        None, as it has to be set externally, as the model won't necessarily be fit by emcee.
 
         :return: The emcee sampler used to fit this model.
         :rtype: em.EnsembleSampler
@@ -1245,8 +1250,8 @@ class BaseModel1D(metaclass=ABCMeta):
     def cut_off(self) -> int | None:
         """
         Property getter for the number of steps that an MCMC fitting method decided should be removed for burn-in.
-         By default this will be None, as the it has to be set externally, as the model won't necessarily
-         be fit by emcee
+        By default this will be None, as it has to be set externally, as the model won't necessarily
+        be fit by emcee.
 
         :return: The number of steps to be removed for burn-in.
         :rtype: int
@@ -1310,7 +1315,7 @@ class BaseModel1D(metaclass=ABCMeta):
     @success.setter
     def success(self, new_val: bool) -> None:
         """
-        This is for an external fit method to set whether the fit run using this model was successful or not
+        This is for an external fit method to set whether the fit run using this model was successful or not.
 
         :param bool new_val: True for successful, False for failed.
         """

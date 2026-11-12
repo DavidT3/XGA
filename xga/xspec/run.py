@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 9:28 AM. Copyright (c) The Contributors.
+"""Core execution machinery and decorators for running XSPEC scripts in parallel and parsing output files."""
 
 import os
 from collections.abc import Callable

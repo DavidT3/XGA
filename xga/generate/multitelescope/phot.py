@@ -1,5 +1,9 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 13:22. Copyright (c) The Contributors
+"""
+The xga.generate.multitelescope.phot module provides convenience functions that call mission-specific photometric
+product generation wrappers across all telescopes associated with a source or sample.
+"""
 
 from warnings import warn
 

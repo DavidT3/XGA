@@ -1,6 +1,8 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 10:20 AM. Copyright (c) The Contributors.
 
+"""Tests for XGA gas temperature profile and annular binning functions in xga.sourcetools.temperature."""
+
 import unittest
 
 import numpy as np
@@ -22,18 +24,16 @@ from .. import get_test_source
 
 
 class TestTempFuncs(unittest.TestCase):
+    """Tests for annular spectral binning and 2D/3D gas temperature profile measurement functions."""
+
     @classmethod
     def setUpClass(cls) -> None:
-        """
-        This is run once before all tests. Here we define class objects that we want to test.
-        """
+        """Define class objects that we want to test before all tests run."""
         cls.test_src = get_test_source("all")
         cls.all_tels = cls.test_src
 
     def test_ann_bins_setup_working_with_erass(self) -> None:
-        """
-        Testing _ann_bins_setup doesn't error unexpectedly with erass data.
-        """
+        """Testing _ann_bins_setup doesn't error unexpectedly with erass data."""
         # need combined ratemaps already generated to have _ann_bins_setup run
         evtool_image(self.test_src, Quantity(0.5, "keV"), Quantity(2, "keV"), combine_obs=True)
         expmap(self.test_src, Quantity(0.5, "keV"), Quantity(2, "keV"), combine_obs=True)
@@ -60,9 +60,7 @@ class TestTempFuncs(unittest.TestCase):
         assert retrn[7].unit == "deg/pix"
 
     def test_snr_bins_working_with_erass(self) -> None:
-        """
-        Testing _snr_bins doesn't error unexpectedly with erass data.
-        """
+        """Testing _snr_bins doesn't error unexpectedly with erass data."""
         # need combined ratemaps already generated to have _snr_bins_setup run
         evtool_image(self.test_src, Quantity(0.5, "keV"), Quantity(2, "keV"), combine_obs=True)
         expmap(self.test_src, Quantity(0.5, "keV"), Quantity(2, "keV"), combine_obs=True)
@@ -85,9 +83,7 @@ class TestTempFuncs(unittest.TestCase):
         assert isinstance(retrn[2], int)
 
     def test_cnt_bins_working_with_erass(self) -> None:
-        """
-        Testing _cnt_bins doesn't error unexpectedly with erass data.
-        """
+        """Testing _cnt_bins doesn't error unexpectedly with erass data."""
         # need combined ratemaps already generated to have _snr_bins_setup run
         evtool_image(self.test_src, Quantity(0.5, "keV"), Quantity(2, "keV"), combine_obs=True)
         expmap(self.test_src, Quantity(0.5, "keV"), Quantity(2, "keV"), combine_obs=True)
@@ -110,6 +106,7 @@ class TestTempFuncs(unittest.TestCase):
         assert isinstance(retrn[2], int)
 
     def test_min_snr_proj_temp_prof_w_two_tscopes(self) -> None:
+        """Testing min_snr_proj_temp_prof works with both XMM and eRASS data."""
         # need combined ratemaps already generated for erass
         evtool_image(self.all_tels, Quantity(0.5, "keV"), Quantity(2, "keV"), combine_obs=True)
         expmap(self.all_tels, Quantity(0.5, "keV"), Quantity(2, "keV"), combine_obs=True)
@@ -125,6 +122,7 @@ class TestTempFuncs(unittest.TestCase):
         assert all_rads["xmm"][0].unit == "arcsec"
 
     def test_min_cnt_proj_temp_prof_w_two_tscopes(self) -> None:
+        """Testing min_cnt_proj_temp_prof works with both XMM and eRASS data."""
         # need combined ratemaps already generated for erass
         evtool_image(self.all_tels, Quantity(0.5, "keV"), Quantity(2, "keV"), combine_obs=True)
         expmap(self.all_tels, Quantity(0.5, "keV"), Quantity(2, "keV"), combine_obs=True)
@@ -140,6 +138,7 @@ class TestTempFuncs(unittest.TestCase):
         assert all_rads["xmm"][0].unit == "arcsec"
 
     def test_onion_deproj_temp_prof(self) -> None:
+        """Testing onion_deproj_temp_prof produces GasTemperature3D profiles for both XMM and eRASS data."""
         # need combined ratemaps already generated for erass
         evtool_image(self.all_tels, Quantity(0.5, "keV"), Quantity(2, "keV"), combine_obs=True)
         expmap(self.all_tels, Quantity(0.5, "keV"), Quantity(2, "keV"), combine_obs=True)

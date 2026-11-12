@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 7:42 PM. Copyright (c) The Contributors.
+"""Miscellaneous utility functions for source analysis, coordinate conversion, and nH lookup."""
 
 from __future__ import annotations
 

@@ -1,5 +1,7 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/15/26, 2:40 PM. Copyright (c) The Contributors.
+"""End-to-end pipeline for measuring galaxy cluster X-ray luminosities, temperatures, and overdensity radii."""
+
 from warnings import warn
 
 import numpy as np

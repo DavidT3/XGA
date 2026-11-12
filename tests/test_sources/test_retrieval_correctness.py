@@ -1,6 +1,8 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 7:14 PM. Copyright (c) The Contributors.
 
+"""Tests for product retrieval specificity between individual and combined products."""
+
 import unittest
 
 from astropy.units import Quantity
@@ -13,14 +15,15 @@ from .. import get_test_source
 
 
 class TestProductRetrievalCorrectness(unittest.TestCase):
+    """Tests that BaseSource product getter methods distinguish between individual and combined products."""
+
     @classmethod
     def setUpClass(cls) -> None:
+        """Initialise the shared XMM test GalaxyCluster source."""
         cls.src = get_test_source("xmm")
 
     def test_xmm_image_retrieval_specificity(self) -> None:
-        """
-        Test that XMM retrieval distinguishes between specific instrument and 'combined'.
-        """
+        """Test that XMM retrieval distinguishes between specific instrument and 'combined'."""
         if "xmm" not in self.src.telescopes:
             self.skipTest("XMM data not associated")
 
@@ -52,9 +55,7 @@ class TestProductRetrievalCorrectness(unittest.TestCase):
         self.assertEqual(comb_img.obs_id, "combined")
 
     def test_erass_image_retrieval_specificity(self) -> None:
-        """
-        Test that eRASS retrieval distinguishes between combination modes.
-        """
+        """Test that eRASS retrieval distinguishes between combination modes."""
         if "erass" not in self.src.telescopes:
             self.skipTest("eRASS data not associated")
 

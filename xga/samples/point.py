@@ -1,5 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 11/12/2025, 17:14. Copyright (c) The Contributors
+"""Sample classes for specific point-like X-ray sources, such as X-ray emitting stars."""
 
 from warnings import warn
 

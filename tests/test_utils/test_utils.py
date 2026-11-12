@@ -1,16 +1,18 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 4/24/26, 1:37 PM. Copyright (c) The Contributors.
 
+"""Tests for constants and general utility definitions in xga.utils."""
+
 from unittest import TestCase
 
 from xga.utils import MISSION_XY_UNITS, TELESCOPES
 
 
 class TestUtils(TestCase):
+    """Tests for general utility structures and constants in xga.utils."""
+
     def test_mission_xy_units(self) -> None:
-        """
-        Tests that all missions supported by XGA have coordinate units defined in MISSION_XY_UNITS.
-        """
+        """Tests that all missions supported by XGA have coordinate units defined in MISSION_XY_UNITS."""
         for tel in TELESCOPES:
             with self.subTest(telescope=tel):
                 self.assertIn(

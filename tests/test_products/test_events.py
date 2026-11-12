@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 9/25/26, 5:46 PM. Copyright (c) The Contributors.
+"""Tests for the EventList product class and its image generation, filtering, and property methods."""
 
 import os
 import unittest
@@ -23,17 +24,20 @@ from . import HTTPS_ROOT, S3_ROOT, TEST_EVTS
 class TestEventListImageGeneration(unittest.TestCase):
     """
     Granular tests for image generation across all defined event lists.
+
     Asserts success for imaging missions and failure for non-imaging missions.
     """
 
     @classmethod
     def setUpClass(cls) -> None:
+        """Set up the XMM PN EventList instance used for the specific image generation tests."""
         # Event list to use for the more specific image tests.
         xmm_pn_test_info = TEST_EVTS["XMM_PN"]
         cls.evt = EventList(S3_ROOT + xmm_pn_test_info["path"])
         cls.test_evt_name = "XMM_PN"
 
     def check_missions_evt_init_image_gen(self, name: str) -> None:
+        """Check EventList initialisation and image generation for a given mission entry in TEST_EVTS."""
         cur_info = TEST_EVTS[name]
 
         # We'll do a subtest of the base event list checks first - no sense
@@ -159,7 +163,7 @@ class TestEventListImageGeneration(unittest.TestCase):
             self.evt.generate_image(lo_en=Quantity(0.5, "keV"), hi_en=Quantity(2.0, "keV"))
 
     def test_image_gen_angular_binsize(self) -> None:
-        """Test passing a binsize in angular units (e.g. arcsec) to EventList.generate_image(...)"""
+        """Test passing a binsize in angular units (e.g. arcsec) to EventList.generate_image(...)."""
         ang_bin_size = Quantity(4.35, "arcsec")
 
         expec_size = 600
@@ -228,7 +232,7 @@ class TestEventListImageGeneration(unittest.TestCase):
         )
 
     def test_image_gen_ang_lims(self) -> None:
-        """Test passing a binsize in angular units (e.g. arcsec) to EventList.generate_image(...)"""
+        """Test passing a binsize in angular units (e.g. arcsec) to EventList.generate_image(...)."""
         ang_bin_size = Quantity(4.35, "arcsec")
 
         ang_x_lims = Quantity([149.6768191, 149.5104306], "deg")
@@ -279,7 +283,7 @@ class TestEventListImageGeneration(unittest.TestCase):
             )
 
     def test_image_gen_pix_lims(self) -> None:
-        """Test passing a binsize in sky pixel units to EventList.generate_image(...)"""
+        """Test passing a binsize in sky pixel units to EventList.generate_image(...)."""
         sky_bin_size = 100
 
         pix_x_lims = Quantity([13560.5, 27560.5], "pix")
@@ -431,6 +435,7 @@ for mission_name in TEST_EVTS:
     gen_method = f"test_evt_init_im_gen_{mission_name}"
 
     def create_gen_test(m_name: str) -> Callable[[Any], None]:
+        """Create a test method that runs check_missions_evt_init_image_gen for a specific mission."""
         return lambda self: self.check_missions_evt_init_image_gen(m_name)
 
     setattr(TestEventListImageGeneration, gen_method, create_gen_test(mission_name))
@@ -441,6 +446,7 @@ class TestEventListFunctionality(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
+        """Set up the XMM PN EventList instance used for the general functionality tests."""
         info = TEST_EVTS["XMM_PN"]
         cls.evt = EventList(S3_ROOT + info["path"])
 
@@ -500,6 +506,7 @@ class TestEventListLocalLoad(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
+        """Download and decompress a Suzaku HXD PIN event list to a local directory for local-loading tests."""
         rel_info = TEST_EVTS["Suzaku_HXD_PIN"]
         rel_url = os.path.join(HTTPS_ROOT, rel_info["path"])
 

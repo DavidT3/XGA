@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 3:27 PM. Copyright (c) The Contributors.
+"""Tests for XGA's image and rate map smoothing functions in xga.imagetools.smooth."""
 
 import os
 import unittest
@@ -112,10 +113,7 @@ class TestGeneralSmoothFunction(unittest.TestCase):
             masked_smth_im.save_view(os.path.join(test_out_path, "masked_smooth.png"))
 
     def test_smooth_ratemap_image(self) -> None:
-        """
-        Checks the general_smooth function by running on the demo ratemap, using the
-        ratemap_smooth_im=True method.
-        """
+        """Checks general_smooth by running on the demo ratemap using the ratemap_smooth_im=True method."""
         # Set up an output directory for this test - visualizations of the ratemaps will
         #  be written to disk there as PNGs.
         test_out_path = os.path.join(MISC_OUTPUT_TESTS, self.id())

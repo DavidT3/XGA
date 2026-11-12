@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 12:01 PM. Copyright (c) The Contributors.
+"""Coordinates, redshifts, and expected ObsIDs for the astrophysical sources used across the XGA unit test suite."""
 
 # This file contains information about the sources used in XGA's unit tests.
 # It is kept separate from the rest of the testing infrastructure to avoid

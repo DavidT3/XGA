@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 10/6/26, 9:36 AM. Copyright (c) The Contributors.
+"""Subpackage defining XGA data product classes for storing and interacting with X-ray data and analysis results."""
 
 from .base import BaseAggregateProduct, BaseAggregateProfile1D, BaseProduct, BaseProfile1D
 from .events import EventList

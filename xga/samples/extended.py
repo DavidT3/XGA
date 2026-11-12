@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/14/26, 12:38 PM. Copyright (c) The Contributors.
+"""Implements sample classes for specific extended X-ray sources, such as galaxy clusters."""
 
 from __future__ import annotations
 

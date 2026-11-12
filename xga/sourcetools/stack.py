@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 1:46 PM. Copyright (c) The Contributors.
+"""Functions for scaling and stacking 2D images and radial profiles across samples of extended sources."""
 
 from multiprocessing.dummy import Pool
 from warnings import warn

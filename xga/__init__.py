@@ -1,5 +1,7 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 6/26/26, 11:28 AM. Copyright (c) The Contributors.
+"""The __init__ for the main xga package, handling version setup, lazy configuration loading, and legacy shims."""
+
 try:
     from importlib.metadata import version as _version
 
@@ -63,7 +65,14 @@ from types import ModuleType
 
 # We use a custom dictionary-like object for sys.modules to lazily import the sas modules
 class LazyModuleShim(ModuleType):
+    """A shim class placed in sys.modules to redirect legacy xga.sas imports to xga.generate.sas."""
+
     def __init__(self, target_name: str) -> None:
+        """
+        Initialise a lazy module shim for a legacy xga.sas module path.
+
+        :param str target_name: The legacy module path being redirected (e.g. 'xga.sas.phot').
+        """
         super().__init__(target_name)
         self.target_name = target_name
         self._module: ModuleType | None = None
@@ -93,9 +102,22 @@ class LazyModuleShim(ModuleType):
         return self._module
 
     def __getattr__(self, name: str) -> Any:
+        """
+        Forward attribute lookups to the underlying module in xga.generate.sas.
+
+        :param str name: The name of the attribute to retrieve from the underlying module.
+        :return: The requested attribute from the underlying module.
+        :rtype: Any
+        """
         return getattr(self._real_module, name)
 
     def __dir__(self) -> list[str]:
+        """
+        Return the list of valid attributes for the underlying module in xga.generate.sas.
+
+        :return: List of attribute names on the underlying module.
+        :rtype: list[str]
+        """
         return dir(self._real_module)
 
 

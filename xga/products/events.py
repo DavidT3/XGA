@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 4:13 PM. Copyright (c) The Contributors.
+"""This module defines the XGA EventList product class for interfacing with X-ray event list data files."""
 
 import os.path
 from warnings import warn

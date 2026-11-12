@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 2:44 PM. Copyright (c) The Contributors.
+"""Functions for fitting XSPEC spectral models to sets of annular spectra to measure radial profiles."""
 
 from inspect import Parameter, signature
 from random import randint

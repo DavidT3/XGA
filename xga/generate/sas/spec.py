@@ -1,5 +1,10 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 10:11 PM. Copyright (c) The Contributors.
+"""
+The xga.generate.sas.spec module implements wrapper functions for SAS tools that generate spectroscopic data
+products (i.e. spectra, background spectra, RMFs, and ARFs). As these functions wrap SAS tools specifically, they
+are only compatible with source/sample instances that have XMM observations associated.
+"""
 
 import os
 from copy import copy

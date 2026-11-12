@@ -1,5 +1,10 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 5:12 PM. Copyright (c) The Contributors.
+"""
+The xga.generate.esass.lightcurve module implements wrapper functions for eSASS tools that generate X-ray light
+curves. As these functions wrap eSASS tools specifically, they are only compatible with source/sample instances
+that have eROSITA observations associated.
+"""
 
 import os
 from copy import deepcopy

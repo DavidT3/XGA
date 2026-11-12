@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 9:00 PM. Copyright (c) The Contributors.
+"""This module provides configuration setup, backend software checks, and general utility functions for XGA."""
 
 import importlib.resources
 import json
@@ -166,9 +167,7 @@ def __getattr__(name: str) -> Any:
 
 
 def _get_sas_info() -> tuple[Version | None, bool]:
-    """
-    Internal helper to discover SAS version and availability. Only triggered if XMM is usable.
-    """
+    """Internal helper to discover SAS version and availability. Only triggered if XMM is usable."""
     # We only care to check for software if the mission is actually configured
     if not USABLE.get("xmm", False):
         return None, False
@@ -216,9 +215,7 @@ def _get_sas_info() -> tuple[Version | None, bool]:
 
 
 def _get_esass_info() -> tuple[str | None, bool]:
-    """
-    Internal helper to discover eSASS version and availability. Only triggered if eROSITA is usable.
-    """
+    """Internal helper to discover eSASS version and availability. Only triggered if eROSITA is usable."""
     if not (USABLE.get("erosita", False) or USABLE.get("erass", False)):
         return None, False
 
@@ -255,9 +252,7 @@ def _get_esass_info() -> tuple[str | None, bool]:
 
 
 def _get_ciao_info() -> tuple[Version | None, bool, Version | None, bool]:
-    """
-    Internal helper to discover CIAO version and availability. Only triggered if Chandra is usable.
-    """
+    """Internal helper to discover CIAO version and availability. Only triggered if Chandra is usable."""
     if not USABLE.get("chandra", False):
         return None, False, None, False
 

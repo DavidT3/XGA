@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 7:14 PM. Copyright (c) The Contributors.
+"""Tests for XGA's SAS photometric product generation wrapper functions."""
 
 import unittest
 
@@ -14,8 +15,11 @@ from ..utils import require_sas
 
 
 class TestSasPhotFuncs(unittest.TestCase):
+    """Test cases for the XMM SAS photometric product generation functions."""
+
     @classmethod
     def setUpClass(cls) -> None:
+        """Set up the test sources required for the SAS photometric generation tests."""
         # Grab a source with XMM in
         cls.src = get_test_source("xmm")
 
@@ -24,15 +28,13 @@ class TestSasPhotFuncs(unittest.TestCase):
 
     @require_sas
     def test_evselect_image_no_tel_error(self) -> None:
-        """
-        Testing that TelescopeNotAssociatedError is raised when a source with no XMM data is passed
-        to the XMM-specific evselect_image function.
-        """
+        """Testing that TelescopeNotAssociatedError is raised when a source has no XMM data."""
         with self.assertRaises(TelescopeNotAssociatedError):
             evselect_image(self.no_xmm_src)
 
     @require_sas
     def test_evselect_image(self) -> None:
+        """Testing that evselect_image generates and stores XMM images within the requested energy bounds."""
         evselect_image(self.src, Quantity(0.4, "keV"), Quantity(3, "keV"))
 
         try:
@@ -54,6 +56,7 @@ class TestSasPhotFuncs(unittest.TestCase):
 
     @require_sas
     def test_eexpmap(self) -> None:
+        """Testing that eexpmap generates and stores XMM exposure maps within the requested energy bounds."""
         eexpmap(self.src, Quantity(0.4, "keV"), Quantity(3, "keV"))
 
         try:
@@ -75,11 +78,13 @@ class TestSasPhotFuncs(unittest.TestCase):
 
     @require_sas
     def test_emosaic_incorrect_input(self) -> None:
+        """Testing that emosaic raises a ValueError when passed an unrecognised product type."""
         with self.assertRaises(ValueError):
             emosaic(self.src, "wrong")
 
     @require_sas
     def test_emosaic_image(self) -> None:
+        """Testing that emosaic generates and stores combined XMM mosaic images."""
         emosaic(self.src, "image", lo_en=Quantity(0.4, "keV"), hi_en=Quantity(3, "keV"))
 
         try:
@@ -101,6 +106,7 @@ class TestSasPhotFuncs(unittest.TestCase):
 
     @require_sas
     def test_emosaic_expmap(self) -> None:
+        """Testing that emosaic generates and stores combined XMM mosaic exposure maps."""
         emosaic(self.src, "expmap", lo_en=Quantity(0.4, "keV"), hi_en=Quantity(3, "keV"))
 
         try:

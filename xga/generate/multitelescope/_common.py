@@ -13,8 +13,8 @@ from xga.sourcetools._common import _get_all_telescopes
 def check_tel_associated(sources: BaseSource | BaseSample, telescope: str | list[str] | None) -> list[str]:
     """
     Simple check meant to be used on user-specified telescope names, to ensure they are associated with at
-    least one source. If None is passed for telescope then all telescope names associated with a source will
-    be returned
+    least one source.
+    If None is passed for telescope then all telescope names associated with a source will be returned.
 
     :param BaseSource/BaseSample sources: XGA source/sample to validate telescope names against, or to retrieve
         all associated telescopes for.

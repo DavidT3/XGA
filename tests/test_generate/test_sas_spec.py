@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 7:14 PM. Copyright (c) The Contributors.
+"""Tests for XGA's SAS spectral product generation wrapper functions."""
 
 import unittest
 
@@ -15,12 +16,16 @@ from ..utils import require_sas
 
 
 class TestSasSpecFuncs(unittest.TestCase):
+    """Test cases for the XMM SAS spectral product generation functions."""
+
     @classmethod
     def setUpClass(cls) -> None:
+        """Set up the XMM test source required for the SAS spectral generation tests."""
         cls.src = get_test_source("xmm")
 
     @require_sas
     def test_evselect_spectrum(self) -> None:
+        """Testing that evselect_spectrum generates and stores XMM spectra for a source."""
         evselect_spectrum(self.src, "r500")
 
         try:
@@ -38,9 +43,7 @@ class TestSasSpecFuncs(unittest.TestCase):
 
     @require_sas
     def test_spectrum_set(self) -> None:
-        """
-        Testing spectrum_set for annular spectrum generation.
-        """
+        """Testing spectrum_set for annular spectrum generation."""
         radii = Quantity([0, 100, 200, 500], "kpc")
         spectrum_set(self.src, radii)
 
@@ -55,9 +58,7 @@ class TestSasSpecFuncs(unittest.TestCase):
 
     @require_sas
     def test_evselect_lightcurve(self) -> None:
-        """
-        Testing evselect_lightcurve generation.
-        """
+        """Testing evselect_lightcurve generation."""
         evselect_lightcurve(self.src, "r500")
 
         try:

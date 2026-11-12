@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 11:55 AM. Copyright (c) The Contributors.
+"""Functions for measuring hydrostatic mass profiles and overdensity masses of galaxy clusters."""
 
 from warnings import warn
 

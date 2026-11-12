@@ -1,5 +1,7 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 2:55 PM. Copyright (c) The Contributors.
+"""This module defines product classes for interaction with, and analysis of, X-ray light curves."""
+
 import re
 from datetime import datetime
 from typing import Any, Union
@@ -363,7 +365,7 @@ class LightCurve(BaseProduct):
     @property
     def time(self) -> Quantity:
         """
-        Returns the time steps that correspond to the count-rates measured for this light curve
+        Returns the time steps that correspond to the count-rates measured for this light curve.
 
         :return: Background-subtracted and instrumental-effect-corrected count-rate uncertainties, in units of seconds.
         :rtype: Quantity

@@ -1,6 +1,9 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:21. Copyright (c) The Contributors
-
+"""
+The xga.models.density module contains analytical 1D models for describing galaxy cluster radial gas density profiles
+(such as single and double King profiles, and simplified and full Vikhlinin density models).
+"""
 
 import numpy as np
 from astropy.units import Quantity, Unit, UnitConversionError, deg, kpc

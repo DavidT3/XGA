@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/11/26, 7:35 AM. Copyright (c) The Contributors.
+"""Tests for XGA's eSASS photometric product generation wrapper functions."""
 
 import unittest
 
@@ -15,8 +16,11 @@ from ..utils import require_esass
 
 
 class TestEsassPhotFuncs(unittest.TestCase):
+    """Test cases for the eROSITA eSASS photometric product generation functions."""
+
     @classmethod
     def setUpClass(cls) -> None:
+        """Set up the eROSITA test source and energy bounds for the photometric generation tests."""
         cls.src = get_test_source("erass")
 
         # Set the lower and upper energy bounds of the phot products generated and retrieved
@@ -26,10 +30,7 @@ class TestEsassPhotFuncs(unittest.TestCase):
 
     @require_esass
     def test_evtool_image(self) -> None:
-        """
-        Generates and retrieves one image per eROSITA ObsID (tile), with TMs combined, associated
-        with the source - then retrieves the image.
-        """
+        """Generates and retrieves one image per eROSITA ObsID (tile), with TMs combined, associated with the source."""
         # Generate one image per ObsID, with TMs combined
         evtool_image(self.src, self._phot_lo_en, self._phot_hi_en)
 
@@ -50,9 +51,7 @@ class TestEsassPhotFuncs(unittest.TestCase):
 
     @require_esass
     def test_evtool_image_combined_obs(self) -> None:
-        """
-        Generates and retrieves eROSITA images with all available ObsIDs and TMs combined.
-        """
+        """Generates and retrieves eROSITA images with all available ObsIDs and TMs combined."""
         # Generate combined-Obs combined-TM image
         evtool_image(self.src, self._phot_lo_en, self._phot_hi_en, combine_obs=True)
 
@@ -69,10 +68,7 @@ class TestEsassPhotFuncs(unittest.TestCase):
 
     @require_esass
     def test_expmap(self) -> None:
-        """
-        Test generation and retrieval of eROSITA exposure maps for each Obs associated with
-        the source, with TMs combined.
-        """
+        """Test generation and retrieval of eROSITA exposure maps for each Obs, with TMs combined."""
         # Generate new eROSITA exposure maps, one per ObsID, with TMs combined
         expmap(self.src, self._phot_lo_en, self._phot_hi_en)
 
@@ -95,6 +91,7 @@ class TestEsassPhotFuncs(unittest.TestCase):
 
     @require_esass
     def test_expmap_combined_obs(self) -> None:
+        """Generates and retrieves eROSITA exposure maps with all available ObsIDs and TMs combined."""
         expmap(self.src, Quantity(0.5, "keV"), Quantity(3, "keV"), combine_obs=True)
 
         try:
@@ -109,7 +106,9 @@ class TestEsassPhotFuncs(unittest.TestCase):
     @require_esass
     def test_evtool_image_w_sample_w_odd_telescopes(self) -> None:
         """
-        There was an old bug that occured when product generation functions were run with samples
+        Tests running evtool_image on a sample whose sources do not all share the same telescopes.
+
+        There was an old bug that occurred when product generation functions were run with samples
         with sources that didn't all have the same telescopes. So this is testing that this bug has
         been fixed!
         """

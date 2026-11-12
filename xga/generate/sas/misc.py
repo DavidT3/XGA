@@ -1,5 +1,10 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 6/16/26, 10:59 AM. Copyright (c) The Contributors.
+"""
+The xga.generate.sas.misc module implements wrapper functions for SAS calibration and housekeeping tools (such as
+cifbuild). As these functions wrap SAS tools specifically, they are only compatible with source/sample instances
+that have XMM observations associated.
+"""
 
 import os
 import sys

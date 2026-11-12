@@ -1,5 +1,9 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 7/28/26, 10:06 AM. Copyright (c) The Contributors.
+"""
+The xga.generate.common module contains shared infrastructure for calling external mission-specific software
+(such as SAS, eSASS, and CIAO), executing commands in parallel, and instantiating the resulting XGA product objects.
+"""
 
 import os
 import sys

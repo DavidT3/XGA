@@ -1,5 +1,10 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 1:49 PM. Copyright (c) The Contributors.
+"""
+The xga.generate.esass.spec module implements wrapper functions for eSASS tools that generate spectroscopic data
+products (i.e. spectra, background spectra, RMFs, and ARFs). As these functions wrap eSASS tools specifically, they
+are only compatible with source/sample instances that have eROSITA observations associated.
+"""
 
 import os
 from copy import copy, deepcopy

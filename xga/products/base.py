@@ -1,8 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 10/6/26, 2:58 PM. Copyright (c) The Contributors.
-"""
-This module implements the bases for most XGA product classes.
-"""
+"""This module implements the base functionality for most XGA product classes."""
 
 import inspect
 import os
@@ -334,7 +332,7 @@ class BaseProduct:
         """
         Property getter for the attribute containing the fsspec keyword arguments passed to this
         product at instantiation. These are for passing configuration information such as credentials for
-        the remote access of S3 buckets
+        the remote access of S3 buckets.
 
         :return: The fsspec keyword arguments passed to this product at instantiation.
         :rtype: dict
@@ -972,9 +970,7 @@ class BaseProduct:
         return tel_errs_msgs, parsed_tel_warns, other_err_lines
 
     def raise_errors(self) -> None:
-        """
-        Method to raise the errors parsed from std_err string.
-        """
+        """Method to raise the errors parsed from std_err string."""
         for error in self._gen_error:
             raise ProductGenerationError(error)
 
@@ -1000,7 +996,7 @@ class BaseAggregateProduct:
         self, file_paths: list, prod_type: str, obs_id: str, instrument: str, telescope: str | None = None
     ) -> None:
         """
-        The init method for the BaseAggregateProduct class
+        The init method for the BaseAggregateProduct class.
 
         :param list file_paths: A list of file paths to the constituent products of this aggregate product.
         :param str prod_type: The type of product this aggregate represents (e.g. 'image').
@@ -1168,16 +1164,12 @@ class BaseAggregateProduct:
         return len(self._component_products)
 
     def __iter__(self) -> "BaseAggregateProduct":
-        """
-        Called when initiating iterating through an AggregateProduct based object. Resets the counter _n.
-        """
+        """Called when initiating iterating through an AggregateProduct based object. Resets the counter _n."""
         self._n = 0
         return self
 
     def __next__(self) -> BaseProduct | dict[str, Any]:
-        """
-        Iterates the counter _n and returns the next entry in the the component_products dictionary.
-        """
+        """Iterates the counter _n and returns the next entry in the component_products dictionary."""
         if self._n < self.__len__():
             result = self.__getitem__(self._n)
             self._n += 1
@@ -1186,6 +1178,13 @@ class BaseAggregateProduct:
             raise StopIteration
 
     def __getitem__(self, ind: int) -> BaseProduct | dict[str, Any]:
+        """
+        Returns the component product corresponding to the supplied index.
+
+        :param int ind: The index of the component product to return.
+        :return: The selected component product (or dictionary of component products).
+        :rtype: Union[BaseProduct, dict]
+        """
         return list(self._component_products.values())[ind]
 
 
@@ -1770,7 +1769,7 @@ class BaseProfile1D:
     def nlls_fit(self, model: BaseModel1D, num_samples: int, show_warn: bool) -> tuple[BaseModel1D, bool]:
         """
         A function to fit an XGA model instance to the data in this profile using the non-linear least squares
-        curve_fit routine from scipy, this should be called through .fit() for full functionality
+        curve_fit routine from scipy, this should be called through .fit() for full functionality.
 
         :param BaseModel1D model: An instance of the model to be fit to this profile.
         :param int num_samples: The number of random samples to be drawn and stored in the model
@@ -2488,7 +2487,7 @@ class BaseProfile1D:
         joined_points: bool = False,
         axis_formatters: dict | None = None,
     ) -> tuple[Axes, Axes | None]:
-        """
+        r"""
         A get method for an axes (or multiple axes) showing this profile and model fits. The idea of this get method
         is that, whilst it is used by the view() method, it can also be called by external methods that wish to use
         the profile plot in concert with other views.
@@ -2940,7 +2939,7 @@ class BaseProfile1D:
         joined_points: bool = False,
         axis_formatters: dict | None = None,
     ) -> None:
-        """
+        r"""
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals. The models are plotted by generating random model realisations from the parameter
         distributions, then plotting the median values, with 1sigma confidence limits.
@@ -3056,7 +3055,7 @@ class BaseProfile1D:
         joined_points: bool = False,
         axis_formatters: dict | None = None,
     ) -> None:
-        """
+        r"""
         A method that allows us to save a view of the current profile, as well as any models that have been
         fitted to it, and their residuals. The models are plotted by generating random model realisations from
         the parameter distributions, then plotting the median values, with 1sigma confidence limits.
@@ -3374,9 +3373,7 @@ class BaseProfile1D:
 
     @src_name.setter
     def src_name(self, new_name: str) -> None:
-        """
-        Setter for the name attribute of this profile, what source object it was derived from.
-        """
+        """Setter for the name attribute of this profile, what source object it was derived from."""
         self._src_name = new_name
         if self.auto_save:
             # This method means that a change has happened to the model, so it should be re-saved
@@ -3421,7 +3418,7 @@ class BaseProfile1D:
     def energy_bounds(self) -> tuple[Quantity, Quantity] | tuple[None, None]:
         """
         Getter method for the energy_bounds property, which returns the rest frame energy band that this
-        profile was generated from
+        profile was generated from.
 
         :return: Tuple containing the lower and upper energy limits as Astropy quantities.
         :rtype: Union[Tuple[Quantity, Quantity], Tuple[None, None]]
@@ -3638,6 +3635,15 @@ class BaseProfile1D:
     def __add__(
         self, other: "BaseProfile1D | BaseAggregateProfile1D | list[BaseProfile1D]"
     ) -> "BaseAggregateProfile1D":
+        """
+        Combines this 1D profile with another 1D profile, an aggregate 1D profile, or a list of 1D profiles to
+        produce a BaseAggregateProfile1D object.
+
+        :param Union[BaseProfile1D, BaseAggregateProfile1D, List[BaseProfile1D]] other: The profile(s) to combine
+            with this profile.
+        :return: An aggregate 1D profile containing the combined profiles.
+        :rtype: BaseAggregateProfile1D
+        """
         to_combine = [self]
         if isinstance(other, list):
             to_combine += other
@@ -3839,7 +3845,7 @@ class BaseAggregateProfile1D:
         show_residual_ax: bool = True,
         joined_points: bool = False,
     ) -> tuple[Axes, Axes | None]:
-        """
+        r"""
         This method populates a matplotlib figure and axes with all the profiles that make up this aggregate
         profile, plotted on the same figure.
 
@@ -4262,7 +4268,7 @@ class BaseAggregateProfile1D:
         show_residual_ax: bool = True,
         joined_points: bool = False,
     ) -> None:
-        """
+        r"""
         A method that allows us to see all the profiles that make up this aggregate profile, plotted
         on the same figure.
 
@@ -4367,7 +4373,7 @@ class BaseAggregateProfile1D:
         joined_points: bool = False,
         dpi: int = 300,
     ) -> None:
-        """
+        r"""
         This method generates a figure containing all the profiles that make up this aggregate profile, plotted
         on the same figure, and saves it to the specified path.
 
@@ -4458,6 +4464,15 @@ class BaseAggregateProfile1D:
     def __add__(
         self, other: "BaseProfile1D | BaseAggregateProfile1D | list[BaseProfile1D]"
     ) -> "BaseAggregateProfile1D":
+        """
+        Combines this aggregate 1D profile with another 1D profile, an aggregate 1D profile, or a list of 1D
+        profiles to produce a new BaseAggregateProfile1D object.
+
+        :param Union[BaseProfile1D, BaseAggregateProfile1D, List[BaseProfile1D]] other: The profile(s) to combine
+            with this aggregate profile.
+        :return: An aggregate 1D profile containing the combined profiles.
+        :rtype: BaseAggregateProfile1D
+        """
         to_combine = self.profiles
         if isinstance(other, list):
             to_combine += other

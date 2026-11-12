@@ -1,6 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 12:44. Copyright (c) The Contributors
-
+"""The xga.models.entropy module defines analytical 1D models for galaxy cluster radial specific entropy profiles."""
 
 from astropy.units import Quantity, Unit, UnitConversionError, kpc
 
