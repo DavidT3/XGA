@@ -26,7 +26,7 @@ from .utils import _prep_xga_config_file
 _prep_xga_config_file()
 
 
-def __getattr__(name: str) -> Any:
+def __getattr__(name: str) -> Any:  # noqa: ANN401
     """
     A module level __getattr__ which allows us to lazily load the XGA configuration and census from the utils
     module. This helps to avoid race conditions when importing XGA from other modules (like DAXA).
@@ -101,7 +101,7 @@ class LazyModuleShim(ModuleType):
                 self._module = generate.sas.run
         return self._module
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str) -> Any:  # noqa: ANN401
         """
         Forward attribute lookups to the underlying module in xga.generate.sas.
 

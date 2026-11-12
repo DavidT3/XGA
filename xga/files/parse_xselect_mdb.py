@@ -17,7 +17,7 @@ import sys
 from typing import Any
 
 
-def _convert_to_proper_type(value: Any) -> Any:
+def _convert_to_proper_type(value: str | int | float | bool | None) -> str | int | float | bool | None:
     """
     Attempts to convert a string value to its correct type (int, float, bool, None).
     If conversion fails, the original string is returned.

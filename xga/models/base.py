@@ -6,10 +6,12 @@ common functionality for parameter management, unit validation, numerical deriva
 and storing fit results.
 """
 
+from __future__ import annotations
+
 import inspect
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from warnings import warn
 
 import emcee as em
@@ -25,6 +27,9 @@ from scipy.integrate import quad
 from tabulate import tabulate
 
 from ..exceptions import XGAFitError
+
+if TYPE_CHECKING:
+    from ..products import BaseProfile1D
 
 
 class BaseModel1D(metaclass=ABCMeta):
@@ -175,7 +180,7 @@ class BaseModel1D(metaclass=ABCMeta):
         #  exists in isolation and hasn't been fit through a profile fit() method then it will remain None, but
         #  otherwise I'm storing the profile to avoid one model being fit to two different profiles accidentally.
         #  The BaseProfile1D internal method _model_allegiance sets this
-        self._profile: Any = None
+        self._profile: BaseProfile1D | None = None
 
     def __call__(self, x: Quantity, use_par_dist: bool = False) -> Quantity:
         """
@@ -1322,7 +1327,7 @@ class BaseModel1D(metaclass=ABCMeta):
         self._success = new_val
 
     @property
-    def profile(self) -> Any:
+    def profile(self) -> BaseProfile1D | None:
         """
         The profile that this model has been fit to.
 
@@ -1333,7 +1338,7 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._profile
 
     @profile.setter
-    def profile(self, new_val: Any) -> None:
+    def profile(self, new_val: BaseProfile1D | None) -> None:
         """
         The property setter for the profile that this model has been fit to.
 

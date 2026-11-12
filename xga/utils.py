@@ -12,7 +12,7 @@ from concurrent.futures import ProcessPoolExecutor
 from configparser import ConfigParser
 from functools import wraps
 from subprocess import PIPE, Popen
-from typing import Any
+from typing import Any, TypeVar
 from warnings import simplefilter, warn
 
 import numpy as np
@@ -103,7 +103,7 @@ def reinitialise_xga(config_dir: str | None = None, override_output_dir: str | N
         OUTPUT = os.path.join(os.path.abspath(override_output_dir), "")
 
 
-def __getattr__(name: str) -> Any:
+def __getattr__(name: str) -> Any:  # noqa: ANN401
     """
     A module level __getattr__ which allows us to lazily load the XGA configuration and census, as well as
     check for the availability of backend software. This helps to avoid race conditions when importing
@@ -739,7 +739,10 @@ def _initialise_xga() -> None:
     _INITIALISED = True
 
 
-def _deprecated(message: str) -> Callable[..., Any]:
+_R = TypeVar("_R")
+
+
+def _deprecated(message: str) -> Callable[[Callable[..., _R]], Callable[..., _R]]:
     """
     An internal function designed to be used as a decorator for any methods or functions which have been
     deprecated - means that the warning will be shown when they're imported or used.
@@ -747,7 +750,7 @@ def _deprecated(message: str) -> Callable[..., Any]:
     :param str message: The warning message which should be shown.
     """
 
-    def deprecated_function(dep_func: Callable[..., Any]) -> Callable[..., Any]:
+    def deprecated_function(dep_func: Callable[..., _R]) -> Callable[..., _R]:
         """
         This ensures that the decorated, deprecated, function is actually still run.
         :param dep_func: The method which is deprecated.
@@ -757,7 +760,7 @@ def _deprecated(message: str) -> Callable[..., Any]:
         # The wraps decorator updates the wrapper function to look like wrapped function by copying attributes
         #  such as __name__, __doc__ (the docstring)
         @wraps(dep_func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
+        def wrapper(*args: object, **kwargs: object) -> _R:
             # Shows the warning message - this makes sure it is shown when the function is used.
             warn(message, DeprecationWarning, stacklevel=2)
             return dep_func(*args, **kwargs)
