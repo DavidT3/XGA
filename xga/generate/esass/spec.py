@@ -9,7 +9,7 @@ are only compatible with source/sample instances that have eROSITA observations 
 import os
 from copy import copy, deepcopy
 from random import randint
-from typing import Any
+from typing import Any, cast
 from warnings import warn
 
 import numpy as np
@@ -17,10 +17,9 @@ from astropy.units import Quantity
 
 from ... import ESASS_VERSION, NUM_CORES, OUTPUT
 from ...exceptions import NoProductAvailableError, TelescopeNotAssociatedError, eSASSInputInvalid
-from ...products.base import BaseAggregateProduct, BaseProduct, BaseProfile1D
 from ...products.events import EventList
 from ...samples.base import BaseSample
-from ...sources import BaseSource, ExtendedSource, GalaxyCluster, NullSource
+from ...sources import BaseSource, ExtendedSource, GalaxyCluster
 from ..common import get_annular_esass_region
 from ..sas._common import region_setup
 from ._common import EROSITA_EXTMAP_HI_EN, EROSITA_EXTMAP_LO_EN, T_STEP_POINT, T_STEP_SURVEY
@@ -30,7 +29,7 @@ from .run import esass_call
 
 
 def _spec_cmds(
-    sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource],
+    sources: BaseSource | BaseSample,
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     group_spec: bool = True,
@@ -488,19 +487,19 @@ def _spec_cmds(
             "There are no eROSITA data associated with the source/sample, as such eROSITA spectra cannot be generated."
         )
 
-    # This function supports passing both individual sources and sets of sources
-    if isinstance(sources, BaseSource):
-        sources = [sources]
+    # This function supports passing both individual sources and sets of sources - using a separate variable
+    #  name to make Mypy happy, as it doesn't like BaseSource | BaseSample being reassigned with a list
+    src_list = [sources] if isinstance(sources, BaseSource) else sources
 
     # In this case the user wants to combine separate sky tiles, so we have to make
     #  sure that combined event lists exist for each source
     if combine_obs:
         # This requires combined event lists - this function will generate them
-        evtool_combine_evts(sources, num_cores)
+        evtool_combine_evts(src_list, num_cores)
 
     # TODO edit region_setup to be telescope agnostic
-    sources, inner_radii, outer_radii = region_setup(
-        sources, outer_radius, inner_radius, disable_progress, obs_id="", num_cores=num_cores
+    _, inner_radii, outer_radii = region_setup(
+        src_list, outer_radius, inner_radius, disable_progress, obs_id="", num_cores=num_cores
     )
 
     # Making sure this value is the expected type
@@ -531,13 +530,13 @@ def _spec_cmds(
 
     # eSASS's srctool operates quite differently for extended sources and point sources. We are going to want a
     #  detector map for extended sources to weight the ARF calculation, so here we check the source type
-    if isinstance(sources[0], (ExtendedSource, GalaxyCluster)):
+    if isinstance(src_list[0], (ExtendedSource, GalaxyCluster)):
         # Set up a boolean value to tell us later on if this is an extended source
         extended_src = True
         # Sets the extent model type to MAP, which means we'll be using an image to encode the emission extent
         ext_type = "MAP"
         # Ensures that the images we intend to use as extent maps have actually been generated
-        evtool_image(sources, EROSITA_EXTMAP_LO_EN, EROSITA_EXTMAP_HI_EN, combine_obs=combine_obs, num_cores=num_cores)
+        evtool_image(src_list, EROSITA_EXTMAP_LO_EN, EROSITA_EXTMAP_HI_EN, combine_obs=combine_obs, num_cores=num_cores)
     else:
         # Set up a boolean value to tell us later on if this is a point source
         extended_src = False
@@ -615,7 +614,7 @@ def _spec_cmds(
     sources_extras = []
     sources_types = []
     source: BaseSource
-    for s_ind, source in enumerate(sources):
+    for s_ind, source in enumerate(src_list):
         cmds: list[str] = []
         final_paths: list[str] = []
         extra_info: list[dict[str, Any]] = []
@@ -680,10 +679,10 @@ def _spec_cmds(
 
             # Now we start to cycle through event lists (or just the one list if there
             #  is only one skytile/observation associated with the source).
-            evt_list: BaseProduct | BaseProfile1D | BaseAggregateProduct
             if not use_combine_obs:
-                # Cycle through the event lists for each sky tile
-                for evt_list in source.get_products("events", telescope=er_miss):
+                # Cycle through the event lists for each sky tile - using typing.cast to keep evt_list typed
+                #  as EventList for Mypy until a dedicated get_event_lists method is added
+                for evt_list in cast(list[EventList], source.get_products("events", telescope=er_miss)):
                     # This internal function uses the evtlist to prepare spec
                     #  commands, final paths, and extra info
                     out_cmd, out_fin_paths, out_ex_info = _make_spec_cmd_info(evt_list)
@@ -696,8 +695,9 @@ def _spec_cmds(
                     extra_info += out_ex_info
             else:
                 # In this case, the sky tiles are to be combined, so we grab
-                #  the combined event list
-                evt_list = source.get_products("combined_events", telescope=er_miss)[0]
+                #  the combined event list - using typing.cast to keep evt_list typed as EventList for Mypy
+                #  until a dedicated get_event_lists method is added
+                evt_list = cast(EventList, source.get_products("combined_events", telescope=er_miss)[0])
 
                 # This function then uses the evtlist to prepare spec commands, final
                 #  paths, and extra info

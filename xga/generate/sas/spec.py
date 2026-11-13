@@ -18,7 +18,7 @@ from astropy.units import Quantity
 from xga import NUM_CORES, OUTPUT
 from xga.exceptions import NoProductAvailableError, NotAssociatedError, SASInputInvalid, TelescopeNotAssociatedError
 from xga.samples.base import BaseSample
-from xga.sources import BaseSource, ExtendedSource, GalaxyCluster, NullSource
+from xga.sources import BaseSource, ExtendedSource, GalaxyCluster
 
 from ..sas.run import sas_call
 from ._common import _gen_detmap_cmd, region_setup
@@ -26,7 +26,7 @@ from .misc import cifbuild
 
 
 def _spec_cmds(
-    sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource],
+    sources: BaseSource | BaseSample,
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     group_spec: bool = True,
@@ -87,14 +87,14 @@ def _spec_cmds(
             "There are no XMM data associated with the source/sample, as such XMM spectra cannot be generated."
         )
 
-    # This function supports passing both individual sources and sets of sources
-    if isinstance(sources, BaseSource):
-        sources = [sources]
+    # This function supports passing both individual sources and sets of sources - using a separate variable
+    #  name to make Mypy happy, as it doesn't like BaseSource | BaseSample being reassigned with a list
+    src_list = [sources] if isinstance(sources, BaseSource) else sources
 
     if outer_radius != "region":
         from_region = False
-        sources, inner_radii, outer_radii = region_setup(
-            sources, outer_radius, inner_radius, disable_progress, "", num_cores
+        _, inner_radii, outer_radii = region_setup(
+            src_list, outer_radius, inner_radius, disable_progress, "", num_cores
         )
     else:
         # This is used in the extra information dictionary for when the XGA spectrum object is defined
@@ -131,7 +131,7 @@ def _spec_cmds(
         extra_name = ""
 
     # Have to make sure that all observations have an up to date cif file.
-    cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
+    cifbuild(src_list, disable_progress=disable_progress, num_cores=num_cores)
 
     # And if it was oversampled during generation then we need to include that as well
     if over_sample is not None:
@@ -179,7 +179,7 @@ def _spec_cmds(
     sources_paths = []
     sources_extras = []
     sources_types = []
-    for s_ind, source in enumerate(sources):
+    for s_ind, source in enumerate(src_list):
         cmds: list[str] = []
         final_paths: list[str] = []
         extra_info: list[dict[str, Any]] = []

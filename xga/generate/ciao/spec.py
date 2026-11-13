@@ -21,13 +21,12 @@ from xga.exceptions import NoProductAvailableError, TelescopeNotAssociatedError
 from xga.generate.sas._common import region_setup
 from xga.samples.base import BaseSample
 from xga.sources import BaseSource
-from xga.sources.base import NullSource
 
 from .run import ciao_call
 
 
 def _chandra_spec_cmds(
-    sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource],
+    sources: BaseSource | BaseSample,
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     group_spec: bool = True,
@@ -70,12 +69,12 @@ def _chandra_spec_cmds(
     stack = False  # This tells the ciao_call routine that this command won't be part of a stack.
     execute = True  # This should be executed immediately.
     # This function supports passing both individual sources and samples - but if it is a source we like to be able
-    #  to iterate over it, so we put it in a list.
-    if isinstance(sources, (BaseSource, NullSource)):
-        sources = [sources]
+    #  to iterate over it, so we put it in a list. Using a separate variable name to make Mypy happy, as it doesn't
+    #  like BaseSource | BaseSample being reassigned with a list.
+    src_list = [sources] if isinstance(sources, BaseSource) else sources
 
-    sources, inner_radii, outer_radii = region_setup(
-        sources,
+    _, inner_radii, outer_radii = region_setup(
+        src_list,
         outer_radius=outer_radius,
         inner_radius=inner_radius,
         disable_progress=False,
@@ -84,9 +83,9 @@ def _chandra_spec_cmds(
     )
 
     # Check if the source/sample has Chandra data.
-    if not isinstance(sources, list) and "chandra" not in sources.telescopes:
+    if not isinstance(src_list, list) and "chandra" not in src_list.telescopes:
         raise TelescopeNotAssociatedError("There are no Chandra data associated with the source.")
-    elif isinstance(sources, list) and "chandra" not in sources[0].telescopes:
+    elif isinstance(src_list, list) and "chandra" not in src_list[0].telescopes:
         raise TelescopeNotAssociatedError("There are no Chandra data associated with the sample.")
 
     # TODO CHECK THESE ARE GOOD ENERGY RANGES AND THEN UNCOMMENT OR UPDATE THEN UNCOMMENT
@@ -105,7 +104,7 @@ def _chandra_spec_cmds(
     sources_types = []
     # Explicitly states that source is at very least a BaseSource instance - useful for code completion in IDEs
     source: BaseSource
-    for s_ind, source in enumerate(sources):
+    for s_ind, source in enumerate(src_list):
         cmds: list[str] = []
         final_paths: list[str] = []
         extra_info: list[dict[str, Any]] = []

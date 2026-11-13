@@ -42,7 +42,7 @@ def _get_all_telescopes(sources: BaseSource | BaseSample | list[BaseSource]) -> 
 
 
 def _setup_global(
-    sources: BaseSource | list[BaseSource] | BaseSample,
+    sources: GalaxyCluster | list[GalaxyCluster] | ClusterSample,
     outer_radius: str | Quantity,
     global_radius: str | Quantity,
     abund_table: str,
@@ -55,7 +55,7 @@ def _setup_global(
     stacked_spectra: bool,
     telescope: str | list[str],
     global_temp_success_check: bool = False,
-) -> tuple[BaseSource | list[BaseSource] | BaseSample, Quantity | list[Quantity], dict]:
+) -> tuple[list[GalaxyCluster] | ClusterSample, Quantity | list[Quantity], dict]:
     """
     Internal function to see if a source/sources have a measured global temperature, single_temp_apec
     is run before the check is done. It also runs the region_setup() method to fetch the outer radii
@@ -116,19 +116,20 @@ def _setup_global(
 
     # If a single source has been passed we will put it in a list - that way we can iterate over the list
     #  in the same way we iterate over samples
-    if isinstance(sources, BaseSource):
-        sources = [sources]
+    # Using a new variable name to make Mypy happy, as it doesn't like variables of one type to be reassigned with
+    #  another (single source -> list of sources)
+    src_list = [sources] if isinstance(sources, BaseSource) else sources
 
     # If XMM is associated with at least one source, we'll run PSF correction
     if "xmm" in src_telescopes:
         # We also want to make sure that everything has a PSF corrected image, using all the default settings
-        rl_psf(sources, bins=psf_bins, num_cores=num_cores)
+        rl_psf(src_list, bins=psf_bins, num_cores=num_cores)
 
     # If the global_temp_success_check argument is True, we need to generate and fit the global spectra, as we will
     #  need to determine whether there are successful global temperature measurements available.
     if global_temp_success_check:
         single_temp_apec(
-            sources,
+            src_list,
             global_radius,
             abund_table=abund_table,
             group_spec=group_spec,
@@ -144,7 +145,7 @@ def _setup_global(
     # each element in the list is a boolean indicated whether a glob temp has been measured
     # ie. has_glob_temp = {'xmm' : [True, True, False], 'erosita' : [True, True, True]}
     has_glob_temp: dict[str, list[bool]] = {key: [] for key in src_telescopes}
-    for src_ind, src in enumerate(sources):
+    for src_ind, src in enumerate(src_list):
         # We cycle over the telescopes in the Sample and not the Source, so that every list in
         # has_glob_temp is the same length
         for tel in src_telescopes:
@@ -192,11 +193,11 @@ def _setup_global(
                 except NotAssociatedError:
                     has_glob_temp[tel].append(False)
 
-    return sources, out_rads, has_glob_temp
+    return src_list, out_rads, has_glob_temp
 
 
 def _setup_inv_abel_dens_onion_temp(
-    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster],
     outer_radius: str | Quantity,
     sb_model: str | list[str] | BaseModel1D | list[BaseModel1D],
     dens_model: str | list[str] | BaseModel1D | list[BaseModel1D],
@@ -229,7 +230,7 @@ def _setup_inv_abel_dens_onion_temp(
     stacked_spectra: bool = False,
     telescope: str | list[str] | None = None,
     global_temp_success_check: bool = False,
-) -> tuple[BaseSource | list[BaseSource] | BaseSample, dict, dict, dict, dict, list[str]]:
+) -> tuple[list[GalaxyCluster] | ClusterSample, dict, dict, dict, dict, list[str]]:
     """
     Internal function to run the common setup functions that are needed for mass, entropy, and pressure profile
     measurements.
@@ -327,7 +328,9 @@ def _setup_inv_abel_dens_onion_temp(
     else:
         src_telescopes = telescope
 
-    sources, outer_rads, has_glob_temp = _setup_global(
+    # Using a new variable name for the returned iterable of sources to make Mypy happy, as it doesn't like
+    #  variables of one type to be reassigned with another
+    src_list, outer_rads, has_glob_temp = _setup_global(
         sources,
         outer_radius,
         global_radius,
@@ -343,26 +346,26 @@ def _setup_inv_abel_dens_onion_temp(
         global_temp_success_check,
     )
 
-    rads_dict = {str(sources[r_ind]): r for r_ind, r in enumerate(outer_rads)}
+    rads_dict = {str(src_list[r_ind]): r for r_ind, r in enumerate(outer_rads)}
 
     # This checks and sets up a predictable structure for the models needed for this measurement.
     # Using new variable names to make Mypy happy, as it doesn't like variables of one type being reassigned with
     #  another (list[BaseModel1D | str])
-    checked_sb_model = model_check(sources, sb_model)
-    checked_dens_model = model_check(sources, dens_model)
-    checked_temp_model = model_check(sources, temp_model)
+    checked_sb_model = model_check(src_list, sb_model)
+    checked_dens_model = model_check(src_list, dens_model)
+    checked_temp_model = model_check(src_list, temp_model)
 
     # I also set up dictionaries, so that models for specific clusters (as you can pass individual model instances
     #  for different clusters) are assigned to the right source when we start cutting down the sources based on
     #  whether a measurement has been successful
-    sb_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(checked_sb_model)}
-    dens_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(checked_dens_model)}
-    temp_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(checked_temp_model)}
+    sb_model_dict = {str(src_list[m_ind]): m for m_ind, m in enumerate(checked_sb_model)}
+    dens_model_dict = {str(src_list[m_ind]): m for m_ind, m in enumerate(checked_dens_model)}
+    temp_model_dict = {str(src_list[m_ind]): m for m_ind, m in enumerate(checked_temp_model)}
 
     # Here we take only the sources that have a successful global temperature measurement for at
     # least one of the associated telescopes
     cut_sources = []
-    for src_ind, src in enumerate(sources):
+    for src_ind, src in enumerate(src_list):
         # The format of has_glob_temp is a dictionary with telescope keys, and then an array of booleans
         # ie. has_glob_temp = {'xmm' : [True, True, False], 'erosita' : [True, True, True]}
         # So we need to cycle through each key and collect the correct indicies to the corresponding source
@@ -483,4 +486,4 @@ def _setup_inv_abel_dens_onion_temp(
             dens_src_dict[tel] = dens_profs[tel][p_ind]
         dens_prof_dict[str(cut_cut_sources[p_ind])] = dens_src_dict
 
-    return sources, dens_prof_dict, temp_prof_dict, dens_model_dict, temp_model_dict, src_telescopes
+    return src_list, dens_prof_dict, temp_prof_dict, dens_model_dict, temp_model_dict, src_telescopes

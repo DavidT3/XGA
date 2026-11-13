@@ -15,7 +15,7 @@ from ..generate.sas import region_setup
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.profile import annular_mask
 from ..products.profile import GasTemperature3D
-from ..samples import BaseSample, ClusterSample
+from ..samples import ClusterSample
 from ..sources import BaseSource, GalaxyCluster
 from ..xspec.fit import single_temp_apec_profile
 from ._common import _get_all_telescopes
@@ -511,7 +511,7 @@ def _cnt_bins(
 
 
 def min_snr_proj_temp_prof(
-    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster],
     outer_radii: Quantity | list[Quantity],
     min_snr: float = 20,
     min_width: Quantity = Quantity(20, "arcsec"),
@@ -639,15 +639,16 @@ def min_snr_proj_temp_prof(
 
     # Makes sure that sources is iterable, even if it's just a single source - makes writing the rest of this
     #  function a bit neater.
-    if isinstance(sources, BaseSource):
-        sources = [sources]
+    # Using a new variable name to make Mypy happy, as it doesn't like variables of one type to be reassigned with
+    #  another (single source -> list of sources)
+    src_list = [sources] if isinstance(sources, BaseSource) else sources
 
     # We're setting up a dictionary that will contain lists of annular radius sets, with top level keys being
     #  telescope names, and values being lists. Each list will have one entry per source, even if that source
     #  doesn't have the telescope associated (in those cases, a null value will be added)
     all_rads: dict[str, list[Quantity | None]] = {tel: [] for tel in src_telescopes}
 
-    for src_ind, src in enumerate(sources):
+    for src_ind, src in enumerate(src_list):
         # Iterating through all the telescopes being considered
         for tel in src_telescopes:
             # Quite possible that not all sources will have the current telescope associated (if there are
@@ -713,11 +714,12 @@ def min_snr_proj_temp_prof(
             #  spectra (if necessary) and fitting to make some nice temperature profiles
             all_rads[tel].append(rads)
 
-    if len(sources) == 1:
-        sources = sources[0]
+    # Using a new variable name to make Mypy happy, as it doesn't like variables of one type to be reassigned with
+    #  another
+    fit_sources = src_list[0] if len(src_list) == 1 else src_list
 
     single_temp_apec_profile(
-        sources,
+        fit_sources,
         all_rads,
         group_spec=group_spec,
         min_counts=min_counts,
@@ -737,7 +739,7 @@ def min_snr_proj_temp_prof(
 
 
 def min_cnt_proj_temp_prof(
-    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster],
     outer_radii: Quantity | list[Quantity],
     min_cnt: int | Quantity = Quantity(1000, "ct"),
     min_width: Quantity = Quantity(20, "arcsec"),
@@ -841,15 +843,16 @@ def min_cnt_proj_temp_prof(
 
     # Makes sure that sources is iterable, even if it's just a single source - makes writing the rest of this
     #  function a bit neater.
-    if isinstance(sources, BaseSource):
-        sources = [sources]
+    # Using a new variable name to make Mypy happy, as it doesn't like variables of one type to be reassigned with
+    #  another (single source -> list of sources)
+    src_list = [sources] if isinstance(sources, BaseSource) else sources
 
     # We're setting up a dictionary that will contain lists of annular radius sets, with top level keys being
     #  telescope names, and values being lists. Each list will have one entry per source, even if that source
     #  doesn't have the telescope associated (in those cases, a null value will be added)
     all_rads: dict[str, list[Quantity | None]] = {tel: [] for tel in src_telescopes}
 
-    for src_ind, src in enumerate(sources):
+    for src_ind, src in enumerate(src_list):
         # Iterating through all the telescopes being considered
         for tel in src_telescopes:
             # Quite possible that not all sources will have the current telescope associated (if there are
@@ -923,12 +926,13 @@ def min_cnt_proj_temp_prof(
             all_rads[tel].append(rads)
 
     # Reverses a bodge employed at the beginning of this function
-    if len(sources) == 1:
-        sources = sources[0]
+    # Using a new variable name to make Mypy happy, as it doesn't like variables of one type to be reassigned with
+    #  another
+    fit_sources = src_list[0] if len(src_list) == 1 else src_list
 
     # This runs the fitting (and generation, if that has not already occurred) of the annular spectra.
     single_temp_apec_profile(
-        sources,
+        fit_sources,
         all_rads,
         group_spec=group_spec,
         min_counts=min_counts,
@@ -948,7 +952,7 @@ def min_cnt_proj_temp_prof(
 
 
 def onion_deproj_temp_prof(
-    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster],
     outer_radii: Quantity | list[Quantity],
     annulus_method: str = "min_snr",
     min_snr: float = 30,
@@ -1129,12 +1133,13 @@ def onion_deproj_temp_prof(
     telescope = list(ann_rads.keys())
 
     # So we can iterate through sources without worrying if there's more than one cluster
-    if not isinstance(sources, (BaseSample, list)):
-        sources = [sources]
+    # Using a new variable name to make Mypy happy, as it doesn't like variables of one type to be reassigned with
+    #  another (single source -> list of sources)
+    src_list = [sources] if isinstance(sources, BaseSource) else sources
 
-    all_3d_temp_profs: dict[str, list[GasTemperature3D | None]] = {key: [None] * len(sources) for key in telescope}
+    all_3d_temp_profs: dict[str, list[GasTemperature3D | None]] = {key: [None] * len(src_list) for key in telescope}
     # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof
-    for src_ind, src in enumerate(sources):
+    for src_ind, src in enumerate(src_list):
         for tel in telescope:
             cur_rads = ann_rads[tel][src_ind]
 

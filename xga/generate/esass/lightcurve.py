@@ -19,7 +19,7 @@ from ... import ESASS_VERSION, NUM_CORES, OUTPUT
 from ...exceptions import NoProductAvailableError, TelescopeNotAssociatedError
 from ...products.events import EventList
 from ...samples.base import BaseSample
-from ...sources import BaseSource, NullSource
+from ...sources import BaseSource
 from ..common import get_annular_esass_region
 from ..sas._common import region_setup
 from ._common import T_STEP_POINT, T_STEP_SURVEY
@@ -28,7 +28,7 @@ from .run import esass_call
 
 
 def _lc_cmds(
-    sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource],
+    sources: BaseSource | BaseSample,
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     lo_en: Quantity = Quantity(0.5, "keV"),
@@ -329,9 +329,9 @@ def _lc_cmds(
     t_step_survey = T_STEP_SURVEY
     t_step_point = T_STEP_POINT
 
-    # This function supports passing both individual sources and sets of sources
-    if isinstance(sources, BaseSource):
-        sources = [sources]
+    # This function supports passing both individual sources and sets of sources - using a separate variable
+    #  name to make Mypy happy, as it doesn't like BaseSource | BaseSample being reassigned with a list
+    src_list = [sources] if isinstance(sources, BaseSource) else sources
 
     # At one point we allowed the 'outer_radius' argument to be 'region', but we
     #  no longer support that
@@ -341,12 +341,10 @@ def _lc_cmds(
     # In this case the user wants to combine separate sky tiles, so we have to make
     #  sure that combined event lists exist for each source
     if combine_obs:
-        evtool_combine_evts(sources, num_cores)
+        evtool_combine_evts(src_list, num_cores)
 
     # Sets up the inner and outer radii arrays for the passed sources
-    sources, inner_radii, outer_radii = region_setup(
-        sources, outer_radius, inner_radius, disable_progress, "", num_cores
-    )
+    _, inner_radii, outer_radii = region_setup(src_list, outer_radius, inner_radius, disable_progress, "", num_cores)
 
     # Check the input time bin size type, we're going to assume that it is in
     #  seconds if the value is an integer or a float
@@ -429,7 +427,7 @@ def _lc_cmds(
     sources_types = []
 
     source: BaseSource
-    for s_ind, source in enumerate(sources):
+    for s_ind, source in enumerate(src_list):
         cmds: list[str] = []
         final_paths: list[str] = []
         extra_info: list[dict[str, Any]] = []

@@ -11,13 +11,13 @@ from .. import NUM_CORES
 from ..exceptions import XGAFitError
 from ..models import BaseModel1D
 from ..products.profile import SpecificEntropy
-from ..samples import BaseSample, ClusterSample
-from ..sources import BaseSource, GalaxyCluster
+from ..samples import ClusterSample
+from ..sources import GalaxyCluster
 from ..sourcetools._common import _setup_inv_abel_dens_onion_temp
 
 
 def entropy_inv_abel_dens_onion_temp(
-    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster],
     outer_radius: str | Quantity,
     sb_model: str | list[str] | BaseModel1D | list[BaseModel1D],
     dens_model: str | list[str] | BaseModel1D | list[BaseModel1D],
@@ -186,14 +186,16 @@ def entropy_inv_abel_dens_onion_temp(
         telescope,
         global_temp_success_check,
     )
-    sources, dens_prof_dict, temp_prof_dict, dens_model_dict, temp_model_dict, telescope = setup_res
+    # Using a new variable name to make Mypy happy, as it doesn't like variables of one type being reassigned
+    #  with another
+    src_list, dens_prof_dict, temp_prof_dict, dens_model_dict, temp_model_dict, telescope = setup_res
 
     # So I can a dict of profiles with telescope keys, a tad more elegant than fetching them from the sources sometimes
-    final_entropy_profs: dict[str, list[SpecificEntropy | None]] = {tel: [None] * len(sources) for tel in telescope}
+    final_entropy_profs: dict[str, list[SpecificEntropy | None]] = {tel: [None] * len(src_list) for tel in telescope}
     # Better to use a with statement for tqdm, so it shut down if something fails inside
     prog_desc = "Generating {} specific entropy profile"
-    with tqdm(desc=prog_desc.format("None"), total=len(sources)) as onwards:
-        for src_ind, src in enumerate(sources):
+    with tqdm(desc=prog_desc.format("None"), total=len(src_list)) as onwards:
+        for src_ind, src in enumerate(src_list):
             onwards.set_description(prog_desc.format(src.name))
             for tel in telescope:
                 if tel not in src.telescopes:

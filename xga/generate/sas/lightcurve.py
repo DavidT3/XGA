@@ -16,14 +16,14 @@ from astropy.units import Quantity, UnitConversionError
 from ... import NUM_CORES, OUTPUT
 from ...exceptions import NoProductAvailableError, TelescopeNotAssociatedError
 from ...samples.base import BaseSample
-from ...sources import BaseSource, NullSource
+from ...sources import BaseSource
 from ..common import check_pattern
 from ._common import region_setup
 from .run import sas_call
 
 
 def _lc_cmds(
-    sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource],
+    sources: BaseSource | BaseSample,
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     lo_en: Quantity = Quantity(0.5, "keV"),
@@ -81,14 +81,14 @@ def _lc_cmds(
             "There are no XMM data associated with the source/sample, as such XMM lightcurves cannot be generated."
         )
 
-    # This function supports passing both individual sources and sets of sources
-    if isinstance(sources, BaseSource):
-        sources = [sources]
+    # This function supports passing both individual sources and sets of sources - using a separate variable
+    #  name to make Mypy happy, as it doesn't like BaseSource | BaseSample being reassigned with a list
+    src_list = [sources] if isinstance(sources, BaseSource) else sources
 
     if outer_radius != "region":
         from_region = False
-        sources, inner_radii, outer_radii = region_setup(
-            sources, outer_radius, inner_radius, disable_progress, "", num_cores
+        _, inner_radii, outer_radii = region_setup(
+            src_list, outer_radius, inner_radius, disable_progress, "", num_cores
         )
     else:
         # This is used in the extra information dictionary for when the XGA light curve object is defined
@@ -146,7 +146,7 @@ def _lc_cmds(
     sources_paths = []
     sources_extras = []
     sources_types = []
-    for s_ind, source in enumerate(sources):
+    for s_ind, source in enumerate(src_list):
         cmds: list[str] = []
         final_paths: list[str] = []
         extra_info: list[dict[str, Any]] = []

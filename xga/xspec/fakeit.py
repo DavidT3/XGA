@@ -11,7 +11,6 @@ from astropy.units import Quantity
 from .. import COUNTRATE_CONV_SCRIPT, NUM_CORES, OUTPUT
 from ..exceptions import ModelNotAssociatedError, NoProductAvailableError, ParameterNotAssociatedError
 from ..products import Spectrum
-from ..samples.base import BaseSample
 from ..samples.extended import ClusterSample
 from ..sources import BaseSource, GalaxyCluster
 from ..utils import ABUND_TABLES
@@ -21,7 +20,7 @@ from .run import xspec_call
 
 @xspec_call
 def cluster_cr_conv(
-    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster],
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     sim_temp: dict[str, Quantity] | None = None,
@@ -78,15 +77,13 @@ def cluster_cr_conv(
     :return: The source object(s) passed in.
     :rtype: GalaxyCluster/ClusterSample/List[GalaxyCluster]
     """
-    # This function supports passing both individual sources and sets of sources
-    if isinstance(sources, BaseSource):
-        sources = [sources]
-
     if abund_table not in ABUND_TABLES:
         ab_list = ", ".join(ABUND_TABLES)
         raise ValueError(f"{abund_table} is not in the accepted list of abundance tables; {ab_list}")
 
-    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(
+    # Using a new variable name to make Mypy happy, as it doesn't like variables of one type being reassigned
+    #  with another
+    pregen_sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(
         sources,
         outer_radius,
         inner_radius,
@@ -103,7 +100,7 @@ def cluster_cr_conv(
     # pregen spectra can output a BaseSource after inputting it as a list, so turning this back to a list
     # Separate variable name to make Mypy happy, as it doesn't like union source variables being reassigned with
     #  a list of a narrowed source type
-    src_list = [sources] if isinstance(sources, BaseSource) else sources
+    src_list = [pregen_sources] if isinstance(pregen_sources, BaseSource) else pregen_sources
 
     # Checks that the luminosity energy bands are pairs of values
     if conv_en.shape[1] != 2:

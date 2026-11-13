@@ -28,7 +28,6 @@ from ..imagetools.profile import radial_brightness
 from ..imagetools.psf import rl_psf
 from ..models import BaseModel1D
 from ..products.profile import GasDensity3D, SurfaceBrightness1D
-from ..samples.base import BaseSample
 from ..samples.extended import ClusterSample
 from ..sources import BaseSource, GalaxyCluster
 from ..sourcetools import ang_to_rad
@@ -52,7 +51,7 @@ ALLOWED_INV_ABEL = [
 
 
 def _dens_setup(
-    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster],
     abund_table: str,
     lo_en: Quantity,
     hi_en: Quantity,
@@ -70,7 +69,7 @@ def _dens_setup(
     telescope: str | list[str] | None = None,
     timeout: Quantity = Quantity(300, "s"),
 ) -> tuple[
-    GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
+    ClusterSample | list[GalaxyCluster],
     dict[str, list[Quantity]],
     dict[str, str | list] | None,
     dict[str, str | list] | None,
@@ -149,8 +148,9 @@ def _dens_setup(
 
     # If a single source is passed it goes in a list, so we can iterate over the one-element list the same
     #  way we iterate over a sample instance
-    if isinstance(sources, BaseSource):
-        sources = [sources]
+    # Using a new variable name to make Mypy happy, as it doesn't like variables of one type to be reassigned with
+    #  another (single source -> list of sources)
+    src_list = [sources] if isinstance(sources, BaseSource) else sources
 
     # Perform some checks on the ObsID and instrument parameters to make sure that they are in the
     # correct format if they have been set. We don't need to check that the ObsIDs are associated
@@ -167,7 +167,7 @@ def _dens_setup(
 
             # if the dict has str values, making them into a list for use later
             if all(isinstance(obs_id[key], str) for key in obs_id):
-                if len(sources) > 1:
+                if len(src_list) > 1:
                     raise ValueError(
                         "If multiple sources are being analysed, then the 'obs_id' "
                         "argument must be input as a dictionary of lists, with one "
@@ -177,7 +177,7 @@ def _dens_setup(
                     obs_id[key] = [obs_id[key]]
 
             elif all(isinstance(obs_id[key], list) for key in obs_id):
-                if any(len(obs_id[key]) != len(sources) for key in obs_id):
+                if any(len(obs_id[key]) != len(src_list) for key in obs_id):
                     raise ValueError(
                         "If you set the 'obs_id' argument as a dictionary of lists, "
                         "there must be one entry per source being analysed in each "
@@ -206,7 +206,7 @@ def _dens_setup(
                     inst[key] = [inst[key]]
 
             elif all(isinstance(inst[key], list) for key in inst):
-                if any(len(inst[key]) != len(sources) for key in inst):
+                if any(len(inst[key]) != len(src_list) for key in inst):
                     raise ValueError(
                         "If you set the 'inst' argument as a dictionary of lists, there"
                         " must be one entry per source being analysed in each list."
@@ -221,14 +221,14 @@ def _dens_setup(
                 )
 
     elif all([obs_id is None, inst is None]):
-        obs_id = {tel: [None] * len(sources) for tel in src_telescopes}
-        inst = {tel: [None] * len(sources) for tel in src_telescopes}
+        obs_id = {tel: [None] * len(src_list) for tel in src_telescopes}
+        inst = {tel: [None] * len(src_list) for tel in src_telescopes}
     else:
         raise ValueError(
             "If a value is supplied for 'obs_id', then a value must be supplied for 'inst' as well, and vice versa."
         )
 
-    if not all([type(src) is GalaxyCluster for src in sources]):
+    if not all([type(src) is GalaxyCluster for src in src_list]):
         raise TypeError("Only GalaxyCluster sources can be passed to the density profile methods.")
 
     # Triggers an exception if the abundance table name passed isn't recognized
@@ -250,7 +250,7 @@ def _dens_setup(
     temps: dict[str, Any]
     if conv_temp is not None:
         if isinstance(conv_temp, Quantity):
-            if not conv_temp.isscalar and len(conv_temp) != len(sources):
+            if not conv_temp.isscalar and len(conv_temp) != len(src_list):
                 raise ValueError(
                     "If there are multiple entries in 'conv_temp', then there must be "
                     "the same number of entries as there are sources being analysed."
@@ -259,7 +259,7 @@ def _dens_setup(
             temps = {key: conv_temp for key in src_telescopes}
 
         elif isinstance(conv_temp, dict):
-            if any(not conv_temp[key].isscalar and len(conv_temp[key]) != len(sources) for key in conv_temp):
+            if any(not conv_temp[key].isscalar and len(conv_temp[key]) != len(src_list) for key in conv_temp):
                 raise ValueError(
                     "If there are multiple entries in 'conv_temp', then there must be "
                     "the same number of entries as there are sources being analysed."
@@ -275,7 +275,7 @@ def _dens_setup(
         # Check that the spectra we will be relying on for conversion calculation have been fitted,
         # calling this function will also make sure that they are generated
         single_temp_apec(
-            sources,
+            src_list,
             conv_outer_radius,
             conv_inner_radius,
             abund_table=abund_table,
@@ -293,7 +293,7 @@ def _dens_setup(
         # factor calculator - this may well change as I intend to let cluster_cr_conv grab
         # temperatures for itself at some point
         temps = {key: [] for key in src_telescopes}
-        for src in sources:
+        for src in src_list:
             for tel in src_telescopes:
                 try:
                     # A temporary temperature variable - the 'fit_conf' value is set as a dictionary with an entry for
@@ -340,7 +340,7 @@ def _dens_setup(
     # This call actually does the fakeit calculation of the conversion factors, then stores them in
     # the XGA Spectrum objects
     cluster_cr_conv(
-        sources,
+        src_list,
         conv_outer_radius,
         conv_inner_radius,
         temps,
@@ -359,7 +359,7 @@ def _dens_setup(
     to_dens_convs: dict[str, list[Quantity]] = {key: [] for key in src_telescopes}
     # These are from the distance and redshift, also the normalizing 10^-14 (see my paper for
     #  more of an explanation)
-    for src_ind, src in enumerate(sources):
+    for src_ind, src in enumerate(src_list):
         for tel in src_telescopes:
             # Both the angular_diameter_distance and redshift are guaranteed to be present here
             #  because redshift is REQUIRED to define GalaxyCluster objects
@@ -399,7 +399,7 @@ def _dens_setup(
             )
             to_dens_convs[tel].append(total_factor)
 
-    return sources, to_dens_convs, obs_id, inst, src_telescopes
+    return src_list, to_dens_convs, obs_id, inst, src_telescopes
 
 
 def _run_sb(
@@ -537,7 +537,7 @@ def _run_sb(
 
 
 def inv_abel_fitted_model(
-    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster],
     model: str | list[str] | BaseModel1D | list[BaseModel1D] | list[BaseModel1D | str],
     fit_method: str = "mcmc",
     outer_radius: str | Quantity = "r500",
@@ -669,7 +669,9 @@ def inv_abel_fitted_model(
     """
     # Run the setup function, and calculates the factors that translate 3D countrate to density
     # Also checks parameters and runs any spectra/fits that need running
-    sources, conv_factors, obs_id, inst, telescope = _dens_setup(
+    # Using a new variable name for the returned iterable of sources to make Mypy happy, as it doesn't like
+    #  variables of one type to be reassigned with another
+    src_list, conv_factors, obs_id, inst, telescope = _dens_setup(
         sources,
         abund_table,
         lo_en,
@@ -691,12 +693,12 @@ def inv_abel_fitted_model(
 
     # Calls the handy spectrum region setup function to make a predictable set of outer radius
     # values
-    out_rads = region_setup(sources, outer_radius, Quantity(0, "arcsec"), False, "", num_cores=num_cores)[-1]
+    out_rads = region_setup(src_list, outer_radius, Quantity(0, "arcsec"), False, "", num_cores=num_cores)[-1]
 
     # Need to sort out the type of model input that the user chose, and make sure its ready to be
     #  passed into the fit method of the surface brightness profile(s)
     # First we check the number of arguments passed for the model
-    model = model_check(sources, model)
+    model = model_check(src_list, model)
 
     # Have to check the psf correction flag, as we cannot necessarily PSF correct images for
     #  all telescopes yet. We also check this in the loop as we have to temporarily change
@@ -711,17 +713,17 @@ def inv_abel_fitted_model(
     elif any([t in ["xmm"] for t in telescope]) and psf_corr:
         # We make sure that PSF corrected ratemaps are available, if they have been
         #  requested (and we can generate) - and also available with the specified configuration
-        rl_psf(sources, psf_iter, psf_model, lo_en, hi_en, psf_bins, num_cores)
+        rl_psf(src_list, psf_iter, psf_model, lo_en, hi_en, psf_bins, num_cores)
 
     # Setting up dict to store profiles in
-    final_dens_profs: dict[str, list[GasDensity3D | None]] = {cur_tel: [None] * len(sources) for cur_tel in telescope}
+    final_dens_profs: dict[str, list[GasDensity3D | None]] = {cur_tel: [None] * len(src_list) for cur_tel in telescope}
 
     with tqdm(
-        desc="Fitting data, inverse Abel transforming, and measuring densities", total=len(sources), position=0
+        desc="Fitting data, inverse Abel transforming, and measuring densities", total=len(src_list), position=0
     ) as dens_prog:
         # We need the ratio of electrons to protons, and fetch that for the current abundance table
         e_to_p_ratio = NHC[abund_table]
-        for src_ind, src in enumerate(sources):
+        for src_ind, src in enumerate(src_list):
             for tel in telescope:
                 if tel in ["erosita", "erass"] and psf_corr:
                     use_psf_corr = False
@@ -879,7 +881,7 @@ def inv_abel_fitted_model(
 
 
 def inv_abel_data(
-    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster],
     outer_radius: str | Quantity,
     inv_abel_method: str,
     num_dens: bool = True,
@@ -1021,13 +1023,14 @@ def inv_abel_data(
     :rtype: Dict[str, List[Union[GasDensity3D, None]]]
     """
     # If a source (rather than a sample) is input, we put it in a list - that way we can iterate over them the same
-    if isinstance(sources, BaseSource):
-        sources = [sources]
+    # Using a new variable name to make Mypy happy, as it doesn't like variables of one type to be reassigned with
+    #  another (single source -> list of sources)
+    src_list = [sources] if isinstance(sources, BaseSource) else sources
 
     # Run the setup function, calculates the factors that translate 3D count-rate to density
     #  Also checks parameters and runs any spectra/fits that need running
-    sources, conv_factors, obs_id, inst, telescope = _dens_setup(
-        sources,
+    src_list, conv_factors, obs_id, inst, telescope = _dens_setup(
+        src_list,
         abund_table,
         lo_en,
         hi_en,
@@ -1047,7 +1050,7 @@ def inv_abel_data(
     )
 
     # Calls the handy spectrum region setup function to make a predictable set of outer radius values
-    out_rads = region_setup(sources, outer_radius, Quantity(0, "arcsec"), False, "", num_cores=num_cores)[-1]
+    out_rads = region_setup(src_list, outer_radius, Quantity(0, "arcsec"), False, "", num_cores=num_cores)[-1]
 
     # Before we properly get started, we just check that the user has passed an 'allowed' inverse-Abel transform
     if inv_abel_method not in ALLOWED_INV_ABEL:
@@ -1068,14 +1071,14 @@ def inv_abel_data(
         )
 
     # Setting up dict to store profiles in
-    final_dens_profs: dict[str, list[GasDensity3D | None]] = {cur_tel: [None] * len(sources) for cur_tel in telescope}
+    final_dens_profs: dict[str, list[GasDensity3D | None]] = {cur_tel: [None] * len(src_list) for cur_tel in telescope}
 
     with tqdm(
-        desc="Inverse Abel transforming data and measuring densities", total=len(sources), position=0
+        desc="Inverse Abel transforming data and measuring densities", total=len(src_list), position=0
     ) as dens_prog:
         # Need the ratio of electrons to protons for the selected abundance table
         e_to_p_ratio = NHC[abund_table]
-        for src_ind, src in enumerate(sources):
+        for src_ind, src in enumerate(src_list):
             for tel in telescope:
                 # Have to check the psf correction flag, as we cannot necessarily PSF correct images for
                 #  all telescopes yet
