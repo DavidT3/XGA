@@ -1568,6 +1568,8 @@ class EventList(BaseProduct):
         cols_to_get = list(set([x_col, y_col, en_col] + list(filt_operations.keys())))
         rel_evt_data = self.get_filtered_data(cols_to_get, filt_operations)
 
+        x_bins: np.ndarray
+        y_bins: np.ndarray
         if donor_image is None:
             # We define bin edges such that they are centered on the sky pixel coordinates
             #  (e.g. for bin_size=1, a bin covering sky pixel 1 has edges [0.5, 1.5))

@@ -17,9 +17,10 @@ from astropy.units import Quantity
 
 from ... import ESASS_VERSION, NUM_CORES, OUTPUT
 from ...exceptions import NoProductAvailableError, TelescopeNotAssociatedError, eSASSInputInvalid
+from ...products.base import BaseAggregateProduct, BaseProduct, BaseProfile1D
 from ...products.events import EventList
 from ...samples.base import BaseSample
-from ...sources import BaseSource, ExtendedSource, GalaxyCluster
+from ...sources import BaseSource, ExtendedSource, GalaxyCluster, NullSource
 from ..common import get_annular_esass_region
 from ..sas._common import region_setup
 from ._common import EROSITA_EXTMAP_HI_EN, EROSITA_EXTMAP_LO_EN, T_STEP_POINT, T_STEP_SURVEY
@@ -29,7 +30,7 @@ from .run import esass_call
 
 
 def _spec_cmds(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource],
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     group_spec: bool = True,
@@ -158,6 +159,7 @@ def _spec_cmds(
             # eROSITA observations have the potential to be in pointed or survey/scan modes - we change the time step
             #  based on that. We suspect that the time step is almost irrelevant for pointed mode observations, as
             #  the pointing of the spacecraft won't be changing appreciably
+            t_step: int | float
             if cur_evt_list.header["OBS_MODE"] == "POINTING":
                 t_step = t_step_point
             elif cur_evt_list.header["OBS_MODE"] in ["SURVEY", "SCAN"]:
@@ -284,6 +286,7 @@ def _spec_cmds(
             b_arf = b_spec.replace("_backspec.fits", "_back.arf")
 
             # Defining the grouping keywords
+            group_scale: int | float | str
             if group_spec and min_counts is not None:
                 group_type = "min"
                 group_scale = min_counts
@@ -677,9 +680,9 @@ def _spec_cmds(
 
             # Now we start to cycle through event lists (or just the one list if there
             #  is only one skytile/observation associated with the source).
+            evt_list: BaseProduct | BaseProfile1D | BaseAggregateProduct
             if not use_combine_obs:
                 # Cycle through the event lists for each sky tile
-                evt_list: EventList
                 for evt_list in source.get_products("events", telescope=er_miss):
                     # This internal function uses the evtlist to prepare spec
                     #  commands, final paths, and extra info
@@ -884,7 +887,7 @@ def srctool_spectrum(
 #  spectrum generation functions with particular arguments
 @esass_call
 def esass_spectrum_set(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     radii: list[Quantity] | Quantity,
     group_spec: bool = True,
     min_counts: int = 5,

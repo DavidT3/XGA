@@ -11,13 +11,13 @@ from .. import NUM_CORES
 from ..exceptions import XGAFitError
 from ..models import BaseModel1D
 from ..products.profile import HydrostaticMass
-from ..samples import ClusterSample
-from ..sources import GalaxyCluster
+from ..samples import BaseSample, ClusterSample
+from ..sources import BaseSource, GalaxyCluster
 from ._common import _setup_inv_abel_dens_onion_temp
 
 
 def inv_abel_dens_onion_temp(
-    sources: GalaxyCluster | ClusterSample,
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
     outer_radius: str | Quantity,
     sb_model: str | list[str] | BaseModel1D | list[BaseModel1D],
     dens_model: str | list[str] | BaseModel1D | list[BaseModel1D],

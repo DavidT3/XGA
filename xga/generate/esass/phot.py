@@ -101,7 +101,7 @@ def _img_params_from_evtlist(evt_list: EventList) -> tuple[int, int, int, str]:
 
 @esass_call
 def evtool_image(
-    sources: BaseSource | NullSource | BaseSample,
+    sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource],
     lo_en: Quantity = Quantity(0.2, "keV"),
     hi_en: Quantity = Quantity(10, "keV"),
     combine_obs: bool = False,
@@ -371,7 +371,7 @@ def evtool_image(
 
 @esass_call
 def expmap(
-    sources: BaseSource | NullSource | BaseSample,
+    sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource],
     lo_en: Quantity = Quantity(0.2, "keV"),
     hi_en: Quantity = Quantity(10, "keV"),
     combine_obs: bool = False,

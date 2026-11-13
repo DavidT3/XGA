@@ -1942,6 +1942,9 @@ class Spectrum(BaseProduct):
             )
 
         # Now we deal with the different models/model fit configurations that can and cannot be specified
+        # Separate plot_models list variable to make Mypy happy, as it doesn't like str | None model being
+        #  reassigned with a list of strings
+        plot_models: list[str] = []
         if show_model_fits and model is None and fit_conf is not None:
             raise ValueError(
                 "Specifying a fit configuration ('fit_conf') is not supported without setting the "
@@ -1949,7 +1952,7 @@ class Spectrum(BaseProduct):
                 "see which models and configurations are available."
             )
         elif show_model_fits and model is None and fit_conf is None:
-            model = self.fitted_models
+            plot_models = self.fitted_models
             fit_conf = self.fitted_model_configurations
         elif show_model_fits and model is not None and fit_conf is None:
             # I indent this check because it is just a bit easier for me that way
@@ -1963,7 +1966,7 @@ class Spectrum(BaseProduct):
             #  we grab ALL OF THEM - making sure that the structure of the parameters is the same (model in a list,
             #  fit configs in a list in a dictionary with model name as key
             fit_conf = {model: self.fitted_model_configurations[model]}
-            model = [model]
+            plot_models = [model]
         elif show_model_fits and model is not None and fit_conf is not None:
             if model not in self.fitted_models:
                 av_mods = ", ".join(self.fitted_models)
@@ -1985,7 +1988,7 @@ class Spectrum(BaseProduct):
                 )
 
             fit_conf = {model: [fit_conf]}
-            model = [model]
+            plot_models = [model]
 
         # Residuals can only be shown if model fits are being displayed
         if show_residuals and not show_model_fits:
@@ -2129,7 +2132,7 @@ class Spectrum(BaseProduct):
         #  calculated values we plot the normalised counts/s/keV (or channel) that were extracted from XSPEC
         else:
             plot_cnt = 0
-            for mod in model:
+            for mod in plot_models:
                 # We also iterate through the different fit configurations for the current model, and plot them
                 #  separately - currently with the only the model name in the legend
                 for fc in fit_conf[mod]:
@@ -2966,8 +2969,10 @@ class AnnularSpectra(BaseAggregateProduct):
         # I think I will allow either a string path, or a product (as I am declaring these arfs in BaseProducts in
         #  the execute_cmd function) - as such I need to account for both. In this case we know that everything is fine
         #  because the product has told us that it is usable
+        # Separate arf_path variable to make Mypy happy, as it doesn't like BaseProduct | str arf being narrowed
+        #  across branches when assigned to a str dictionary entry
         if isinstance(arf, BaseProduct) and arf.usable:
-            arf = arf.path
+            arf_path = arf.path
         # In this case though something has obviously gone wrong, so we'll tell the user about it
         elif isinstance(arf, BaseProduct) and not arf.usable:
             raise FailedProductError(
@@ -2978,6 +2983,8 @@ class AnnularSpectra(BaseAggregateProduct):
         # In this case we assume that the string was the path, and if it doesn't exist we say so.
         elif isinstance(arf, str) and not os.path.exists(arf):
             raise FileNotFoundError(f"The specified cross-arf file ({arf}) cannot be found.")
+        elif isinstance(arf, str):
+            arf_path = arf
 
         # We make absolutely sure that the input annulus identifiers are integer representations, not strings, just
         #  to be safe as it could screw things up downstream from here
@@ -3008,7 +3015,7 @@ class AnnularSpectra(BaseAggregateProduct):
         # Now we actually store the PATH to the file in the attribute that was set up in the init of this
         #  class - This one is four layers deep, as every source annulus will have a cross arf for every
         #  other annulus
-        self._cross_arfs[obs_id][inst][src_ann_id][cross_ann_id] = arf
+        self._cross_arfs[obs_id][inst][src_ann_id][cross_ann_id] = arf_path
 
     def get_cross_arf_paths(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int | None = None) -> dict:
         """
@@ -3670,6 +3677,7 @@ class AnnularSpectra(BaseAggregateProduct):
                 obs_id, inst = obs_key.split("-")
 
             try:
+                new_prof: BaseProfile1D
                 if par == "kT":
                     new_prof = ProjectedGasTemperature1D(
                         mid_radii,
@@ -4135,6 +4143,9 @@ class AnnularSpectra(BaseAggregateProduct):
                 show_model_fits = False
 
             # Now we deal with the different models/model fit configurations that can and cannot be specified
+            # Separate plot_models list variable to make Mypy happy, as it doesn't like str | None model being
+            #  reassigned with a list of strings
+            plot_models: list[str] = []
             if show_model_fits and model is None and fit_conf is not None:
                 raise ValueError(
                     "Specifying a fit configuration ('fit_conf') is not supported without setting the "
@@ -4142,7 +4153,7 @@ class AnnularSpectra(BaseAggregateProduct):
                     "see which models and configurations are available."
                 )
             elif show_model_fits and model is None and fit_conf is None:
-                model = self.fitted_models
+                plot_models = self.fitted_models
                 fit_conf = self.fitted_model_configurations
             elif show_model_fits and model is not None and fit_conf is None:
                 # I indent this check because it is just a bit easier for me that way
@@ -4156,7 +4167,7 @@ class AnnularSpectra(BaseAggregateProduct):
                 #  we grab ALL OF THEM - making sure that the structure of the parameters is the same (model in a list,
                 #  fit configs in a list in a dictionary with model name as key
                 fit_conf = {model: self.fitted_model_configurations[model]}
-                model = [model]
+                plot_models = [model]
             elif show_model_fits and model is not None and fit_conf is not None:
                 if model not in self.fitted_models:
                     av_mods = ", ".join(self.fitted_models)
@@ -4178,7 +4189,7 @@ class AnnularSpectra(BaseAggregateProduct):
                     )
 
                 fit_conf = {model: [fit_conf]}
-                model = [model]
+                plot_models = [model]
 
             if not grouped:
                 sct = spec.count_rates.copy()
@@ -4312,7 +4323,7 @@ class AnnularSpectra(BaseAggregateProduct):
                 ax.set_xlabel("Energy [keV]", fontsize=fontsize)
 
                 plot_cnt = 0
-                for mod in model:
+                for mod in plot_models:
                     # We also iterate through the different fit configurations for the current model, and plot them
                     #  separately - currently with the only the model name in the legend
                     for fc in fit_conf[mod]:

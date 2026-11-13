@@ -10,6 +10,7 @@ from ..exceptions import ModelNotAssociatedError, NotAssociatedError
 from ..generate.sas._common import region_setup
 from ..imagetools.psf import rl_psf
 from ..models import BaseModel1D
+from ..products.profile import GasDensity3D
 from ..samples import BaseSample, ClusterSample
 from ..sources import BaseSource, GalaxyCluster
 from ..xspec import single_temp_apec
@@ -195,7 +196,7 @@ def _setup_global(
 
 
 def _setup_inv_abel_dens_onion_temp(
-    sources: GalaxyCluster | ClusterSample,
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
     outer_radius: str | Quantity,
     sb_model: str | list[str] | BaseModel1D | list[BaseModel1D],
     dens_model: str | list[str] | BaseModel1D | list[BaseModel1D],
@@ -345,16 +346,18 @@ def _setup_inv_abel_dens_onion_temp(
     rads_dict = {str(sources[r_ind]): r for r_ind, r in enumerate(outer_rads)}
 
     # This checks and sets up a predictable structure for the models needed for this measurement.
-    sb_model = model_check(sources, sb_model)
-    dens_model = model_check(sources, dens_model)
-    temp_model = model_check(sources, temp_model)
+    # Using new variable names to make Mypy happy, as it doesn't like variables of one type being reassigned with
+    #  another (list[BaseModel1D | str])
+    checked_sb_model = model_check(sources, sb_model)
+    checked_dens_model = model_check(sources, dens_model)
+    checked_temp_model = model_check(sources, temp_model)
 
     # I also set up dictionaries, so that models for specific clusters (as you can pass individual model instances
     #  for different clusters) are assigned to the right source when we start cutting down the sources based on
     #  whether a measurement has been successful
-    sb_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(sb_model)}
-    dens_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(dens_model)}
-    temp_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(temp_model)}
+    sb_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(checked_sb_model)}
+    dens_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(checked_dens_model)}
+    temp_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(checked_temp_model)}
 
     # Here we take only the sources that have a successful global temperature measurement for at
     # least one of the associated telescopes
@@ -472,10 +475,12 @@ def _setup_inv_abel_dens_onion_temp(
     dens_prof_dict = {}
     for p_ind, _p in enumerate(cut_cut_sources):
         # this is the nested dict that will have telescope keys and profile object values
-        src_dict = {}
+        # Separate variable name from src_dict above to make Mypy happy, as it doesn't like
+        #  dict[str, GasTemperature3D | None] variables being reassigned as dict[str, GasDensity3D | None]
+        dens_src_dict: dict[str, GasDensity3D | None] = {}
         for tel in dens_profs:
             # dens_profs is of the form {'xmm': [Profile, Profile, etc.]}
-            src_dict[tel] = dens_profs[tel][p_ind]
-        dens_prof_dict[str(cut_cut_sources[p_ind])] = src_dict
+            dens_src_dict[tel] = dens_profs[tel][p_ind]
+        dens_prof_dict[str(cut_cut_sources[p_ind])] = dens_src_dict
 
     return sources, dens_prof_dict, temp_prof_dict, dens_model_dict, temp_model_dict, src_telescopes

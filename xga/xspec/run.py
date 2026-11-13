@@ -65,17 +65,19 @@ def execute_cmd(
     xspec_proc = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
 
     # This makes sure the process is killed if it does timeout
+    # Separate raw_out/raw_err byte variables to make Mypy happy, as it doesn't like bytes variables being
+    #  reassigned with list[str]
     try:
-        out, err = xspec_proc.communicate(timeout=timeout)
+        raw_out, raw_err = xspec_proc.communicate(timeout=timeout)
     except TimeoutExpired:
         xspec_proc.kill()
-        out, err = xspec_proc.communicate()
+        raw_out, raw_err = xspec_proc.communicate()
         timed_out = True
         usable = False
 
     # Have to decode the output and errors as they are in byte form
-    out = out.decode("UTF-8").split("\n")
-    err = err.decode("UTF-8").split("\n")
+    out = raw_out.decode("UTF-8").split("\n")
+    err = raw_err.decode("UTF-8").split("\n")
 
     # Remove the temporary directory
     rmtree(os.path.join(os.path.dirname(out_file), tmp_ident))

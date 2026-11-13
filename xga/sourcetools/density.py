@@ -28,6 +28,7 @@ from ..imagetools.profile import radial_brightness
 from ..imagetools.psf import rl_psf
 from ..models import BaseModel1D
 from ..products.profile import GasDensity3D, SurfaceBrightness1D
+from ..samples.base import BaseSample
 from ..samples.extended import ClusterSample
 from ..sources import BaseSource, GalaxyCluster
 from ..sourcetools import ang_to_rad
@@ -51,7 +52,7 @@ ALLOWED_INV_ABEL = [
 
 
 def _dens_setup(
-    sources: GalaxyCluster | ClusterSample,
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
     abund_table: str,
     lo_en: Quantity,
     hi_en: Quantity,
@@ -59,8 +60,8 @@ def _dens_setup(
     min_counts: int = 5,
     min_sn: int | float | None = None,
     over_sample: float | None = None,
-    obs_id: dict[str, str] | dict[str, list] | None = None,
-    inst: dict[str, str] | dict[str, list] | None = None,
+    obs_id: dict[str, str | list] | None = None,
+    inst: dict[str, str | list] | None = None,
     conv_temp: Quantity | dict[str, Quantity] | None = None,
     conv_outer_radius: Quantity | str = "r500",
     conv_inner_radius: str | Quantity = Quantity(0, "arcsec"),
@@ -69,10 +70,10 @@ def _dens_setup(
     telescope: str | list[str] | None = None,
     timeout: Quantity = Quantity(300, "s"),
 ) -> tuple[
-    GalaxyCluster | ClusterSample,
+    GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
     dict[str, list[Quantity]],
-    dict[str, str] | dict[str, list] | None,
-    dict[str, str] | dict[str, list] | None,
+    dict[str, str | list] | None,
+    dict[str, str | list] | None,
     list[str],
 ]:
     """
@@ -536,8 +537,8 @@ def _run_sb(
 
 
 def inv_abel_fitted_model(
-    sources: GalaxyCluster | ClusterSample,
-    model: str | list[str] | BaseModel1D | list[BaseModel1D],
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
+    model: str | list[str] | BaseModel1D | list[BaseModel1D] | list[BaseModel1D | str],
     fit_method: str = "mcmc",
     outer_radius: str | Quantity = "r500",
     num_dens: bool = True,
@@ -559,8 +560,8 @@ def inv_abel_fitted_model(
     min_counts: int = 5,
     min_sn: int | float | None = None,
     over_sample: float | None = None,
-    obs_id: dict[str, str] | dict[str, list] | None = None,
-    inst: dict[str, str] | dict[str, list] | None = None,
+    obs_id: dict[str, str | list] | None = None,
+    inst: dict[str, str | list] | None = None,
     conv_temp: Quantity | dict[str, Quantity] | None = None,
     conv_outer_radius: Quantity | str = "r500",
     conv_inner_radius: Quantity = Quantity(0, "arcsec"),
@@ -878,7 +879,7 @@ def inv_abel_fitted_model(
 
 
 def inv_abel_data(
-    sources: GalaxyCluster | ClusterSample,
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
     outer_radius: str | Quantity,
     inv_abel_method: str,
     num_dens: bool = True,
@@ -898,8 +899,8 @@ def inv_abel_data(
     min_counts: int = 5,
     min_sn: int | float | None = None,
     over_sample: float | None = None,
-    obs_id: str | list | None = None,
-    inst: str | list | None = None,
+    obs_id: str | list | dict | None = None,
+    inst: str | list | dict | None = None,
     conv_temp: Quantity | None = None,
     conv_outer_radius: Quantity = "r500",
     conv_inner_radius: Quantity = Quantity(0, "arcsec"),
@@ -1457,14 +1458,15 @@ def ann_spectra_apec_norm(
     telescope = list(ann_rads.keys())
 
     # So we can iterate through sources without worrying if there's more than one cluster
-    if not isinstance(sources, ClusterSample):
-        sources = [sources]
+    # Separate variable name to make Mypy happy, as it doesn't like GalaxyCluster | ClusterSample variables
+    #  being reassigned with a list
+    src_list = [sources] if not isinstance(sources, ClusterSample) else sources
 
     # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof and
     # the gas_density_profile method of APECNormalisation1D
-    final_dens_profs: dict[str, list[GasDensity3D | None]] = {tel: [None] * len(sources) for tel in telescope}
-    with tqdm(desc="Generating density profiles from annular spectra", total=len(sources)) as dens_prog:
-        for src_ind, src in enumerate(sources):
+    final_dens_profs: dict[str, list[GasDensity3D | None]] = {tel: [None] * len(src_list) for tel in telescope}
+    with tqdm(desc="Generating density profiles from annular spectra", total=len(src_list)) as dens_prog:
+        for src_ind, src in enumerate(src_list):
             for tel in telescope:
                 cur_rads = ann_rads[tel][src_ind]
 

@@ -53,6 +53,7 @@ def mission_software_call(
 
             # The first argument of all of these mission software functions will be the source object (or a list of),
             # so rather than return them from the function I'll just access them like this.
+            sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource]
             if isinstance(args[0], (BaseSource, NullSource)):
                 sources = [args[0]]
             elif isinstance(args[0], (BaseSample, list)):
@@ -290,8 +291,8 @@ def mission_software_call(
 
 
 def execute_cmd(
-    cmd: str, p_type: str | list[str], p_path: list, extra_info: dict, src: str
-) -> tuple[BaseProduct | list[BaseProduct | None] | None, str]:
+    cmd: str, p_type: str | list[str], p_path: str | list, extra_info: dict, src: str
+) -> tuple[BaseProduct | PSFGrid | list[BaseProduct | PSFGrid | None] | None, str]:
     """
     This function is called for the local compute option, and runs the passed command in a Popen shell.
     It then creates an appropriate product object, and passes it back to the callback function of the Pool
@@ -317,10 +318,12 @@ def execute_cmd(
             cmd = f"export DYLD_LIBRARY_PATH={sys_env['DYLD_LIBRARY_PATH']} && {cmd}"
 
     # This runs the passed command - it captures the stdout and stderr as well
-    out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
+    # Separate raw_out/raw_err byte variables to make Mypy happy, as it doesn't like bytes variables being
+    #  reassigned with str
+    raw_out, raw_err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
     # Captured out/err are byte type, will decode that into str for easier use
-    out = out.decode("UTF-8", errors="ignore")
-    err = err.decode("UTF-8", errors="ignore")
+    out = raw_out.decode("UTF-8", errors="ignore")
+    err = raw_err.decode("UTF-8", errors="ignore")
 
     # We will assume that the first entry in the product path argument is the
     #  primary output file, and will name the log files after it
@@ -376,10 +379,10 @@ def execute_cmd(
         )
 
     # We'll now be iterating through the product paths and their matching types
-    prods: list[BaseProduct | None] = []
+    prods: list[BaseProduct | PSFGrid | None] = []
     for p_ind, cur_p_path in enumerate(p_path):
         cur_p_type = p_type[p_ind]
-        prod: BaseProduct | None
+        prod: BaseProduct | PSFGrid | None
 
         # This part for defining an image object used to make sure that the src wasn't a NullSource, as defining product
         #  objects is wasteful considering the purpose of a NullSource, but generating exposure maps requires a

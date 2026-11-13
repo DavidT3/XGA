@@ -88,10 +88,12 @@ def mifbuild(sources: BaseSource | NullSource | BaseSample | list[BaseSource | N
 
         with tqdm(desc="Generating XMM Calibration Master Index File", total=1) as onwards:
             # This runs the passed command - it captures the stdout and stderr as well
-            out, err = Popen(mif_cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
+            # Separate raw_out/raw_err byte variables to make Mypy happy, as it doesn't like bytes variables being
+            #  reassigned with str
+            raw_out, raw_err = Popen(mif_cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
             # Captured out/err are byte type, will decode that into str for easier use
-            out = out.decode("UTF-8", errors="ignore")
-            err = err.decode("UTF-8", errors="ignore")
+            out = raw_out.decode("UTF-8", errors="ignore")
+            err = raw_err.decode("UTF-8", errors="ignore")
 
             prod = BaseProduct(final_path, "", "", out, err, mif_cmd, telescope="xmm")
             prod.raise_errors()
@@ -103,7 +105,9 @@ def mifbuild(sources: BaseSource | NullSource | BaseSample | list[BaseSource | N
 
 @sas_call
 def cifbuild(
-    sources: BaseSource | NullSource | BaseSample, num_cores: int = NUM_CORES, disable_progress: bool = False
+    sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource],
+    num_cores: int = NUM_CORES,
+    disable_progress: bool = False,
 ) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A wrapper for the XMM cifbuild command, which will be run before many of the more complex SAS commands, to

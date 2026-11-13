@@ -763,7 +763,8 @@ def luminosity_temperature_pipeline(
     # Now to assemble the final sample information dataframe - note that the sample does have methods for the bulk
     #  retrieval of temperature and luminosity values, but they aren't so useful here because I know that some of the
     #  original entries in sample_data might have been deleted from the sample object itself
-    for row_ind, row in loaded_samp_data.iterrows():
+    # Separate df_row_ind variable to make Mypy happy, as it doesn't like int row_ind being reassigned with Hashable
+    for df_row_ind, row in loaded_samp_data.iterrows():
         # We're iterating through the rows of the sample information passed in, because we want there to be an
         #  entry even if the LT pipeline didn't succeed. As such we have to check if the current row's cluster
         #  is actually still a part of the sample
@@ -993,7 +994,7 @@ def luminosity_temperature_pipeline(
 
             # We know that at least the radius will always be there to be added to the dataframe, so we add the
             #  information in vals and cols
-            loaded_samp_data.loc[row_ind, cols] = np.array(vals)
+            loaded_samp_data.loc[df_row_ind, cols] = np.array(vals)
 
     # If the user wants to save the resulting dataframe to disk then we do so
     if save_samp_results_path is not None:

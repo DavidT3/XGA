@@ -19,7 +19,7 @@ from ... import ESASS_VERSION, NUM_CORES, OUTPUT
 from ...exceptions import NoProductAvailableError, TelescopeNotAssociatedError
 from ...products.events import EventList
 from ...samples.base import BaseSample
-from ...sources import BaseSource
+from ...sources import BaseSource, NullSource
 from ..common import get_annular_esass_region
 from ..sas._common import region_setup
 from ._common import T_STEP_POINT, T_STEP_SURVEY
@@ -28,7 +28,7 @@ from .run import esass_call
 
 
 def _lc_cmds(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource],
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     lo_en: Quantity = Quantity(0.5, "keV"),
@@ -123,7 +123,7 @@ def _lc_cmds(
                         lo_en,
                         hi_en,
                         time_bin_size,
-                        patt,
+                        patt_str,
                         cur_evt_list.telescope,
                     )
 
@@ -137,7 +137,7 @@ def _lc_cmds(
                         lo_en,
                         hi_en,
                         time_bin_size,
-                        patt,
+                        patt_str,
                         cur_evt_list.telescope,
                     )
 
@@ -152,6 +152,7 @@ def _lc_cmds(
             # eROSITA observations have the potential to be in pointed or survey/scan modes - we change the time step
             #  based on that. We suspect that the time step is almost irrelevant for pointed mode observations, as
             #  the pointing of the spacecraft won't be changing appreciably
+            t_step: int | float
             if cur_evt_list.header["OBS_MODE"] == "POINTING":
                 t_step = t_step_point
             elif cur_evt_list.header["OBS_MODE"] in ["SURVEY", "SCAN"]:
@@ -245,7 +246,7 @@ def _lc_cmds(
                 le=str(lo_en.value),
                 lm=str(hi_en.value),
                 lcg=str(lc_gamma),
-                pat=patt,
+                pat=patt_str,
                 wi=cur_inst_srctool_id,
             )
 
@@ -287,7 +288,7 @@ def _lc_cmds(
                     "inner_radius": src_inn_rad,
                     "outer_radius": src_out_rad,
                     "time_bin": time_bin_size,
-                    "pattern": patt,
+                    "pattern": patt_str,
                     "obs_id": cur_evt_list.obs_id,
                     "instrument": inst,
                     "central_coord": source.default_coord,
@@ -363,8 +364,9 @@ def _lc_cmds(
     else:
         time_bin_size = time_bin_size.to("s")
 
-    # Convert the integer pattern to a string
-    patt = str(patt)
+    # Convert the integer pattern to a string - using a new variable name to make Mypy happy, as it doesn't like
+    #  variables of one type (int) being reassigned with another (str)
+    patt_str = str(patt)
 
     # Have to make sure that the user hasn't done anything daft here, hi_en must be larger than lo_en
     if lo_en >= hi_en:

@@ -1269,7 +1269,7 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._cut_off
 
     @cut_off.setter
-    def cut_off(self, new_val: int) -> None:
+    def cut_off(self, new_val: int | None) -> None:
         """
         Property setter for the number of steps to removed from MCMC chains as burn-in.
 

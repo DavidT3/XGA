@@ -28,7 +28,7 @@ from .run import sas_call
 # TODO Perhaps remove the option to add to the SAS expression
 @sas_call
 def evselect_image(
-    sources: BaseSource | NullSource | BaseSample,
+    sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource],
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
     add_expr: str = "",
@@ -147,7 +147,7 @@ def evselect_image(
 
 @sas_call
 def eexpmap(
-    sources: BaseSource | NullSource | BaseSample,
+    sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource],
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
     num_cores: int = NUM_CORES,
@@ -290,7 +290,7 @@ def eexpmap(
 
 @sas_call
 def emosaic(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     to_mosaic: str,
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
@@ -482,7 +482,7 @@ def emosaic(
 
 @sas_call
 def psfgen(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     bins: int = 4,
     psf_model: str = "ELLBETA",
     num_cores: int = NUM_CORES,

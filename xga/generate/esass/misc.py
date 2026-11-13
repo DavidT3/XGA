@@ -23,7 +23,9 @@ from .run import esass_call
 
 @esass_call
 def evtool_combine_evts(
-    sources: BaseSource | NullSource | BaseSample, num_cores: int = NUM_CORES, disable_progress: bool = False
+    sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource],
+    num_cores: int = NUM_CORES,
+    disable_progress: bool = False,
 ) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A convenient Python wrapper for the eSASS evtool command that combines event lists. In eRASS data

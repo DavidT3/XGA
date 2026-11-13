@@ -21,7 +21,7 @@ from ._common import _check_inputs, _pregen_annular_spectra, _write_xspec_script
 
 @xspec_call
 def single_temp_apec_profile(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     radii: Quantity | list[Quantity] | dict[str, Quantity] | dict[str, list[Quantity]],
     start_temp: Quantity = Quantity(3.0, "keV"),
     start_met: float = 0.3,
@@ -458,10 +458,12 @@ def single_temp_apec_profile(
                     # Creates the list of lists of cross-arfs for the current source annulus
                     cross_arf_paths.append("{" + " ".join(cur_ann_cross_arfs) + "}")
 
-                # Finally, the final strings for inserting into the XSPEC script template are constructed
-                ann_spec_paths = "{" + " ".join(ann_spec_paths) + "}"
-                cross_arf_rmf_paths = "{" + " ".join(cross_arf_rmf_paths) + "}"
-                cross_arf_paths = "{" + " ".join(cross_arf_paths) + "}"
+                # Finally, the final strings for inserting into the XSPEC script template are constructed - using
+                #  new variable names to make Mypy happy, as it doesn't like list[str] variables being reassigned
+                #  with str
+                ann_spec_paths_str = "{" + " ".join(ann_spec_paths) + "}"
+                cross_arf_rmf_paths_str = "{" + " ".join(cross_arf_rmf_paths) + "}"
+                cross_arf_paths_str = "{" + " ".join(cross_arf_paths) + "}"
 
                 # Set up the TCL list that defines which parameters are frozen, dependent on user input
                 freezing = "{{F {n} F {ab} T F}}".format(n="T" if freeze_nh else "F", ab="T" if freeze_met else "F")
@@ -500,7 +502,7 @@ def single_temp_apec_profile(
                         model,
                         abund_table,
                         fit_method,
-                        ann_spec_paths,
+                        ann_spec_paths_str,
                         lo_en,
                         hi_en,
                         par_names,
@@ -522,8 +524,8 @@ def single_temp_apec_profile(
                         fit_conf,
                         nh_to_zero,
                         str(rand_ident),
-                        cross_arf_paths,
-                        cross_arf_rmf_paths,
+                        cross_arf_paths_str,
+                        cross_arf_rmf_paths_str,
                     )
 
                     script_paths.append(script_file)

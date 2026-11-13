@@ -1704,7 +1704,7 @@ class BaseProfile1D:
                 auto_corr = np.mean(sampler.get_autocorr_time())
                 # Find the nearest hundred above the mean auto-correlation time, then multiply by two for
                 #  burn-in region
-                cut_off = int(np.ceil(auto_corr / 100) * 100) * 2
+                cut_off: int | None = int(np.ceil(auto_corr / 100) * 100) * 2
                 success = True
             except ValueError as bugger:
                 model.fit_warning = str(bugger)
@@ -1867,13 +1867,14 @@ class BaseProfile1D:
             ]
             model.par_dists = par_dists
 
-        # Now we put the values BACK into quantities
-        fit_par = [Quantity(p, model.par_units[p_ind]) for p_ind, p in enumerate(fit_par)]
-        fit_par_err = [Quantity(p, model.par_units[p_ind]) for p_ind, p in enumerate(fit_par_err)]
+        # Now we put the values BACK into quantities (using new variable names to make Mypy happy, as it doesn't
+        #  like np.ndarray variables being reassigned with lists of Quantities)
+        fit_par_quants = [Quantity(p, model.par_units[p_ind]) for p_ind, p in enumerate(fit_par)]
+        fit_par_err_quants = [Quantity(p, model.par_units[p_ind]) for p_ind, p in enumerate(fit_par_err)]
 
         # And pass them into the model
-        model.model_pars = fit_par
-        model.model_par_errs = fit_par_err
+        model.model_pars = fit_par_quants
+        model.model_par_errs = fit_par_err_quants
 
         if not success:
             model.fit_warning = warning_str
@@ -2106,11 +2107,13 @@ class BaseProfile1D:
 
         # Verify that an explicitly requested model is supported for this type of 1D profile
         if model is not None and model not in PROF_TYPE_MODELS[self._prof_type]:
-            allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
+            # Separate allowed_mods variable to make Mypy happy, as it doesn't like str allowed being reassigned with
+            #  a list
+            allowed_mods = list(PROF_TYPE_MODELS[self._prof_type].keys())
             prof_name = self._y_axis_name.lower()
             raise XGAInvalidModelError(
                 f"{model} is not a valid model for a {prof_name} profile, please choose from one of these; "
-                f"{', '.join(allowed)}"
+                f"{', '.join(allowed_mods)}"
             )
 
         # When neither model nor method is specified, auto-resolve if there is exactly one successful (or, failing
@@ -2811,12 +2814,13 @@ class BaseProfile1D:
             res_ax.set_ylabel("Model - Data", fontsize=13)
 
         # Adds a title to this figure, changes depending on whether model fits are plotted as well
-        if models and custom_title is None and len(self.good_model_fits) == 1:
-            title_str = f"{self._y_axis_name} Profile - with model"
-        elif models and custom_title is None and len(self.good_model_fits) > 1:
-            title_str = f"{self._y_axis_name} Profile - with models"
-        elif not models and custom_title is None:
-            title_str = f"{self._y_axis_name} Profile"
+        if custom_title is None:
+            if models and len(self.good_model_fits) == 1:
+                title_str = f"{self._y_axis_name} Profile - with model"
+            elif models and len(self.good_model_fits) > 1:
+                title_str = f"{self._y_axis_name} Profile - with models"
+            else:
+                title_str = f"{self._y_axis_name} Profile"
         else:
             # If the user doesn't like my title, they can supply their own
             title_str = custom_title

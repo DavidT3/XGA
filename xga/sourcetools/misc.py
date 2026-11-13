@@ -50,14 +50,15 @@ def nh_lookup(coord_pair: Quantity) -> Quantity:
     heasoft_output = out.decode("utf-8")
     lines = heasoft_output.split("\n")
     try:
-        average_nh = lines[-3].split(" ")[-1]
-        weighed_av_nh = lines[-2].split(" ")[-1]
+        # Separate raw string variables to make Mypy happy, as it doesn't like str variables being reassigned with float
+        raw_average_nh = lines[-3].split(" ")[-1]
+        raw_weighed_av_nh = lines[-2].split(" ")[-1]
     except IndexError as err:
         raise HeasoftError("HEASoft nH command output is not as expected.") from err
 
     try:
-        average_nh = float(average_nh)
-        weighed_av_nh = float(weighed_av_nh)
+        average_nh = float(raw_average_nh)
+        weighed_av_nh = float(raw_weighed_av_nh)
         nh_vals = Quantity(array([average_nh, weighed_av_nh]) / 10**22, "10^22 cm^-2")
     except ValueError as err:
         if any(["nH is from the closest pixel to the input position" in line for line in lines]):

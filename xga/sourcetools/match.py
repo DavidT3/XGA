@@ -722,6 +722,8 @@ def separation_match(
 
     # If we only want to use one core, we don't set up a pool as it could be that a pool is open where
     #  this function is being called from
+    sparse_results: dict | DataFrame
+    sparse_bl: dict | DataFrame
     if num_cores == 1:
         # The tqdm progress bar is handled here for the serial path
         with tqdm(
@@ -760,12 +762,13 @@ def separation_match(
         ]
 
         # We set up the pool with an initializer to store the census coordinates in worker global scope
+        # Separate flat_res_chunks/flat_bl_chunks lists to make Mypy happy, as it doesn't like dict/DataFrame
+        #  variables being reassigned with lists
+        flat_res_chunks: list[DataFrame] = []
+        flat_bl_chunks: list[DataFrame] = []
         if not return_flat:
             sparse_results = {tel: {} for tel in telescope}
             sparse_bl = {tel: {} for tel in telescope}
-        else:
-            sparse_results = []
-            sparse_bl = []
 
         with (
             tqdm(desc="Searching for telescope observations near source coordinates", total=num_chunks) as onwards,
@@ -779,14 +782,14 @@ def separation_match(
                         sparse_results[tel].update(chunk_res[tel])
                         sparse_bl[tel].update(chunk_bl[tel])
                 else:
-                    sparse_results.append(chunk_res)
-                    sparse_bl.append(chunk_bl)
+                    flat_res_chunks.append(chunk_res)
+                    flat_bl_chunks.append(chunk_bl)
                 onwards.update(1)
 
         if return_flat:
-            if len(sparse_results) > 0:
-                sparse_results = pd.concat(sparse_results, ignore_index=True)
-                sparse_bl = pd.concat(sparse_bl, ignore_index=True)
+            if len(flat_res_chunks) > 0:
+                sparse_results = pd.concat(flat_res_chunks, ignore_index=True)
+                sparse_bl = pd.concat(flat_bl_chunks, ignore_index=True)
             else:
                 # Should have been handled in _vectorized_separation_match but just in case
                 cols = list(CENSUS[telescope[0]].columns) + ["src_idx", "dist", "telescope"]
@@ -845,11 +848,13 @@ def separation_match(
     # Result length of one means one coordinate was passed in, so we should pass back out a single dataframe
     #  rather than a single dataframe in a list
     if len(results) == 1:
-        results = results[0]
-        bl_results = bl_results[0]
+        # Separate single_res/single_bl_res variables to make Mypy happy, as it doesn't like list variables being
+        #  reassigned with a single dict
+        single_res = results[0]
+        single_bl_res = bl_results[0]
 
         # This calculates the total number of results across all requested telescopes
-        tot_res = sum([len(results[tel]) for tel in results])
+        tot_res = sum([len(single_res[tel]) for tel in single_res])
 
         # As in this case there is only one source, we can include more information in our error message telling
         #  the user that there are no matches
@@ -862,6 +867,7 @@ def separation_match(
                     t="/".join(telescope),
                 )
             )
+        return single_res, single_bl_res
     # If all the dataframes in the results list are length zero, then none of the coordinates has a
     #  valid ObsID
     elif all([sum([len(r[tel]) for tel in r]) == 0 for r in results]):
@@ -1108,7 +1114,7 @@ def on_detector_match(
 
     # --- Assembly Pass ---
     # We assemble the final results list from the flat matches
-    results = [{t: None for t in telescope} for _ in range(len(src_ra))]
+    results: list[dict[str, list | np.ndarray | None]] = [{t: None for t in telescope} for _ in range(len(src_ra))]
 
     # Directly populate results to avoid temp_matches dictionary overhead
     for s_idx, tel, o in all_matches:
@@ -1130,14 +1136,16 @@ def on_detector_match(
     # Result length of one means one coordinate was passed in, so we should pass back out a single dictionary
     #  rather than a single dictionary in a list
     if len(src_ra) == 1:
-        results = results[0]
+        # Separate single_res variable to make Mypy happy, as it doesn't like a list variable being reassigned with a
+        #  single dict
+        single_res = results[0]
 
         # This calculates the total number of results across all requested telescopes
-        # We need to make sure we check if results[tel] is not None
+        # We need to make sure we check if single_res[tel] is not None
         tot_res = 0
-        for tel in results:
-            if results[tel] is not None:
-                tot_res += len(results[tel])
+        for tel in single_res:
+            if single_res[tel] is not None:
+                tot_res += len(single_res[tel])
 
         # As in this case there is only one source, we can include more information in our error message telling
         #  the user that there are no matches
@@ -1147,6 +1155,7 @@ def on_detector_match(
                     r=round(src_ra[0], 4), d=round(src_dec[0], 4), t="/".join(telescope)
                 )
             )
+        return single_res
     # If all the entries in the results list are None for all telescopes
     else:
         # Check if any source has any detections

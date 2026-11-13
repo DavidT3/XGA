@@ -50,7 +50,7 @@ def download_products(
     """
     # This is what we'll return - a mapping of product instance to either a successful local path, or
     #  an Exception if something went wrong further down. Built up incrementally as we go.
-    results = {}
+    results: dict[BaseProduct, str | Exception] = {}
 
     # We validate the save_path input - if it's a sequence it must match the length of the products list
     if not isinstance(save_path, str) and len(save_path) != len(products):

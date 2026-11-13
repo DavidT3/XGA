@@ -290,10 +290,11 @@ def _get_ciao_info() -> tuple[Version | None, bool, Version | None, bool]:
     caldb_version = None
     caldb_avail = False
 
-    ciao_out, ciao_err = Popen("ciaover -v", stdout=PIPE, stderr=PIPE, shell=True).communicate()
+    # Separate raw byte variables to make Mypy happy, as it doesn't like bytes variables being reassigned with str
+    raw_ciao_out, raw_ciao_err = Popen("ciaover -v", stdout=PIPE, stderr=PIPE, shell=True).communicate()
     # Just turn those pesky byte outputs into strings
-    ciao_out = ciao_out.decode("UTF-8")
-    ciao_err = ciao_err.decode("UTF-8")
+    ciao_out = raw_ciao_out.decode("UTF-8")
+    ciao_err = raw_ciao_err.decode("UTF-8")
 
     if "ciaover: command not found" in ciao_err:
         warn(
@@ -1463,7 +1464,12 @@ CHANDRA_FILES = {
 }
 
 # We set up this dictionary for later, it makes programmatically grabbing the section dictionaries easier.
-tele_conf_sects = {"xmm": XMM_FILES, "erosita": EROSITA_FILES, "erass": ERASS_FILES, "chandra": CHANDRA_FILES}
+tele_conf_sects: dict[str, dict[str, Any]] = {
+    "xmm": XMM_FILES,
+    "erosita": EROSITA_FILES,
+    "erass": ERASS_FILES,
+    "chandra": CHANDRA_FILES,
+}
 # -------------------------------------------------------------------------------
 
 

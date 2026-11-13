@@ -16,14 +16,14 @@ from astropy.units import Quantity, UnitConversionError
 from ... import NUM_CORES, OUTPUT
 from ...exceptions import NoProductAvailableError, TelescopeNotAssociatedError
 from ...samples.base import BaseSample
-from ...sources import BaseSource
+from ...sources import BaseSource, NullSource
 from ..common import check_pattern
 from ._common import region_setup
 from .run import sas_call
 
 
 def _lc_cmds(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource],
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     lo_en: Quantity = Quantity(0.5, "keV"),

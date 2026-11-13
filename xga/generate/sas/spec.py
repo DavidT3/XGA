@@ -18,7 +18,7 @@ from astropy.units import Quantity
 from xga import NUM_CORES, OUTPUT
 from xga.exceptions import NoProductAvailableError, NotAssociatedError, SASInputInvalid, TelescopeNotAssociatedError
 from xga.samples.base import BaseSample
-from xga.sources import BaseSource, ExtendedSource, GalaxyCluster
+from xga.sources import BaseSource, ExtendedSource, GalaxyCluster, NullSource
 
 from ..sas.run import sas_call
 from ._common import _gen_detmap_cmd, region_setup
@@ -26,7 +26,7 @@ from .misc import cifbuild
 
 
 def _spec_cmds(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource],
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     group_spec: bool = True,
@@ -690,7 +690,7 @@ def evselect_spectrum(
 
 @sas_call
 def spectrum_set(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     radii: list[Quantity] | Quantity,
     group_spec: bool = True,
     min_counts: int = 5,
@@ -998,13 +998,13 @@ def spectrum_set(
 
 @sas_call
 def cross_arf(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     radii: list[Quantity] | Quantity,
     group_spec: bool = True,
     min_counts: int = 5,
     min_sn: float | None = None,
     over_sample: float | None = None,
-    set_id: str | None = None,
+    set_id: int | str | list | np.ndarray | None = None,
     detmap_bin: int = 200,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,

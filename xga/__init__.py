@@ -3,9 +3,10 @@
 """The __init__ for the main xga package, handling version setup, lazy configuration loading, and legacy shims."""
 
 try:
-    from importlib.metadata import version as _version
+    # Aliased to _get_meta_version to make Mypy happy, as it doesn't like _version being reassigned with a module
+    from importlib.metadata import version as _get_meta_version
 
-    __version__ = _version("xga")
+    __version__ = _get_meta_version("xga")
 except Exception:
     try:
         from . import _version

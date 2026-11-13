@@ -514,14 +514,16 @@ class ClusterSample(BaseSample):
         for gcs in self._sources.values():
             rs.append(gcs.richness.value)
 
-        rs = np.array(rs)
+        # Separate rs_arr variable to make Mypy happy, as it doesn't like list variables being reassigned with
+        #  np.ndarray
+        rs_arr = np.array(rs)
 
         # We're going to throw an error if all the richnesses are NaN, because obviously something is wrong
-        check_rs = rs[~np.isnan(rs)]
+        check_rs = rs_arr[~np.isnan(rs_arr)]
         if len(check_rs) == 0:
             raise ValueError("All richnesses appear to be NaN.")
 
-        return Quantity(rs)
+        return Quantity(rs_arr)
 
     @property
     def wl_mass(self) -> Quantity:
@@ -537,14 +539,16 @@ class ClusterSample(BaseSample):
             wlm.append(gcs.weak_lensing_mass.value)
             wlm_unit = gcs.weak_lensing_mass.unit
 
-        wlm = np.array(wlm)
+        # Separate wlm_arr variable to make Mypy happy, as it doesn't like list variables being reassigned with
+        #  np.ndarray
+        wlm_arr = np.array(wlm)
 
         # We're going to throw an error if all the weak lensing masses are NaN, because obviously something is wrong
-        check_wlm = wlm[~np.isnan(wlm)]
+        check_wlm = wlm_arr[~np.isnan(wlm_arr)]
         if len(check_wlm) == 0:
             raise ValueError("All weak lensing masses appear to be NaN.")
 
-        return Quantity(wlm, wlm_unit)
+        return Quantity(wlm_arr, wlm_unit)
 
     @property
     def r200(self) -> Quantity:
@@ -1092,14 +1096,16 @@ class ClusterSample(BaseSample):
                     stacklevel=2,
                 )
 
-        gms = np.array(gms)
+        # Separate gms_arr variable to make Mypy happy, as it doesn't like list variables being reassigned with
+        #  np.ndarray
+        gms_arr = np.array(gms)
 
         # We're going to throw an error if all the gas masses are NaN, because obviously something is wrong
-        check_gms = gms[~np.isnan(gms)]
+        check_gms = gms_arr[~np.isnan(gms_arr)]
         if len(check_gms) == 0:
             raise ValueError("All gas masses appear to be NaN.")
 
-        return Quantity(gms, "Msun")
+        return Quantity(gms_arr, "Msun")
 
     def hydrostatic_mass(
         self,
@@ -1175,13 +1181,15 @@ class ClusterSample(BaseSample):
                 ms.append([np.nan, np.nan, np.nan])
                 warn(f"{gcs.name} doesn't have a matching hydrostatic mass profile associated", stacklevel=2)
 
-        ms = np.array(ms)
+        # Separate ms_arr variable to make Mypy happy, as it doesn't like list variables being reassigned with
+        #  np.ndarray
+        ms_arr = np.array(ms)
         # We're going to throw an error if all the masses are NaN, because obviously something is wrong
-        check_ms = ms[~np.isnan(ms)]
+        check_ms = ms_arr[~np.isnan(ms_arr)]
         if len(check_ms) == 0:
             raise ValueError("All hydrostatic masses appear to be NaN.")
 
-        return Quantity(ms, "Msun")
+        return Quantity(ms_arr, "Msun")
 
     def calc_overdensity_radii(
         self, delta: int, telescope: str, temp_model_name: str | None = None, dens_model_name: str | None = None

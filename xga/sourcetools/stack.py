@@ -155,11 +155,12 @@ def _create_stack(
 
     # Check for NaN values in the brightness profiles we've retrieved - very bad if they exist
     no_nan = np.where(~np.isnan(sb.sum(axis=1)))[0]
-    # Selects only those clusters that don't have nans in their brightness profiles
-    combined_factors = np.array(combined_factors)[no_nan]
+    # Selects only those clusters that don't have nans in their brightness profiles - using a new variable name to
+    #  make Mypy happy, as it doesn't like list variables being reassigned with np.ndarray
+    comb_factors_arr = np.array(combined_factors)[no_nan]
 
     # Multiplies each cluster profile by the matching conversion factor to go from countrate to luminosity
-    luminosity = (sb[no_nan, :].T * combined_factors).T
+    luminosity = (sb[no_nan, :].T * comb_factors_arr).T
 
     # Finds the highest value in the profile of each cluster
     max_lums = np.max(luminosity, axis=1)

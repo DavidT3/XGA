@@ -81,6 +81,7 @@ def log_prob(
     :rtype: np.ndarray
     """
     lp = log_uniform_prior(theta, pr)
+    ret_val: np.ndarray | float
     if not np.isfinite(lp):
         ret_val = -np.inf
     else:

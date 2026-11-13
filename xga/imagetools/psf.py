@@ -17,13 +17,13 @@ from xga import NUM_CORES, OUTPUT
 
 from ..exceptions import NoProductAvailableError, NotAssociatedError
 from ..generate.sas import emosaic, evselect_image, psfgen
-from ..products import Image, PSFGrid
+from ..products import Image
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 
 
 def rl_psf(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     iterations: int = 15,
     psf_model: str = "ELLBETA",
     lo_en: Quantity = Quantity(0.5, "keV"),
@@ -199,7 +199,7 @@ def rl_psf(
 
                 # Extra key we need to search for the PSFGrid we need, then fetch it.
                 psf_key = "_".join([psf_model, str(bins)])
-                psf_grid: PSFGrid = source.get_products("psf", obs_id, inst, psf_key, telescope="xmm")[0]
+                psf_grid = source.get_products("psf", obs_id, inst, psf_key, telescope="xmm")[0]
 
                 # This uses a built in method of the PSF class to re-sample the PSF(s) to the same
                 #  scale as our image

@@ -27,7 +27,7 @@ from .run import ciao_call
 
 
 def _chandra_spec_cmds(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource],
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     group_spec: bool = True,
@@ -178,6 +178,7 @@ def _chandra_spec_cmds(
             mask_file = mask_prod[0].path
 
             # Check do we need to group the spec
+            binspec_int: int | float | str
             if group_spec and min_counts is not None:
                 extra_file_name = f"_mincnt{min_counts}"
                 grouptype_int = "NUM_CTS"
@@ -427,7 +428,7 @@ def specextract_spectrum(
 
 @ciao_call
 def ciao_spectrum_set(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     radii: list[Quantity] | Quantity,
     group_spec: bool = True,
     min_counts: int = 5,

@@ -14,7 +14,7 @@ from regions import Region
 from xga import COMBINED_INSTS, DEFAULT_COSMO
 from xga.exceptions import MultipleMatchError, NoProductAvailableError, NoRegionsError, XGADeveloperError
 from xga.imagetools.profile import radial_brightness
-from xga.products.base import BaseProfile1D
+from xga.products.base import BaseAggregateProfile1D, BaseProfile1D
 from xga.products.phot import RateMap
 from xga.products.profile import (
     APECNormalisation1D,
@@ -1541,7 +1541,7 @@ class GalaxyCluster(ExtendedSource):
         back_sub: bool = True,
         lo_en: Quantity = Quantity(0.5, "keV"),
         hi_en: Quantity = Quantity(2.0, "keV"),
-    ) -> tuple[SurfaceBrightness1D, dict[str, Quantity]]:
+    ) -> tuple[SurfaceBrightness1D | BaseAggregateProfile1D, dict[str, Quantity]]:
         """
         A method that generates brightness profile objects for this galaxy cluster. Interloper
         sources are excluded, and any fits performed to pre-existing brightness profiles which are being
@@ -1642,6 +1642,7 @@ class GalaxyCluster(ExtendedSource):
         rad = self.get_radius(reg_type)
 
         # This fetches any profiles that might have already been generated to our required specifications
+        sb_profile: BaseProfile1D | BaseAggregateProfile1D | list[SurfaceBrightness1D]
         try:
             sb_profile = self.get_1d_brightness_profile(
                 rad, pix_step=pix_step, min_snr=min_snr, lo_en=lo_en, hi_en=hi_en, telescope=telescope

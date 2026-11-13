@@ -575,7 +575,7 @@ class LightCurve(BaseProduct):
                         self._bck_sub_cnt_rate_err = Quantity(all_lc["RATE"].read_column("RATE_ERR"), "ct/s")
 
                     if np.isnan(self._bck_sub_cnt_rate).any():
-                        good_ent = np.where(~np.isnan(self._bck_sub_cnt_rate))
+                        good_ent: tuple[np.ndarray, ...] | np.ndarray = np.where(~np.isnan(self._bck_sub_cnt_rate))
                         self._bck_sub_cnt_rate = self._bck_sub_cnt_rate[good_ent]
                         self._bck_sub_cnt_rate_err = self._bck_sub_cnt_rate_err[good_ent]
                     else:
@@ -2158,7 +2158,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         title_font_size: int = 20,
         inst_cmap: str = "viridis",
         y_lims: Quantity | None = None,
-        time_chunk_ids: int | list[int] | None = None,
+        time_chunk_ids: int | list[int] | np.ndarray | None = None,
         yscale: str = "linear",
         fracexp_corr: bool = False,
         show_legend: bool = True,

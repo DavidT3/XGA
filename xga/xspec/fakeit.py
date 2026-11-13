@@ -11,6 +11,7 @@ from astropy.units import Quantity
 from .. import COUNTRATE_CONV_SCRIPT, NUM_CORES, OUTPUT
 from ..exceptions import ModelNotAssociatedError, NoProductAvailableError, ParameterNotAssociatedError
 from ..products import Spectrum
+from ..samples.base import BaseSample
 from ..samples.extended import ClusterSample
 from ..sources import BaseSource, GalaxyCluster
 from ..utils import ABUND_TABLES
@@ -20,7 +21,7 @@ from .run import xspec_call
 
 @xspec_call
 def cluster_cr_conv(
-    sources: GalaxyCluster | ClusterSample,
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     sim_temp: dict[str, Quantity] | None = None,
@@ -100,8 +101,9 @@ def cluster_cr_conv(
     )
 
     # pregen spectra can output a BaseSource after inputting it as a list, so turning this back to a list
-    if isinstance(sources, BaseSource):
-        sources = [sources]
+    # Separate variable name to make Mypy happy, as it doesn't like union source variables being reassigned with
+    #  a list of a narrowed source type
+    src_list = [sources] if isinstance(sources, BaseSource) else sources
 
     # Checks that the luminosity energy bands are pairs of values
     if conv_en.shape[1] != 2:
@@ -118,12 +120,12 @@ def cluster_cr_conv(
         sim_temp = {key: Quantity(3, "keV") for key in telescope}
     # Check that the correct number of temperatures are supplied
     for key in sim_temp:
-        if not sim_temp[key].isscalar and len(sim_temp[key]) != len(sources):
+        if not sim_temp[key].isscalar and len(sim_temp[key]) != len(src_list):
             raise ValueError(
                 "The 'sim_temp' argument must either be scalar or have the same number of entries as there are sources."
             )
 
-    if not isinstance(sim_met, float) and len(sim_met) != len(sources):
+    if not isinstance(sim_met, float) and len(sim_met) != len(src_list):
         raise ValueError(
             "The 'sim_met' variable must either be a float or have the same number of entries as there are sources."
         )
@@ -141,7 +143,7 @@ def cluster_cr_conv(
     fit_confs = []
     inv_ents = []
     # This function supports passing multiple sources, so we have to setup a script for all of them.
-    for s_ind, source in enumerate(sources):
+    for s_ind, source in enumerate(src_list):
         for tel in telescope:
             # This function can take a single temperature to simulate at, or a list of them (one for each source).
             if sim_temp[tel].isscalar:

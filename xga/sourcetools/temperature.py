@@ -34,10 +34,10 @@ def _ann_bins_setup(
     obs_id: str | None = None,
     inst: str | None = None,
     psf_corr: bool = False,
-    psf_model: str = "ELLBETA",
-    psf_bins: int = 4,
-    psf_algo: str = "rl",
-    psf_iter: int = 15,
+    psf_model: str | None = "ELLBETA",
+    psf_bins: int | None = 4,
+    psf_algo: str | None = "rl",
+    psf_iter: int | None = 15,
 ) -> tuple:
     """
     This method just sets up radii, masks, etc. for annular binning functions in this file. The operations in
@@ -511,7 +511,7 @@ def _cnt_bins(
 
 
 def min_snr_proj_temp_prof(
-    sources: GalaxyCluster | ClusterSample,
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
     outer_radii: Quantity | list[Quantity],
     min_snr: float = 20,
     min_width: Quantity = Quantity(20, "arcsec"),
@@ -737,7 +737,7 @@ def min_snr_proj_temp_prof(
 
 
 def min_cnt_proj_temp_prof(
-    sources: GalaxyCluster | ClusterSample,
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
     outer_radii: Quantity | list[Quantity],
     min_cnt: int | Quantity = Quantity(1000, "ct"),
     min_width: Quantity = Quantity(20, "arcsec"),
@@ -948,7 +948,7 @@ def min_cnt_proj_temp_prof(
 
 
 def onion_deproj_temp_prof(
-    sources: GalaxyCluster | ClusterSample,
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster] | BaseSource | BaseSample | list[BaseSource],
     outer_radii: Quantity | list[Quantity],
     annulus_method: str = "min_snr",
     min_snr: float = 30,

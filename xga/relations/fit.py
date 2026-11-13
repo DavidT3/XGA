@@ -287,7 +287,7 @@ def scaling_relation_odr(
     y_norm: Quantity | None = None,
     x_norm: Quantity | None = None,
     x_lims: Quantity | None = None,
-    start_pars: list | None = None,
+    start_pars: list | np.ndarray | None = None,
     y_name: str = "Y",
     x_name: str = "X",
     dim_hubb_ind: float | int | None = None,
