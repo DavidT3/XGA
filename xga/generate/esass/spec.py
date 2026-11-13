@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 1:49 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """
 The xga.generate.esass.spec module implements wrapper functions for eSASS tools that generate spectroscopic data
 products (i.e. spectra, background spectra, RMFs, and ARFs). As these functions wrap eSASS tools specifically, they
@@ -611,8 +611,8 @@ def _spec_cmds(
     sources_paths = []
     sources_extras = []
     sources_types = []
+    source: BaseSource
     for s_ind, source in enumerate(sources):
-        source: BaseSource
         cmds: list[str] = []
         final_paths: list[str] = []
         extra_info: list[dict[str, Any]] = []
@@ -679,10 +679,8 @@ def _spec_cmds(
             #  is only one skytile/observation associated with the source).
             if not use_combine_obs:
                 # Cycle through the event lists for each sky tile
+                evt_list: EventList
                 for evt_list in source.get_products("events", telescope=er_miss):
-                    # Mainly for code-completion purposes in IDE
-                    evt_list: EventList
-
                     # This internal function uses the evtlist to prepare spec
                     #  commands, final paths, and extra info
                     out_cmd, out_fin_paths, out_ex_info = _make_spec_cmd_info(evt_list)
@@ -697,8 +695,6 @@ def _spec_cmds(
                 # In this case, the sky tiles are to be combined, so we grab
                 #  the combined event list
                 evt_list = source.get_products("combined_events", telescope=er_miss)[0]
-                # Mainly for code-completion purposes in IDE
-                evt_list: EventList
 
                 # This function then uses the evtlist to prepare spec commands, final
                 #  paths, and extra info

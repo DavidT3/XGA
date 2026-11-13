@@ -148,7 +148,7 @@ files = ["xga"]
 #  that are somehow connected to the file we're changing - that is important because
 #  we want to fix the problems mypy finds ones file at a time.
 follow_imports = "silent"
-warn_return_any = true
+warn_return_any = false
 warn_unused_configs = true
 disallow_untyped_defs = false
 check_untyped_defs = true
@@ -162,11 +162,19 @@ module = [
     "scipy.*",
     "fitsio.*",
     "matplotlib.*",
+    "mpl_toolkits.*",
     "regions.*",
     "tqdm.*",
     "abel.*",
     "emcee.*",
-    "getdist.*"
+    "getdist.*",
+    "fsspec.*",
+    "packaging.*",
+    "exceptiongroup.*",
+    "cycler.*",
+    "rpy2.*",
+    "contextlib_chdir.*",
+    "daxa.*"
 ]
 ignore_missing_imports = true
 

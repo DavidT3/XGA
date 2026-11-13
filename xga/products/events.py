@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 4:13 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """This module defines the XGA EventList product class for interfacing with X-ray event list data files."""
 
 import os.path
@@ -323,7 +323,7 @@ class EventList(BaseProduct):
 
     # ------------- Define properties -------------
     @property
-    def obs_ids(self) -> list:
+    def obs_ids(self) -> list | None:
         """
         Property getter for the ObsIDs that are involved in this Eventlist, if combined. Otherwise
         will return a list with one element, the single relevant ObsID.
@@ -390,6 +390,8 @@ class EventList(BaseProduct):
         # If the header attribute is None then we know we have to read the header in
         if self._data is None:
             self._read_data_on_demand()
+        if self._data is None:
+            raise XGADeveloperError("EventList data failed to load on demand.")
         return self._data
 
     @data.deleter
@@ -708,7 +710,7 @@ class EventList(BaseProduct):
         self._en_col = value
 
     @property
-    def evt_tab_name(self) -> str:
+    def evt_tab_name(self) -> str | None:
         """
         The name of the FITS table containing the event data.
 

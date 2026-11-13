@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 2:06 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 
 """XGA submodule that implements methods of correcting for and modeling PSF effects."""
 
@@ -174,7 +174,6 @@ def rl_psf(
         desc=corr_prog_message.format(""), total=len(sub_sources), disable=len(sub_sources) == 0
     ) as corr_progress:
         for source in sub_sources:
-            source: BaseSource
             # Updates the source name in the message every iteration
             corr_progress.set_description(corr_prog_message.format(source.name))
 

@@ -1,9 +1,9 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 2:55 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """This module defines product classes for interaction with, and analysis of, X-ray light curves."""
 
 import re
-from datetime import datetime
+from datetime import datetime as dt_datetime
 from typing import Any, Union
 from warnings import warn
 
@@ -16,7 +16,13 @@ from fitsio import FITS, FITSHDR, read_header
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-from xga.exceptions import FailedProductError, IncompatibleProductError, NotAssociatedError, TelescopeNotAssociatedError
+from xga.exceptions import (
+    FailedProductError,
+    IncompatibleProductError,
+    NotAssociatedError,
+    TelescopeNotAssociatedError,
+    XGADeveloperError,
+)
 from xga.products import BaseAggregateProduct, BaseProduct
 from xga.utils import dict_search
 
@@ -360,6 +366,8 @@ class LightCurve(BaseProduct):
         #  XGA product instance
         self._read_on_demand()
 
+        if self._time_sys is None:
+            raise XGADeveloperError("LightCurve time_system failed to load on demand.")
         return self._time_sys
 
     @property
@@ -378,7 +386,7 @@ class LightCurve(BaseProduct):
         return self._time
 
     @property
-    def datetime(self) -> datetime:
+    def datetime(self) -> np.ndarray:
         """
         Returns the time steps for this light curve, but in a datetime format, and no longer relative to a
         reference time.
@@ -488,7 +496,7 @@ class LightCurve(BaseProduct):
         return self._time_stop
 
     @property
-    def start_datetime(self) -> datetime:
+    def start_datetime(self) -> dt_datetime:
         """
         A property getter to access the recorded start datetime for this light curve.
 
@@ -500,7 +508,7 @@ class LightCurve(BaseProduct):
         return (self.ref_time + TimeDelta(self._time_start, format="sec", scale=self.time_system.lower())).to_datetime()
 
     @property
-    def stop_datetime(self) -> datetime:
+    def stop_datetime(self) -> dt_datetime:
         """
         A property getter to access the recorded stop datetime for this light curve.
 
@@ -519,6 +527,8 @@ class LightCurve(BaseProduct):
         :rtype: str
         """
         self._read_on_demand()
+        if self._time_assign is None:
+            raise XGADeveloperError("LightCurve time_assign failed to load on demand.")
         return self._time_assign
 
     @property
@@ -1271,7 +1281,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         return list(self._rel_obs.keys())
 
     @property
-    def src_name(self) -> str:
+    def src_name(self) -> str | None:
         """
         Method to return the name of the object a product is associated with. The product becomes
         aware of this once it is added to a source object.
@@ -1577,8 +1587,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         which_gti: str = "src",
         inst: str | None = None,
         telescope: str | None = None,
-        interval_start: Quantity | Time | datetime | None = None,
-        interval_end: Quantity | Time | datetime | None = None,
+        interval_start: Quantity | Time | dt_datetime | None = None,
+        interval_end: Quantity | Time | dt_datetime | None = None,
         over_run: bool = True,
     ) -> tuple[Quantity, np.ndarray]:
         """
@@ -1647,10 +1657,7 @@ class AggregateLightCurve(BaseAggregateProduct):
             tc_data.append(rel_tc)
 
         # Concatenate the lists of GTIs and chunk IDs to form a single array of GTIs and chunk IDs
-        gtis = np.concatenate(gtis)
-        tc_data = np.concatenate(tc_data)
-
-        return gtis, tc_data
+        return np.concatenate(gtis), np.concatenate(tc_data)
 
     # Then define user-facing methods
     def get_lightcurves(
@@ -1742,8 +1749,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         telescope: str | None = None,
         date_time: bool = False,
         fracexp_corr: bool = False,
-        interval_start: Quantity | Time | datetime | None = None,
-        interval_end: Quantity | Time | datetime | None = None,
+        interval_start: Quantity | Time | dt_datetime | None = None,
+        interval_end: Quantity | Time | dt_datetime | None = None,
         over_run: bool = True,
     ) -> tuple[Quantity, Quantity, TimeDelta | np.ndarray, np.ndarray]:
         """
@@ -1815,20 +1822,19 @@ class AggregateLightCurve(BaseAggregateProduct):
 
         # Concatenate the light curve arrays of time, count-rate, and count-rate-error into a single
         #  array each - that is what we're going to return
-        t_data = np.concatenate(t_data)
-        cr_data = np.concatenate(cr_data)
-        cr_err_data = np.concatenate(cr_err_data)
-        tc_data = np.concatenate(tc_data)
-
-        # Concatenate the count rate data and error into one quantity each and return everything
-        return cr_data, cr_err_data, t_data, tc_data
+        return (
+            np.concatenate(cr_data),
+            np.concatenate(cr_err_data),
+            np.concatenate(t_data),
+            np.concatenate(tc_data),
+        )
 
     def get_src_gtis(
         self,
         inst: str | None = None,
         telescope: str | None = None,
-        interval_start: Quantity | Time | datetime | None = None,
-        interval_end: Quantity | Time | datetime | None = None,
+        interval_start: Quantity | Time | dt_datetime | None = None,
+        interval_end: Quantity | Time | dt_datetime | None = None,
         over_run: bool = True,
     ) -> tuple[Quantity, np.ndarray]:
         """
@@ -1862,8 +1868,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         self,
         inst: str | None = None,
         telescope: str | None = None,
-        interval_start: Quantity | Time | datetime | None = None,
-        interval_end: Quantity | Time | datetime | None = None,
+        interval_start: Quantity | Time | dt_datetime | None = None,
+        interval_end: Quantity | Time | dt_datetime | None = None,
         over_run: bool = True,
     ) -> tuple[Quantity, np.ndarray]:
         """
@@ -1895,8 +1901,8 @@ class AggregateLightCurve(BaseAggregateProduct):
 
     def time_chunk_ids_within_interval(
         self,
-        interval_start: Quantity | Time | datetime | None = None,
-        interval_end: Quantity | Time | datetime | None = None,
+        interval_start: Quantity | Time | dt_datetime | None = None,
+        interval_end: Quantity | Time | dt_datetime | None = None,
         over_run: bool = True,
     ) -> np.ndarray:
         """
@@ -1942,8 +1948,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         #  as a time from reference time, and the end as a datetime). We wish to avoid dealing with
         #  limits in different formats, so raise an error if this is the case.
         # Also check the object types passed to ensure they haven't done anything really silly like passed a string
-        if not isinstance(interval_start, (Quantity, Time, datetime)) or not isinstance(
-            interval_end, (Quantity, Time, datetime)
+        if not isinstance(interval_start, (Quantity, Time, dt_datetime)) or not isinstance(
+            interval_end, (Quantity, Time, dt_datetime)
         ):
             raise TypeError(
                 "The 'interval_start' and 'interval_end' arguments must be one of the following; "
@@ -2012,8 +2018,8 @@ class AggregateLightCurve(BaseAggregateProduct):
 
     def obs_ids_within_interval(
         self,
-        interval_start: Quantity | Time | datetime | None = None,
-        interval_end: Quantity | Time | datetime | None = None,
+        interval_start: Quantity | Time | dt_datetime | None = None,
+        interval_end: Quantity | Time | dt_datetime | None = None,
         over_run: bool = True,
     ) -> dict:
         """
@@ -2120,8 +2126,8 @@ class AggregateLightCurve(BaseAggregateProduct):
             times = (times - self.ref_times[telescope]).to("s")
         elif (
             not isinstance(times, Quantity)
-            and (isinstance(times, np.ndarray) and all([isinstance(en, datetime) for en in times]))
-        ) or isinstance(times, datetime):
+            and (isinstance(times, np.ndarray) and all([isinstance(en, dt_datetime) for en in times]))
+        ) or isinstance(times, dt_datetime):
             times = (Time(times) - self.ref_times[telescope]).to("s")
         elif not isinstance(times, Quantity) and isinstance(times, np.ndarray):
             raise TypeError("If an array is passed to the 'times' argument, every element must be of type 'datetime'.")
@@ -2157,8 +2163,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         fracexp_corr: bool = False,
         show_legend: bool = True,
         alpha: float = 0.8,
-        interval_start: Quantity | Time | datetime | None = None,
-        interval_end: Quantity | Time | datetime | None = None,
+        interval_start: Quantity | Time | dt_datetime | None = None,
+        interval_end: Quantity | Time | dt_datetime | None = None,
         over_run: bool = True,
         one_tick_per_chunk: bool | list[bool] | np.ndarray = False,
     ) -> tuple[dict, Figure]:
@@ -2528,8 +2534,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         fracexp_corr: bool = False,
         show_legend: bool = True,
         alpha: float = 0.8,
-        interval_start: Quantity | Time | datetime | None = None,
-        interval_end: Quantity | Time | datetime | None = None,
+        interval_start: Quantity | Time | dt_datetime | None = None,
+        interval_end: Quantity | Time | dt_datetime | None = None,
         over_run: bool = True,
         one_tick_per_chunk: bool | list[bool] | np.ndarray = False,
     ) -> None:

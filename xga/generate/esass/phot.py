@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 1:28 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """
 The xga.generate.esass.phot module implements wrapper functions for eSASS tools that generate 'photometric' (i.e.
 images and things related to images) data products. As these functions wrap eSASS tools specifically, they are only
@@ -427,8 +427,8 @@ def expmap(
     sources_paths = []
     sources_extras = []
     sources_types = []
+    source: BaseSource
     for source in sources:
-        source: BaseSource
         cmds: list[str] = []
         final_paths: list[str] = []
         extra_info: list[dict[str, Any]] = []

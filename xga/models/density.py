@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:21. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """
 The xga.models.density module contains analytical 1D models for describing galaxy cluster radial gas density profiles
 (such as single and double King profiles, and simplified and full Vikhlinin density models).
@@ -99,7 +99,7 @@ class KingProfile1D(BaseModel1D):
         )
 
     @staticmethod
-    def model(x: Quantity, beta: Quantity, r_core: Quantity, norm: Quantity) -> Quantity:
+    def model(x: Quantity, beta: Quantity, r_core: Quantity, norm: Quantity) -> Quantity:  # type: ignore[override]
         """
         The model function for the king profile.
 
@@ -262,7 +262,7 @@ class DoubleKingProfile1D(BaseModel1D):
         )
 
     @staticmethod
-    def model(
+    def model(  # type: ignore[override]
         x: Quantity,
         beta_one: Quantity,
         r_core_one: Quantity,
@@ -445,7 +445,7 @@ class SimpleVikhlininDensity1D(BaseModel1D):
         )
 
     @staticmethod
-    def model(
+    def model(  # type: ignore[override]
         x: Quantity, beta: Quantity, r_core: Quantity, alpha: Quantity, r_s: Quantity, epsilon: Quantity, norm: Quantity
     ) -> Quantity:
         """
@@ -669,7 +669,7 @@ class VikhlininDensity1D(BaseModel1D):
         )
 
     @staticmethod
-    def model(
+    def model(  # type: ignore[override]
         x: Quantity,
         beta_one: Quantity,
         r_core_one: Quantity,
@@ -744,7 +744,7 @@ class VikhlininDensity1D(BaseModel1D):
         else:
             b, rc, a, rs, e, g, n, b2, rc2, n2 = self.par_dists
 
-        # Its horrible I know...
+        # It's horrible. I know...
         p1 = (-6 * b2 * (n2**2) * x * (((x / rc2) ** 2) + 1) ** ((-3 * b2) - 1)) / rc2**2
         p2 = (
             -a
@@ -782,11 +782,11 @@ class VikhlininDensity1D(BaseModel1D):
         return (p1 + p2 + p3 + p4) / p5
 
 
-DENS_MODELS = {
+DENS_MODELS: dict[str, type[BaseModel1D]] = {
     "simple_vikhlinin_dens": SimpleVikhlininDensity1D,
     "king": KingProfile1D,
     "double_king": DoubleKingProfile1D,
     "vikhlinin_dens": VikhlininDensity1D,
 }
-DENS_MODELS_PAR_NAMES = {n: m().par_publication_names for n, m in DENS_MODELS.items()}
-DENS_MODELS_PUB_NAMES = {n: m().publication_name for n, m in DENS_MODELS.items()}
+DENS_MODELS_PAR_NAMES = {n: m().par_publication_names for n, m in DENS_MODELS.items()}  # type: ignore[abstract]
+DENS_MODELS_PUB_NAMES = {n: m().publication_name for n, m in DENS_MODELS.items()}  # type: ignore[abstract]

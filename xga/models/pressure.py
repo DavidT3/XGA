@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:06 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """
 The xga.models.pressure module contains analytical 1D models for describing galaxy cluster radial thermal pressure
 profiles (variants of the generalised NFW profile).
@@ -111,7 +111,9 @@ class SimpleGNFWThermalPressure(BaseModel1D):
         )
 
     @staticmethod
-    def model(x: Quantity, p_zero: Quantity, r_scale: Quantity, alpha: Quantity, beta: Quantity) -> Quantity:
+    def model(  # type: ignore[override]
+        x: Quantity, p_zero: Quantity, r_scale: Quantity, alpha: Quantity, beta: Quantity
+    ) -> Quantity:
         """
         The model function for the simplified generalized NFW pressure profile.
 
@@ -232,7 +234,7 @@ class GNFWThermalPressure(BaseModel1D):
         )
 
     @staticmethod
-    def model(
+    def model(  # type: ignore[override]
         x: Quantity, p_zero: Quantity, r_scale: Quantity, alpha: Quantity, beta: Quantity, gamma: Quantity
     ) -> Quantity:
         """

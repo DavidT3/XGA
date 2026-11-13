@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 2:44 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """Functions for fitting XSPEC spectral models to sets of annular spectra to measure radial profiles."""
 
 from inspect import Parameter, signature
@@ -533,7 +533,18 @@ def single_temp_apec_profile(
                     inv_ents.append(inv_ent)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, deg_rad, timeout, model, fit_confs, inv_ents
+    return (  # type: ignore[return-value]
+        script_paths,
+        outfile_paths,
+        num_cores,
+        run_type,
+        src_inds,
+        deg_rad,
+        timeout,
+        model,
+        fit_confs,
+        inv_ents,
+    )
 
 
 # This allows us to make a link between the model that was fit to a profile and the XGA function

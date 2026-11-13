@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 2:06 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """This submodule implements methods to build sets of spatially resolved temperature measurements (e.g. profiles)
 for extended sources.
 """
@@ -293,28 +293,28 @@ def _snr_bins(
             stacklevel=2,
         )
         cur_num_ann = ann_masks.shape[2]
-        snrs = []
+        snr_list = []
         for i in range(cur_num_ann):
             # We're calling the signal-to-noise calculation method of the ratemap for all of our annuli
-            snrs.append(
+            snr_list.append(
                 rt.signal_to_noise(ann_masks[:, :, i], back_mask, exp_corr, allow_negative, x_slice_lims, y_slice_lims)
             )
         # Becomes a numpy array because they're nicer to work with
-        snrs = np.array(snrs)
+        snrs = np.array(snr_list)
 
     while not acceptable:
         # How many annuli are there at this point in the loop?
         cur_num_ann = ann_masks.shape[2]
 
         # Just a list for the snrs to live in
-        snrs = []
+        snr_list = []
         for i in range(cur_num_ann):
             # We're calling the signal-to-noise calculation method of the ratemap for all of our annuli
-            snrs.append(
+            snr_list.append(
                 rt.signal_to_noise(ann_masks[:, :, i], back_mask, exp_corr, allow_negative, x_slice_lims, y_slice_lims)
             )
         # Becomes a numpy array because they're nicer to work with
-        snrs = np.array(snrs)
+        snrs = np.array(snr_list)
         # We find any indices of the array (== annuli) where the signal-to-noise is not above our minimum
         bad_snrs = np.where(snrs < min_snr)[0]
 
@@ -979,7 +979,7 @@ def onion_deproj_temp_prof(
     num_cores: int = NUM_CORES,
     stacked_spectra: bool = False,
     telescope: str | list[str] | None = None,
-) -> dict[str, list[GasTemperature3D]]:
+) -> dict[str, list[GasTemperature3D | None]]:
     """
     This function will generate de-projected, three-dimensional, gas temperature profiles of galaxy clusters using
     the 'onion peeling' deprojection method. It will also generate any projected temperature profiles that may be
@@ -1132,7 +1132,7 @@ def onion_deproj_temp_prof(
     if not isinstance(sources, (BaseSample, list)):
         sources = [sources]
 
-    all_3d_temp_profs = {key: [None] * len(sources) for key in telescope}
+    all_3d_temp_profs: dict[str, list[GasTemperature3D | None]] = {key: [None] * len(sources) for key in telescope}
     # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof
     for src_ind, src in enumerate(sources):
         for tel in telescope:

@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:21. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """
 The xga.models.temperature module defines analytical 1D models for describing galaxy cluster radial gas temperature
 profiles (such as simplified and full Vikhlinin temperature models).
@@ -143,7 +143,7 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
         )
 
     @staticmethod
-    def model(
+    def model(  # type: ignore[override]
         x: Quantity,
         r_cool: Quantity,
         a_cool: Quantity,
@@ -353,7 +353,7 @@ class VikhlininTemperature1D(BaseModel1D):
         )
 
     @staticmethod
-    def model(
+    def model(  # type: ignore[override]
         x: Quantity,
         r_cool: Quantity,
         a_cool: Quantity,

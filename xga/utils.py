@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 9:00 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """This module provides configuration setup, backend software checks, and general utility functions for XGA."""
 
 import importlib.resources
@@ -71,6 +71,35 @@ _LAZY_VARS = {
 #  of the xga module (i.e. via xga.VAR_NAME). This allows for internal lazy variables in utils.py.
 # Any variable name in this set must also be present in _LAZY_VARS
 _KEEP_PRIVATE_LAZY_VARS: set[str] = set()
+
+# Type declarations for lazily initialized module-level globals (populated on demand via __getattr__)
+CONFIG_PATH: str
+CONFIG_FILE: str
+xga_conf: dict[str, Any]
+CENSUS: dict[str, DataFrame]
+BLACKLIST: dict[str, DataFrame]
+ROOT_DIR_FS: dict[str, dict[str, Any]]
+COMBINED_INSTS: dict[str, bool]
+SAS_AVAIL: bool
+SAS_VERSION: Version | None
+ESASS_AVAIL: bool
+ESASS_VERSION: str | None
+CIAO_AVAIL: bool
+CIAO_VERSION: Version | None
+CALDB_AVAIL: bool
+CALDB_VERSION: Version | None
+XSPEC_VERSION: Version | None
+XSPEC_FIT_METHOD: list[str]
+XSPEC_MODELS: dict[str, dict[str, Any]]
+MODEL_PARS: dict[str, list[str]]
+MODEL_UNITS: dict[str, list[Unit]]
+OUTPUT: str
+NUM_CORES: int
+USABLE: dict[str, bool]
+VALID_CONFIG: dict[str, bool]
+CENSUS_FILES: dict[str, str]
+BLACKLIST_FILES: dict[str, str]
+ABUND_TABLES: list[str]
 
 
 def reinitialise_xga(config_dir: str | None = None, override_output_dir: str | None = None) -> None:
@@ -474,9 +503,9 @@ def _prep_xga_config_file() -> tuple[dict, str, str]:
 
     # As it turns out, the ConfigParser class is a pain to work with, so we're converting to a dict here
     # Addressing works just the same
-    cur_xga_conf = {str(sect): dict(cur_xga_conf[str(sect)]) for sect in cur_xga_conf}
+    xga_conf_dict = {str(sect): dict(cur_xga_conf[str(sect)]) for sect in cur_xga_conf}
 
-    return cur_xga_conf, cur_config_path, cur_config_file
+    return xga_conf_dict, cur_config_path, cur_config_file
 
 
 def _get_root_data_filesystem(cur_root_dir: str) -> tuple[str | None, AbstractFileSystem | None, str | None]:

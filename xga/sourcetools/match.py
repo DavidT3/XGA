@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 3:12 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """Functions for matching input source coordinates to available X-ray observations and source regions."""
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from .. import (
     check_telescope_choices,
     xga_conf,
 )
-from ..exceptions import NoMatchFoundError, NoProductAvailableError, NoRegionsError
+from ..exceptions import NoMatchFoundError, NoProductAvailableError, NoRegionsError, XGADeveloperError
 
 if TYPE_CHECKING:
     from ..products.phot import ExpMap, Image
@@ -208,7 +208,7 @@ def _vectorized_separation_match(
 
 def _on_obs_id(
     ra: float, dec: float, exp_maps: ExpMap | list[ExpMap], s_idx: int | None = None
-) -> tuple[float, float, np.ndarray, int]:
+) -> tuple[float, float, np.ndarray | None, int | None]:
     """
     Internal function used by the on_detector_match function to check whether a passed coordinate falls directly on a
     camera for a single (or set of) ObsID(s). Checks whether exposure time is 0 at the coordinate.
@@ -259,13 +259,10 @@ def _on_obs_id(
         if cur_det:
             det.append(o)
 
-    # If the list of ObsIDs with data is empty then its set to None, otherwise turned into a numpy array
-    if len(det) == 0:
-        det = None
-    else:
-        det = np.array(det)
+    # If the list of ObsIDs with data is empty, then it's set to None, otherwise turned into a numpy array
+    det_arr: np.ndarray | None = None if len(det) == 0 else np.array(det)
 
-    return ra, dec, det, s_idx
+    return ra, dec, det_arr, s_idx
 
 
 def _in_region(
@@ -618,7 +615,10 @@ def separation_match(
     num_cores: int = NUM_CORES,
     show_warnings: bool = True,
     return_flat: Literal[False] = False,
-) -> tuple[dict[str, pd.DataFrame], dict[str, pd.DataFrame]]: ...
+) -> tuple[
+    dict[str, pd.DataFrame] | list[dict[str, pd.DataFrame]],
+    dict[str, pd.DataFrame] | list[dict[str, pd.DataFrame]],
+]: ...
 
 
 @overload
@@ -1164,7 +1164,7 @@ def on_detector_match(
 
     # If it was an array input, return as array
     if not isinstance(results, dict):
-        results = np.array(results)
+        return np.array(results)
 
     return results
 
@@ -1319,7 +1319,7 @@ def region_match(
     else:
         for tel in obs_src.telescopes:
             # This is to store exceptions that are raised in separate processes, so they can all be raised at the end.
-            search_errors = []
+            search_errors: list[BaseException] = []
             # We setup a Pool with the number of cores the user specified (or the default).
             with (
                 tqdm(
@@ -1413,9 +1413,7 @@ def region_match(
             to_return.append(None)
 
     # Makes it into an array rather than a list
-    to_return = np.array(to_return)
-
-    return to_return
+    return np.array(to_return)
 
 
 def simple_xmm_match(
@@ -1449,11 +1447,13 @@ def simple_xmm_match(
     res, bl_res = separation_match(src_ra, src_dec, distance, "xmm", num_cores)
     # Two possible outputs, depending on whether there is a single input coordinate or multiple - the return needs
     #  to be exactly as it would have been from the original, so we make sure there are no dictionaries
-    if isinstance(res, list):
-        res = [r["xmm"] for r in res]
-        bl_res = [br["xmm"] for br in bl_res]
+    if isinstance(res, list) and isinstance(bl_res, list):
+        xmm_res: DataFrame | list[DataFrame] = [r["xmm"] for r in res]
+        xmm_bl_res: DataFrame | list[DataFrame] = [br["xmm"] for br in bl_res]
     else:
-        res = res["xmm"]
-        bl_res = bl_res["xmm"]
+        if not isinstance(res, dict) or not isinstance(bl_res, dict):
+            raise XGADeveloperError("Expected separation_match results to both be dicts or both be lists.")
+        xmm_res = res["xmm"]
+        xmm_bl_res = bl_res["xmm"]
 
-    return res, bl_res
+    return xmm_res, xmm_bl_res

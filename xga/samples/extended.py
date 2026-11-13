@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/14/26, 12:38 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """Implements sample classes for specific extended X-ray sources, such as galaxy clusters."""
 
 from __future__ import annotations
@@ -33,6 +33,7 @@ from ..relations.fit import (
     scaling_relation_lira,
     scaling_relation_odr,
 )
+from ..sources.base import BaseSource
 from ..sources.extended import GalaxyCluster
 from .base import BaseSample
 
@@ -693,7 +694,7 @@ class ClusterSample(BaseSample):
         else:
             raise ValueError("Please pass either 'r2500', 'r500', or 'r200'.")
 
-    def Lx(  # noqa: N802
+    def Lx(  # type: ignore[override]  # noqa: N802
         self,
         outer_radius: str | Quantity,
         telescope: str,
@@ -2152,7 +2153,7 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
-    def __getitem__(self, key: int | str) -> GalaxyCluster:
+    def __getitem__(self, key: int | str) -> GalaxyCluster | BaseSource:
         """
         This returns the relevant source when a sample is addressed using the name of a source as the key,
         or using an integer index. This overrides the BaseSample return but is functionally identical, only the

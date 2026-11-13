@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/28/26, 11:22 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """
 The xga.imagetools.profile module contains functions for generating annular masks and measuring radial surface
 brightness profiles from XGA Image and RateMap products.
@@ -454,7 +454,7 @@ def radial_brightness(
 
     deg_cen = rt.coord_conv(centre, deg)
     # Now I've finally implemented some profile product classes I can just smoosh everything into a convenient product
-    br_prof = SurfaceBrightness1D(
+    sb_prof = SurfaceBrightness1D(
         rt,
         cen_rads,
         Quantity(br_prof, "ct/(s*arcmin**2)"),
@@ -474,7 +474,7 @@ def radial_brightness(
         rt.telescope,
     )
 
-    return br_prof, succeeded
+    return sb_prof, succeeded
 
 
 # TODO REWRITE THESE AT SOME POINT

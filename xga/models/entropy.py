@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 12:44. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """The xga.models.entropy module defines analytical 1D models for galaxy cluster radial specific entropy profiles."""
 
 from astropy.units import Quantity, Unit, UnitConversionError, kpc
@@ -92,7 +92,7 @@ class CoreConstPowerEntropy(BaseModel1D):
         )
 
     @staticmethod
-    def model(x: Quantity, k_zero: Quantity, k_100kpc: Quantity, alpha: Quantity) -> Quantity:
+    def model(x: Quantity, k_zero: Quantity, k_100kpc: Quantity, alpha: Quantity) -> Quantity:  # type: ignore[override]
         """
         The model function for the constant-core and power-law entropy model.
 
@@ -193,7 +193,7 @@ class PowerEntropy(BaseModel1D):
         )
 
     @staticmethod
-    def model(x: Quantity, k_100kpc: Quantity, alpha: Quantity) -> Quantity:
+    def model(x: Quantity, k_100kpc: Quantity, alpha: Quantity) -> Quantity:  # type: ignore[override]
         """
         The model function for the power-law entropy model.
 

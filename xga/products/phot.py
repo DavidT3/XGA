@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/10/26, 9:57 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """
 This module defines XGA photometric product classes, including Image, ExpMap, RateMap, PSF, and PSFGrid,
 for storing, manipulating, and visualising imaging X-ray data products.
@@ -45,6 +45,7 @@ from ..exceptions import (
     NotPSFCorrectedError,
     ProductNotUsableError,
     RateMapPairError,
+    XGADeveloperError,
 )
 from ..sourcetools import ang_to_rad
 from ..utils import ALLOWED_INST, PRETTY_TELESCOPE_NAMES
@@ -944,7 +945,9 @@ class Image(BaseProduct):
             self._read_header_on_demand()
 
         # There will not be a setter for this property, no-one is allowed to change the shape of the image.
-        return self._shape
+        if self._shape is None:
+            raise XGADeveloperError("Image shape failed to load on demand.")
+        return self._shape  # type: ignore[return-value]
 
     @property
     def data(self) -> np.ndarray:
@@ -957,6 +960,8 @@ class Image(BaseProduct):
         # Calling this ensures the image object is read into memory
         if self._data is None:
             self._read_on_demand()
+        if self._data is None:
+            raise XGADeveloperError("Image data failed to load on demand.")
         return self._data
 
     @data.setter
@@ -1407,7 +1412,7 @@ class Image(BaseProduct):
             cts = self.data[pix_coord[:, 1], pix_coord[:, 0]]
         return Quantity(cts, "ct")
 
-    def simple_peak(self, mask: np.ndarray, out_unit: UnitBase | str = deg) -> tuple[Quantity, bool]:
+    def simple_peak(self, mask: np.ndarray, out_unit: UnitBase | str = deg) -> tuple[Quantity, bool | None]:
         """
         Simplest possible way to find the position of the peak of X-ray emission in an Image. This method
         takes a mask in the form of a numpy array, which allows the user to mask out parts of the ratemap
@@ -3427,7 +3432,9 @@ class RateMap(Image):
         if self._data is None:
             self._construct_on_demand()
         # There will not be a setter for this property, no-one is allowed to change the shape of the image.
-        return self._shape
+        if self._shape is None:
+            raise XGADeveloperError("RateMap shape failed to construct on demand.")
+        return self._shape  # type: ignore[return-value]
 
     @property
     def data(self) -> np.ndarray:
@@ -3987,6 +3994,8 @@ class RateMap(Image):
         """
         if self._edge_mask is None:
             self._construct_on_demand()
+        if self._edge_mask is None:
+            raise XGADeveloperError("RateMap edge_mask failed to construct on demand.")
         return self._edge_mask
 
     @property
@@ -4000,6 +4009,8 @@ class RateMap(Image):
         """
         if self._on_sensor_mask is None:
             self._construct_on_demand()
+        if self._on_sensor_mask is None:
+            raise XGADeveloperError("RateMap sensor_mask failed to construct on demand.")
         return self._on_sensor_mask
 
     @property
@@ -4250,7 +4261,7 @@ class PSF(Image):
         return self._psf_centre
 
     @property
-    def model(self) -> str:
+    def model(self) -> str | None:
         """
         This is the model that was used to generate this PSF.
 

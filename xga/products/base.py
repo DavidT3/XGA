@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/6/26, 2:58 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """This module implements the base functionality for most XGA product classes."""
 
 import inspect
@@ -28,6 +28,7 @@ from ..exceptions import (
     ModelNotAssociatedError,
     ProductGenerationError,
     UnknownCommandlineError,
+    XGADeveloperError,
     XGAFitError,
     XGAInvalidModelError,
 )
@@ -360,7 +361,7 @@ class BaseProduct:
         return self._gen_warn
 
     @property
-    def telescope(self) -> str:
+    def telescope(self) -> str | None:
         """
         Property getter for the name of the telescope that this product was derived from.
 
@@ -409,7 +410,7 @@ class BaseProduct:
         return self._inst
 
     @property
-    def type(self) -> str:
+    def type(self) -> str | None:
         """
         Property getter for the string identifier for the type of product this object is, mostly useful for
         internal methods of source objects.
@@ -442,7 +443,7 @@ class BaseProduct:
         return self._energy_bounds
 
     @property
-    def src_name(self) -> str:
+    def src_name(self) -> str | None:
         """
         Method to return the name of the object a product is associated with. The product becomes
         aware of this once it is added to a source object.
@@ -1020,7 +1021,7 @@ class BaseAggregateProduct:
         self._energy_bounds: tuple[Quantity, Quantity] | tuple[None, None] = (None, None)
 
     @property
-    def src_name(self) -> str:
+    def src_name(self) -> str | None:
         """
         Method to return the name of the object a product is associated with. The product becomes
         aware of this once it is added to a source object. This is overridden in the AnnularSpectra class.
@@ -1067,7 +1068,7 @@ class BaseAggregateProduct:
         return self._inst
 
     @property
-    def telescope(self) -> str:
+    def telescope(self) -> str | None:
         """
         Property getter for the name of the telescope that this product was derived from.
 
@@ -1077,7 +1078,7 @@ class BaseAggregateProduct:
         return self._tele
 
     @property
-    def type(self) -> str:
+    def type(self) -> str | None:
         """
         Property getter for the string identifier for the type of product this object is, mostly useful for
         internal methods of source objects.
@@ -2178,6 +2179,8 @@ class BaseProfile1D:
             else:
                 raise ModelNotAssociatedError(f"{model} is valid for this profile, but hasn't been fit yet.")
 
+        if model is None or method is None:
+            raise XGADeveloperError("Model and fit method failed to resolve during check.")
         return model, method
 
     def get_model_fit(self, model: str | None = None, method: str | None = None) -> BaseModel1D:
@@ -3172,7 +3175,7 @@ class BaseProfile1D:
             pickle.dump(self, picklo)
 
     @property
-    def save_path(self) -> str:
+    def save_path(self) -> str | None:
         """
         Property getter that assembles the default XGA save path of this profile. The file name contains
         limited information; the type of profile, the source name, and a random integer.
@@ -3405,7 +3408,7 @@ class BaseProfile1D:
         return self._inst
 
     @property
-    def telescope(self) -> str:
+    def telescope(self) -> str | None:
         """
         Property getter for the name of the telescope that this profile was derived from.
 
@@ -3426,7 +3429,7 @@ class BaseProfile1D:
         return self._energy_bounds
 
     @property
-    def set_ident(self) -> int:
+    def set_ident(self) -> int | None:
         """
         If this profile was generated from an annular spectrum, this will contain the set_id of that annular spectrum.
 
@@ -3437,7 +3440,7 @@ class BaseProfile1D:
         return self._set_id
 
     @property
-    def spec_fit_conf(self) -> str:
+    def spec_fit_conf(self) -> str | None:
         """
         If this profile was generated from an annular spectrum, this property provides the fit-configuration key of
         the spectral fits that provided the properties used to build it.
@@ -3449,7 +3452,7 @@ class BaseProfile1D:
         return self._spec_fit_conf
 
     @property
-    def spec_model(self) -> str:
+    def spec_model(self) -> str | None:
         """
         If this profile was generated from an annular spectrum, this property provides the name of the model
         that was fit to the spectra in order to measure the properties used to build it.
@@ -3484,7 +3487,7 @@ class BaseProfile1D:
             self.save()
 
     @property
-    def associated_set_storage_key(self) -> str:
+    def associated_set_storage_key(self) -> str | None:
         """
         This property provides the storage key of the associated AnnularSpectra object, if the profile was generated
         from an AnnularSpectra. If it was not then a None value is returned.
@@ -3580,7 +3583,7 @@ class BaseProfile1D:
         return self._fit_methods
 
     @property
-    def nice_fit_names(self) -> list[str]:
+    def nice_fit_names(self) -> dict[str, str]:
         """
         Returns nicer looking names for the supported fit options of XGA profiles.
 
@@ -3600,7 +3603,7 @@ class BaseProfile1D:
         return self._outer_rad
 
     @property
-    def custom_aggregate_label(self) -> str:
+    def custom_aggregate_label(self) -> str | None:
         """
         This property is a label that should be used in place of the source name associated with this profile when
         plotting multiple profiles on one axis through an aggregate profile instance.

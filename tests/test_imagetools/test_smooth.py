@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 3:27 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """Tests for XGA's image and rate map smoothing functions in xga.imagetools.smooth."""
 
 import os
@@ -107,7 +107,7 @@ class TestGeneralSmoothFunction(unittest.TestCase):
 
         # Applying a mask and smoothing
         with self.subTest(check="Masked smoothing"):
-            mask = np.zeros(self.demo_im.data.shape, dtype=int)
+            mask = np.zeros(self.demo_im.shape, dtype=np.int64)
             mask[270:378, 270:378] = 1
             masked_smth_im = general_smooth(self.demo_im, cur_kern, mask=mask)
             masked_smth_im.save_view(os.path.join(test_out_path, "masked_smooth.png"))
@@ -148,7 +148,7 @@ class TestGeneralSmoothFunction(unittest.TestCase):
 
         # Applying a mask and smoothing
         with self.subTest(check="Masked smoothing ratemap [im method]"):
-            mask = np.zeros(self.demo_rt.data.shape, dtype=int)
+            mask = np.zeros(self.demo_rt.shape, dtype=np.int64)
             mask[270:378, 270:378] = 1
             masked_smth_rt = general_smooth(self.demo_rt, cur_kern, mask=mask, ratemap_smooth_im=True)
             masked_smth_rt.save_view(os.path.join(test_out_path, "masked_smooth_rt_im_method.png"))

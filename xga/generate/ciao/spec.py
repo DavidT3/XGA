@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 10:36. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """
 The xga.generate.ciao.spec module implements wrapper functions for CIAO tools that generate spectroscopic data
 products (i.e. spectra, background spectra, RMFs, and ARFs). As these functions wrap CIAO tools specifically, they
@@ -103,10 +103,9 @@ def _chandra_spec_cmds(
     # once the CIAO cmd has run.
     sources_extras = []
     sources_types = []
+    # Explicitly states that source is at very least a BaseSource instance - useful for code completion in IDEs
+    source: BaseSource
     for s_ind, source in enumerate(sources):
-        # Explicitly states that source is at very least a BaseSource instance - useful for code completion in IDEs
-        source: BaseSource
-
         cmds: list[str] = []
         final_paths: list[str] = []
         extra_info: list[dict[str, Any]] = []

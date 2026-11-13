@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:06 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """Functions for fitting scaling relations to sample measurements using curve_fit, ODR, or LIRA."""
 
 import inspect
@@ -30,7 +30,7 @@ def _fit_initialise(
     log_data: bool = False,
     point_names: np.ndarray | list | None = None,
     third_dim: np.ndarray | Quantity | list | None = None,
-) -> tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity, np.ndarray, Quantity]:
+) -> tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity, np.ndarray | list | None, Quantity | None]:
     """
     A handy little function that prepares the data for fitting with the chosen method.
 

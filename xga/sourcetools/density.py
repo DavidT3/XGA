@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 2:06 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 
 """XGA submodule that implements methods to create sets of spatially resolved density measurements (e.g. profiles)
 for extended X-ray sources.
@@ -69,10 +69,10 @@ def _dens_setup(
     telescope: str | list[str] | None = None,
     timeout: Quantity = Quantity(300, "s"),
 ) -> tuple[
-    ClusterSample | list,
+    GalaxyCluster | ClusterSample,
     dict[str, list[Quantity]],
-    dict[str, str] | dict[str, list],
-    dict[str, str] | dict[str, list],
+    dict[str, str] | dict[str, list] | None,
+    dict[str, str] | dict[str, list] | None,
     list[str],
 ]:
     """
@@ -246,6 +246,7 @@ def _dens_setup(
         ) from err
 
     # Setting up the temperatures used for the calculation of the emissivity-to-density conversion factor
+    temps: dict[str, Any]
     if conv_temp is not None:
         if isinstance(conv_temp, Quantity):
             if not conv_temp.isscalar and len(conv_temp) != len(sources):
@@ -290,7 +291,7 @@ def _dens_setup(
         # Then we need to grab the temperatures and pass them through to the cluster conversion
         # factor calculator - this may well change as I intend to let cluster_cr_conv grab
         # temperatures for itself at some point
-        temps: dict[str, Any] = {key: [] for key in src_telescopes}
+        temps = {key: [] for key in src_telescopes}
         for src in sources:
             for tel in src_telescopes:
                 try:
@@ -359,7 +360,6 @@ def _dens_setup(
     #  more of an explanation)
     for src_ind, src in enumerate(sources):
         for tel in src_telescopes:
-            src: GalaxyCluster
             # Both the angular_diameter_distance and redshift are guaranteed to be present here
             #  because redshift is REQUIRED to define GalaxyCluster objects
             factor = (4 * np.pi * (src.angular_diameter_distance.to("cm") * (1 + src.redshift)) ** 2) / (
@@ -417,7 +417,7 @@ def _run_sb(
     min_snr: float,
     obs_id: str | None = None,
     inst: str | None = None,
-) -> SurfaceBrightness1D:
+) -> SurfaceBrightness1D | list[SurfaceBrightness1D] | None:
     """
     An internal function for the Surface Brightness based density functions, which just quickly
     assembles the requested surface brightness profile.
@@ -713,7 +713,7 @@ def inv_abel_fitted_model(
         rl_psf(sources, psf_iter, psf_model, lo_en, hi_en, psf_bins, num_cores)
 
     # Setting up dict to store profiles in
-    final_dens_profs = {cur_tel: [None] * len(sources) for cur_tel in telescope}
+    final_dens_profs: dict[str, list[GasDensity3D | None]] = {cur_tel: [None] * len(sources) for cur_tel in telescope}
 
     with tqdm(
         desc="Fitting data, inverse Abel transforming, and measuring densities", total=len(sources), position=0
@@ -1067,7 +1067,7 @@ def inv_abel_data(
         )
 
     # Setting up dict to store profiles in
-    final_dens_profs = {cur_tel: [None] * len(sources) for cur_tel in telescope}
+    final_dens_profs: dict[str, list[GasDensity3D | None]] = {cur_tel: [None] * len(sources) for cur_tel in telescope}
 
     with tqdm(
         desc="Inverse Abel transforming data and measuring densities", total=len(sources), position=0
@@ -1298,7 +1298,7 @@ def ann_spectra_apec_norm(
     num_cores: int = NUM_CORES,
     stacked_spectra: bool = False,
     telescope: str | list[str] | None = None,
-) -> list[GasDensity3D]:
+) -> dict[str, list[GasDensity3D | None]]:
     """
     A method of measuring density profiles using XSPEC fits of a set of Annular Spectra. First
     checks whether the required annular spectra already exist and have been fit using XSPEC, if not
@@ -1462,7 +1462,7 @@ def ann_spectra_apec_norm(
 
     # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof and
     # the gas_density_profile method of APECNormalisation1D
-    final_dens_profs = {tel: [None] * len(sources) for tel in telescope}
+    final_dens_profs: dict[str, list[GasDensity3D | None]] = {tel: [None] * len(sources) for tel in telescope}
     with tqdm(desc="Generating density profiles from annular spectra", total=len(sources)) as dens_prog:
         for src_ind, src in enumerate(sources):
             for tel in telescope:

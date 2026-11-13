@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/28/26, 10:06 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """
 The xga.generate.common module contains shared infrastructure for calling external mission-specific software
 (such as SAS, eSASS, and CIAO), executing commands in parallel, and instantiating the resulting XGA product objects.
@@ -190,8 +190,8 @@ def mission_software_call(
                 # Finds the ind of the list of sources that we should add this set of products to
                 ind = src_lookup[entry]
                 to_raise = []
+                product: BaseProduct
                 for product in results[entry]:
-                    product: BaseProduct
                     ext_info = (
                         f"- {sources[ind].name} is the associated source, the specific data used is "
                         f"{product.telescope} {product.obs_id}-{product.instrument}."
@@ -291,7 +291,7 @@ def mission_software_call(
 
 def execute_cmd(
     cmd: str, p_type: str | list[str], p_path: list, extra_info: dict, src: str
-) -> tuple[BaseProduct | list[BaseProduct], str]:
+) -> tuple[BaseProduct | list[BaseProduct | None] | None, str]:
     """
     This function is called for the local compute option, and runs the passed command in a Popen shell.
     It then creates an appropriate product object, and passes it back to the callback function of the Pool
@@ -376,9 +376,10 @@ def execute_cmd(
         )
 
     # We'll now be iterating through the product paths and their matching types
-    prods = []
+    prods: list[BaseProduct | None] = []
     for p_ind, cur_p_path in enumerate(p_path):
         cur_p_type = p_type[p_ind]
+        prod: BaseProduct | None
 
         # This part for defining an image object used to make sure that the src wasn't a NullSource, as defining product
         #  objects is wasteful considering the purpose of a NullSource, but generating exposure maps requires a
@@ -517,7 +518,7 @@ def execute_cmd(
     # This should make it easier to keep this compatible for the telescopes without functions that generate multiple
     #  different products at once without changing how their call decorators work right now
     if len(prods) == 1:
-        prods = prods[0]
+        return prods[0], src
 
     return prods, src
 
@@ -780,4 +781,4 @@ def check_pattern(pattern: str | int, telescope: str | None = "xmm") -> tuple[st
             warn(f"Support for the {telescope} telescope has not yet been added to this function.", stacklevel=2)
         patt_file_name = str(pattern)
 
-    return pattern, patt_file_name
+    return str(pattern), patt_file_name

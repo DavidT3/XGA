@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 22:40. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """
 The xga.models.sb module contains analytical 1D models for describing galaxy cluster radial X-ray surface brightness
 profiles (such as single and double beta profiles).
@@ -101,7 +101,7 @@ class BetaProfile1D(BaseModel1D):
         )
 
     @staticmethod
-    def model(x: Quantity, beta: Quantity, r_core: Quantity, norm: Quantity) -> Quantity:
+    def model(x: Quantity, beta: Quantity, r_core: Quantity, norm: Quantity) -> Quantity:  # type: ignore[override]
         """
         The model function for the beta profile.
 
@@ -340,7 +340,7 @@ class DoubleBetaProfile1D(BaseModel1D):
         )
 
     @staticmethod
-    def model(
+    def model(  # type: ignore[override]
         x: Quantity,
         beta_one: Quantity,
         r_core_one: Quantity,

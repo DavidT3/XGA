@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 7:42 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """Miscellaneous utility functions for source analysis, coordinate conversion, and nH lookup."""
 
 from __future__ import annotations
@@ -172,7 +172,7 @@ def coord_to_name(coord_pair: Quantity, survey: str | None = None) -> str:
 
 def model_check(
     sources: BaseSource | BaseSample | list[BaseSource], model: str | list[str] | BaseModel1D | list[BaseModel1D]
-) -> list[BaseModel1D] | list[str]:
+) -> list[BaseModel1D] | list[str] | list[str | BaseModel1D]:
     """
     Very simple function that checks if a passed set of models is appropriately structured for the number of sources
     that have been passed. There is no reason a user would need this directly, it's only here as these checks
@@ -186,16 +186,16 @@ def model_check(
     # This is when there is a single model instance or model name given for a single source. Obviously this is
     #  fine, but we need to put it in a list because the functions that use this want everything to be iterable
     if isinstance(model, (str, BaseModel1D)) and len(sources) == 1:
-        model = [model]
+        return [model]
     # Here we deal with a single model name for a SET of sources - as the fit method will use strings to declare
     #  model instances we just make a list of the same length as the sample we're analysing (full of the same string)
     elif isinstance(model, str) and len(sources) != 1:
-        model = [model] * len(sources)
+        return [model] * len(sources)
     # Here we deal with a single model INSTANCE for a SET of sources - this is slightly more complex, as we don't want
     #  to just fill a list full of a bunch of pointers to the same memory address (instance). As such we store copies
     #  of the model in the list, one for each source
     elif isinstance(model, BaseModel1D) and len(sources) != 1:
-        model = [deepcopy(model) for s_ind in range(len(sources))]
+        return [deepcopy(model) for s_ind in range(len(sources))]
     # These next conditionals just catch when the user has done something silly - you can figure it out from the
     #  error messages
     elif isinstance(model, list) and len(model) != len(sources):
@@ -207,7 +207,7 @@ def model_check(
         raise TypeError(
             "If you pass a list, then every element must be either a string model name, or a model instance."
         )
-    elif not isinstance(model, (list, BaseModel1D, str)):
+    elif not isinstance(model, list):
         raise TypeError(
             "The model argument must either be a string model name, a single instance of a model, a list"
             " of model names, or a list of model instances."

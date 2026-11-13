@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 9:28 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """Core execution machinery and decorators for running XSPEC scripts in parallel and parsing output files."""
 
 import os
@@ -20,7 +20,6 @@ from tqdm import tqdm
 
 from .. import OUTPUT, XSPEC_VERSION
 from ..exceptions import XGADeveloperError, XSPECNotFoundError
-from ..products import AnnularSpectra
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 
@@ -427,7 +426,6 @@ def xspec_call(xspec_func: Callable[..., Any]) -> Callable[..., Any]:
                                     f"telescope ({tel}) that does not yet have cross-arf support."
                                 )
 
-                            ann_spec: AnnularSpectra
                             # Here our main problem is untangling the parameters in the results table for this fit, as
                             #  we need to be able to assign them to our N annuli. This starts by reading out all
                             #  the column names, and figuring out where the fit parameters (which will be relevant

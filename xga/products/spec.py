@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 9:50 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """
 This module defines the XGA Spectrum and AnnularSpectra product classes for storing and interacting with
 X-ray spectra and their associated response and background files.
@@ -28,6 +28,7 @@ from ..exceptions import (
     NotAssociatedError,
     ParameterNotAssociatedError,
     ProductNotUsableError,
+    XGADeveloperError,
     XGASetIDError,
 )
 from ..products.profile import APECNormalisation1D, Generic1D, ProjectedGasMetallicity1D, ProjectedGasTemperature1D
@@ -615,6 +616,8 @@ class Spectrum(BaseProduct):
         if self._spec_group is None:
             self._read_on_demand(True)
 
+        if self._spec_group is None:
+            raise XGADeveloperError("Spectrum grouping failed to load on demand.")
         return self._spec_group
 
     @property
@@ -630,6 +633,8 @@ class Spectrum(BaseProduct):
         if self._spec_quality is None:
             self._read_on_demand(True)
 
+        if self._spec_quality is None:
+            raise XGADeveloperError("Spectrum quality failed to load on demand.")
         return self._spec_quality
 
     @property
@@ -731,6 +736,8 @@ class Spectrum(BaseProduct):
             # Passing false means it won't read the source spectrum, but instead the background spectrum
             self._read_on_demand(False)
 
+        if self._back_group is None:
+            raise XGADeveloperError("Spectrum back_grouping failed to load on demand.")
         return self._back_group
 
     @property
@@ -747,6 +754,8 @@ class Spectrum(BaseProduct):
         if self._back_quality is None:
             self._read_on_demand(False)
 
+        if self._back_quality is None:
+            raise XGADeveloperError("Spectrum back_quality failed to load on demand.")
         return self._back_quality
 
     @property
@@ -805,6 +814,8 @@ class Spectrum(BaseProduct):
         if self._rmf_channels is None:
             self._read_response_on_demand(rmf=True)
 
+        if self._rmf_channels is None:
+            raise XGADeveloperError("Spectrum rmf_channels failed to load on demand.")
         return self._rmf_channels
 
     @property
@@ -836,7 +847,7 @@ class Spectrum(BaseProduct):
         return self._rmf_channels_hi_en
 
     @property
-    def rmf_redist_matrix(self) -> np.ndarray:
+    def rmf_redist_matrix(self) -> np.ndarray | None:
         """
         The contents of the RMF MATRIX table.
 
@@ -1392,7 +1403,7 @@ class Spectrum(BaseProduct):
             )
         # However here they passed no fit configuration, and only one has been used for the model, so we're all good
         #  and will select it for them
-        elif fit_conf is None and len(self.fitted_model_configurations[model]) == 1:
+        elif fit_conf is None:
             fit_conf = self.fitted_model_configurations[model][0]
 
         # # We also check that
@@ -1401,6 +1412,8 @@ class Spectrum(BaseProduct):
         #     raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to this AnnularSpectra; "
         #                                       "available parameters are {a}".format(p=par, m=model, a=av_pars))
 
+        if not isinstance(model, str) or not isinstance(fit_conf, str):
+            raise XGADeveloperError("Model and fit configuration failed to resolve to strings during check.")
         return model, fit_conf
 
     def get_luminosities(
@@ -1636,7 +1649,9 @@ class Spectrum(BaseProduct):
 
         return converted_vals
 
-    def get_grouped_data(self, count_rate: bool = True) -> tuple[Quantity]:
+    def get_grouped_data(
+        self, count_rate: bool = True
+    ) -> tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity]:
         """
         In many cases a spectrum is 'grouped' after generation, which involves combining sequential channels to
         increase the signal-to-noise. This method reads any grouping information in the spectrum associated with
@@ -2356,7 +2371,9 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Here I run through all the spectra and access their annulus_ident property, that way we can determine how
         #  many annuli there are and start storing spectra appropriately
-        uniq_ann_ids = list(set([s.annulus_ident for s in spectra]))
+        if any(s.annulus_ident is None for s in spectra):
+            raise ValueError("All spectra passed to AnnularSpectra must have a non-None annulus_ident.")
+        uniq_ann_ids = list({s.annulus_ident for s in spectra if s.annulus_ident is not None})
 
         if min(uniq_ann_ids) != 0 or max(uniq_ann_ids) != (len(uniq_ann_ids) - 1):
             raise ValueError(
@@ -2530,7 +2547,7 @@ class AnnularSpectra(BaseAggregateProduct):
     # The src_name setter and getter have been overridden because there is an easier way of setting
     #  the source name for all spectra
     @property
-    def src_name(self) -> str:
+    def src_name(self) -> str | None:
         """
         Method to return the name of the object a product is associated with. The product becomes
         aware of this once it is added to a source object.
@@ -2596,7 +2613,7 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         return self.get_spectra(self._num_ann - 1, obs_id, inst).background
 
-    def background_rmf(self, obs_id: str, inst: str) -> str:
+    def background_rmf(self, obs_id: str, inst: str) -> str | None:
         """
         This method returns the path to the background spectrum's RMF for a particular ObsID and
         instrument. It is the RMF of the background associated with the outermost annulus of this object.
@@ -2608,7 +2625,7 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         return self.get_spectra(self._num_ann - 1, obs_id, inst).background_rmf
 
-    def background_arf(self, obs_id: str, inst: str) -> str:
+    def background_arf(self, obs_id: str, inst: str) -> str | None:
         """
         This method returns the path to the background spectrum's ARF for a particular ObsID and
         instrument. It is the ARF of the background associated with the outermost annulus of this object.
@@ -2791,7 +2808,7 @@ class AnnularSpectra(BaseAggregateProduct):
         return self._proper_ann_centres
 
     @property
-    def set_ident(self) -> int:
+    def set_ident(self) -> int | None:
         """
         This property returns the ID of this set of spectra.
 
@@ -3366,7 +3383,7 @@ class AnnularSpectra(BaseAggregateProduct):
             )
         # However here they passed no fit configuration, and only one has been used for the model, so we're all good
         #  and will select it for them
-        elif fit_conf is None and len(self.fitted_model_configurations[model]) == 1:
+        elif fit_conf is None:
             fit_conf = self.fitted_model_configurations[model][0]
 
         # Have to check that the user has passed a legal annulus ID, otherwise we'll be getting key errors down the
@@ -3398,6 +3415,8 @@ class AnnularSpectra(BaseAggregateProduct):
                 f"{av_pars}"
             )
 
+        if not isinstance(model, str) or not isinstance(fit_conf, str):
+            raise XGADeveloperError("Model and fit configuration failed to resolve to strings during check.")
         return model, fit_conf
 
     def get_results(
@@ -3567,7 +3586,13 @@ class AnnularSpectra(BaseAggregateProduct):
 
     def generate_profile(
         self, model: str, par: str, par_unit: Unit | str, fit_conf: str | dict | None = None
-    ) -> BaseProfile1D | ProjectedGasTemperature1D | ProjectedGasMetallicity1D:
+    ) -> (
+        BaseProfile1D
+        | ProjectedGasTemperature1D
+        | ProjectedGasMetallicity1D
+        | list[BaseProfile1D | ProjectedGasTemperature1D | ProjectedGasMetallicity1D | None]
+        | None
+    ):
         """
         This generates a radial profile of the requested fit parameter using the stored results from
         an XSPEC model fit run on this AnnularSpectra. The profile is added to AnnularSpectra internal
@@ -3620,7 +3645,7 @@ class AnnularSpectra(BaseAggregateProduct):
                 par_data["combined"].append(cur_data)
 
         # For storing the profiles generated here
-        profs = []
+        profs: list[BaseProfile1D | ProjectedGasTemperature1D | ProjectedGasMetallicity1D | None] = []
         # If there is only one profile to be generated (which means the quantity of interest was linked across
         #  spectra during the fit), then this will just iterate once and obs_key will be combined
         for obs_key in par_data:
@@ -3729,7 +3754,7 @@ class AnnularSpectra(BaseAggregateProduct):
                 profs.append(None)
 
         if len(profs) == 1:
-            profs = profs[0]
+            return profs[0]
 
         return profs
 

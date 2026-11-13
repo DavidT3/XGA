@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:06 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """
 The xga.models.mass module contains analytical 1D models for describing galaxy cluster cumulative radial mass profiles
 (including NFW, isothermal King, and Vikhlinin hydrostatic mass models).
@@ -101,7 +101,7 @@ class NFW(BaseModel1D):
         super().__init__(x_unit, y_unit, start_pars, priors, "nfw", "NFW Profile", nice_pars, "Mass", info_dict)
 
     @staticmethod
-    def model(x: Quantity, r_scale: Quantity, rho_zero: Quantity) -> Quantity:
+    def model(x: Quantity, r_scale: Quantity, rho_zero: Quantity) -> Quantity:  # type: ignore[override]
         """
         The model function for the constant-core and power-law entropy model.
 

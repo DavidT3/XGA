@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 5:12 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """
 The xga.generate.esass.lightcurve module implements wrapper functions for eSASS tools that generate X-ray light
 curves. As these functions wrap eSASS tools specifically, they are only compatible with source/sample instances
@@ -426,8 +426,8 @@ def _lc_cmds(
     sources_extras = []
     sources_types = []
 
+    source: BaseSource
     for s_ind, source in enumerate(sources):
-        source: BaseSource
         cmds: list[str] = []
         final_paths: list[str] = []
         extra_info: list[dict[str, Any]] = []

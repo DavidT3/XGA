@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 11:54 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """Functions for measuring specific entropy profiles of galaxy clusters."""
 
 from warnings import warn
@@ -50,7 +50,7 @@ def entropy_inv_abel_dens_onion_temp(
     stacked_spectra: bool = False,
     telescope: str | list[str] | None = None,
     global_temp_success_check: bool = False,
-) -> dict[str, list[SpecificEntropy]] | list[SpecificEntropy]:
+) -> dict[str, list[SpecificEntropy | None]] | list[SpecificEntropy | None]:
     """
     A convenience function that should allow the user to easily measure specific entropy profiles for a sample of
     galaxy clusters, elegantly dealing with any sources that have inadequate data or aren't fit properly. For
@@ -189,7 +189,7 @@ def entropy_inv_abel_dens_onion_temp(
     sources, dens_prof_dict, temp_prof_dict, dens_model_dict, temp_model_dict, telescope = setup_res
 
     # So I can a dict of profiles with telescope keys, a tad more elegant than fetching them from the sources sometimes
-    final_entropy_profs = {tel: [None] * len(sources) for tel in telescope}
+    final_entropy_profs: dict[str, list[SpecificEntropy | None]] = {tel: [None] * len(sources) for tel in telescope}
     # Better to use a with statement for tqdm, so it shut down if something fails inside
     prog_desc = "Generating {} specific entropy profile"
     with tqdm(desc=prog_desc.format("None"), total=len(sources)) as onwards:
@@ -262,6 +262,6 @@ def entropy_inv_abel_dens_onion_temp(
     # In case only one source is being analysed
     if len(final_entropy_profs) == 1:
         # this will select the inner nested dictionary
-        final_entropy_profs = next(iter(final_entropy_profs.values()))
+        return next(iter(final_entropy_profs.values()))
 
     return final_entropy_profs

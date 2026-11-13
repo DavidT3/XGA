@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:21. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """
 The xga.models.fitting module contains log-likelihood, prior, and posterior probability functions used when fitting
 XGA 1D profile models with MCMC samplers.
@@ -65,7 +65,7 @@ def log_uniform_prior(theta: np.ndarray, pr: list) -> float:
 
 def log_prob(
     theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.ndarray, m_func: Callable[..., Any], pr: list
-) -> np.ndarray:
+) -> np.ndarray | float:
     """
     The combination of the log prior and log likelihood.
 

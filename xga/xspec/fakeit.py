@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 9:24 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 """Functions for running XSPEC fakeit spectral simulations and count-rate to luminosity conversions."""
 
 import os
@@ -294,7 +294,7 @@ def cluster_cr_conv(
     run_type = "conv_factors"
     # I don't allow the user to set a timeout for fakeit runs because it's unnecessary, but the run code still
     #  needs a value
-    return (
+    return (  # type: ignore[return-value]
         script_paths,
         outfile_paths,
         num_cores,
