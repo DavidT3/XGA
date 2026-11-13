@@ -4,25 +4,108 @@
 The __init__ of the xga.models submodule. Sets up the dictionaries used by other parts of the module
 to check model names and access their functions.
 """
-# ruff: noqa
 
 import inspect
 from types import FunctionType
 from typing import Any
 
-# We explicitly import numpy here, even though it will be imported through the star imports below, to
-#  make the code linters of the world happy.
 import numpy as np
 
-# Doing star imports just because it's more convenient, and there won't ever be enough code in these that
-#  it becomes a big inefficiency
-from .density import *
-from .entropy import *
-from .mass import *
-from .misc import *
-from .pressure import *
-from .sb import *
-from .temperature import *
+from .base import BaseModel1D
+from .density import (
+    DENS_MODELS,
+    DENS_MODELS_PAR_NAMES,
+    DENS_MODELS_PUB_NAMES,
+    DoubleKingProfile1D,
+    KingProfile1D,
+    SimpleVikhlininDensity1D,
+    VikhlininDensity1D,
+)
+from .entropy import (
+    ENTROPY_MODELS,
+    ENTROPY_MODELS_PAR_NAMES,
+    ENTROPY_MODELS_PUB_NAMES,
+    CoreConstPowerEntropy,
+    PowerEntropy,
+)
+from .mass import MASS_MODELS, MASS_MODELS_PAR_NAMES, MASS_MODELS_PUB_NAMES, NFW
+from .misc import (
+    MISC_MODELS,
+    MISC_MODELS_PAR_NAMES,
+    MISC_MODELS_PRIORS,
+    MISC_MODELS_PUB_NAMES,
+    MISC_MODELS_STARTS,
+    power_law,
+    straight_line,
+)
+from .pressure import (
+    PRESSURE_MODELS,
+    PRESSURE_MODELS_PAR_NAMES,
+    PRESSURE_MODELS_PUB_NAMES,
+    GNFWThermalPressure,
+    SimpleGNFWThermalPressure,
+)
+from .sb import (
+    SB_MODELS,
+    SB_MODELS_PAR_NAMES,
+    SB_MODELS_PUB_NAMES,
+    BetaProfile1D,
+    DoubleBetaProfile1D,
+)
+from .temperature import (
+    TEMP_MODELS,
+    TEMP_MODELS_PAR_NAMES,
+    TEMP_MODELS_PUB_NAMES,
+    SimpleVikhlininTemperature1D,
+    VikhlininTemperature1D,
+)
+
+__all__ = [
+    "DENS_MODELS",
+    "DENS_MODELS_PAR_NAMES",
+    "DENS_MODELS_PUB_NAMES",
+    "ENTROPY_MODELS",
+    "ENTROPY_MODELS_PAR_NAMES",
+    "ENTROPY_MODELS_PUB_NAMES",
+    "MASS_MODELS",
+    "MASS_MODELS_PAR_NAMES",
+    "MASS_MODELS_PUB_NAMES",
+    "MISC_MODELS",
+    "MISC_MODELS_PAR_NAMES",
+    "MISC_MODELS_PRIORS",
+    "MISC_MODELS_PUB_NAMES",
+    "MISC_MODELS_STARTS",
+    "MODEL_PUBLICATION_NAMES",
+    "MODEL_PUBLICATION_PAR_NAMES",
+    "NFW",
+    "PRESSURE_MODELS",
+    "PRESSURE_MODELS_PAR_NAMES",
+    "PRESSURE_MODELS_PUB_NAMES",
+    "PROF_TYPE_MODELS",
+    "SB_MODELS",
+    "SB_MODELS_PAR_NAMES",
+    "SB_MODELS_PUB_NAMES",
+    "TEMP_MODELS",
+    "TEMP_MODELS_PAR_NAMES",
+    "TEMP_MODELS_PUB_NAMES",
+    "BaseModel1D",
+    "BetaProfile1D",
+    "CoreConstPowerEntropy",
+    "DoubleBetaProfile1D",
+    "DoubleKingProfile1D",
+    "GNFWThermalPressure",
+    "KingProfile1D",
+    "PowerEntropy",
+    "SimpleGNFWThermalPressure",
+    "SimpleVikhlininDensity1D",
+    "SimpleVikhlininTemperature1D",
+    "VikhlininDensity1D",
+    "VikhlininTemperature1D",
+    "convert_to_odr_compatible",
+    "derivative",
+    "power_law",
+    "straight_line",
+]
 
 # This dictionary is meant to provide pretty versions of model/function names to go in plots
 # This method of merging dictionaries only works in Python 3.5+, but that should be fine
@@ -180,7 +263,7 @@ def derivative(func: FunctionType, x0: float, dx: float = 1.0, n: int = 1, args:
     :rtype: float
     """
 
-    def _central_diff_weights(Np, ndiv=1):
+    def _central_diff_weights(Np, ndiv=1):  # noqa: N803
         """
         Return weights for a Np-point central derivative.
 
@@ -197,9 +280,9 @@ def derivative(func: FunctionType, x0: float, dx: float = 1.0, n: int = 1, args:
         ho = Np >> 1
         x = np.arange(-ho, ho + 1.0)
         x = x[:, np.newaxis]
-        X = x**0.0
+        X = x**0.0  # noqa: N806
         for k in range(1, Np):
-            X = np.hstack([X, x**k])
+            X = np.hstack([X, x**k])  # noqa: N806
         w = np.prod(np.arange(1, ndiv + 1), axis=0) * np.linalg.inv(X)[ndiv]
         return w
 

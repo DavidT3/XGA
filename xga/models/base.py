@@ -1,9 +1,17 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:26 PM. Copyright (c) The Contributors.
+"""
+The xga.models.base module defines the BaseModel1D superclass for analytical 1D profile models in XGA, providing
+common functionality for parameter management, unit validation, numerical derivatives, volume/spherical integration,
+and storing fit results.
+"""
+
+from __future__ import annotations
 
 import inspect
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy
+from typing import TYPE_CHECKING, Any
 from warnings import warn
 
 import emcee as em
@@ -19,6 +27,9 @@ from scipy.integrate import quad
 from tabulate import tabulate
 
 from ..exceptions import XGAFitError
+
+if TYPE_CHECKING:
+    from ..products import BaseProfile1D
 
 
 class BaseModel1D(metaclass=ABCMeta):
@@ -59,8 +70,8 @@ class BaseModel1D(metaclass=ABCMeta):
         par_pub_names: list[str],
         describes: str,
         info: dict,
-        x_lims: Quantity = None,
-    ):
+        x_lims: Quantity | None = None,
+    ) -> None:
         """
         Initialisation method for the base model class, just sets up all the necessary attributes and does some
         checks on the passed in parameters.
@@ -107,11 +118,13 @@ class BaseModel1D(metaclass=ABCMeta):
                 f"set x-unit of this model ({self._x_unit.to_string()})"
             )
         elif x_lims is not None and x_lims.isscalar:
-            raise ValueError("The xlim argument should be a non-scalar astropy quantity, with a lower and upper limit.")
+            raise ValueError(
+                "The x_lims argument should be a non-scalar astropy quantity, with a lower and upper limit."
+            )
         elif x_lims is not None and x_lims.shape != (2,):
-            raise ValueError("The quantity passed for xlim should have a lower and upper limit, with a shape of (2,)")
+            raise ValueError("The quantity passed for x_lim should have a lower and upper limit, with a shape of (2,)")
         elif x_lims is not None:
-            xlim = x_lims.to(self._x_unit)
+            x_lims = x_lims.to(self._x_unit)
 
         # And setting xlim attribute, it is allowed to be None
         self._x_lims = x_lims
@@ -125,7 +138,7 @@ class BaseModel1D(metaclass=ABCMeta):
 
         # I also add this attribute to store the parameter names as they appear in the model function, though
         #  they are only found if someone accesses the par_names property
-        self._par_names = None
+        self._par_names: list[str] | None = None
 
         # This sets up the attribute to store what this model describes (e.g. surface brightness)
         self._describes = describes
@@ -148,28 +161,28 @@ class BaseModel1D(metaclass=ABCMeta):
         # And another attribute to hold whether the external fit method considers the fit run using
         #  this model to be successful or not. This is also reflected in how the model is stored in a profile
         #  object, but it feels useful to have the information here as well.
-        self._success = None
+        self._success: bool | None = None
 
         # If the fit was performed with an MCMC fitter than it can store an acceptance fraction in the model,
         #  its quite a useful diagnostic
-        self._acc_frac = None
+        self._acc_frac: float | None = None
 
         # If an emcee sampler is used to do the fitting than that sampler can be stored in the model instance
-        self._emcee_sampler = None
+        self._emcee_sampler: em.EnsembleSampler | None = None
         # And the number of steps the fitting method decided on for a burn-in region
-        self._cut_off = None
+        self._cut_off: int | None = None
 
         # Allows the storage of the method used to fit the data in the model instance
-        self._fit_method = None
+        self._fit_method: str | None = None
 
         # I'm going to store any volume integral results within the model itself
-        self._vol_ints = {"pars": {}, "par_dists": {}}
+        self._vol_ints: dict[str, dict[Any, Any]] = {"pars": {}, "par_dists": {}}
 
         # This attribute stores a reference to a profile that a model instance has been used to fit. If the model
         #  exists in isolation and hasn't been fit through a profile fit() method then it will remain None, but
         #  otherwise I'm storing the profile to avoid one model being fit to two different profiles accidentally.
         #  The BaseProfile1D internal method _model_allegiance sets this
-        self._profile = None
+        self._profile: BaseProfile1D | None = None
 
     def __call__(self, x: Quantity, use_par_dist: bool = False) -> Quantity:
         """
@@ -195,7 +208,10 @@ class BaseModel1D(metaclass=ABCMeta):
             x = x.to(self._x_unit)
 
         if self._x_lims is not None and (np.any(x < self._x_lims[0]) or np.any(x > self._x_lims[1])):
-            warn("Some x values are outside of the x-axis limits for this model, results may not be trustworthy.")
+            warn(
+                "Some x values are outside of the x-axis limits for this model, results may not be trustworthy.",
+                stacklevel=2,
+            )
 
         # Check whether parameter distributions have been added to this model
         if use_par_dist and len(self._par_dists[0]) == 0:
@@ -425,7 +441,7 @@ class BaseModel1D(metaclass=ABCMeta):
         return transform_res
 
     def volume_integral(
-        self, outer_radius: Quantity, inner_radius: Quantity = None, use_par_dist: bool = False
+        self, outer_radius: Quantity, inner_radius: Quantity | None = None, use_par_dist: bool = False
     ) -> Quantity:
         """
         Calculates a numerical value for the volume integral of the function over a sphere of
@@ -452,7 +468,7 @@ class BaseModel1D(metaclass=ABCMeta):
         :rtype: Quantity
         """
 
-        def integrand(x: float, pars: list[float]):
+        def integrand(x: float, pars: list[float]) -> float:
             """
             Internal function to wrap the model function.
 
@@ -463,22 +479,22 @@ class BaseModel1D(metaclass=ABCMeta):
             """
             return x**2 * self.model(x, *pars)
 
+        # This checks to see if inner radius is None (probably how it will be used most of the time), and if
+        #  it is then creates a Quantity with the same units as outer_radius
+        if inner_radius is None:
+            inner_radius = Quantity(0, outer_radius.unit)
+        elif not inner_radius.unit.is_equivalent(outer_radius.unit):
+            raise UnitConversionError(
+                "If an inner_radius Quantity is supplied, then it must be in the same units"
+                " as the outer_radius Quantity."
+            )
+
         # This variable just tells the rest of the function whether either the inner or outer radii are actually
         #  a distribution rather than a single value.
         if not inner_radius.isscalar or not outer_radius.isscalar:
             rad_dist = True
         else:
             rad_dist = False
-
-        # This checks to see if inner radius is None (probably how it will be used most of the time), and if
-        #  it is then creates a Quantity with the same units as outer_radius
-        if inner_radius is None:
-            inner_radius = Quantity(0, outer_radius.unit)
-        elif inner_radius is not None and not inner_radius.unit.is_equivalent(outer_radius.unit):
-            raise UnitConversionError(
-                "If an inner_radius Quantity is supplied, then it must be in the same units"
-                " as the outer_radius Quantity."
-            )
 
         if (not outer_radius.isscalar or not inner_radius.isscalar) and not use_par_dist:
             raise ValueError("Radius distributions can only be used with use_par_dist set to True.")
@@ -723,7 +739,7 @@ class BaseModel1D(metaclass=ABCMeta):
         # Check if there are parameter distributions associated with this model
         if len(self._par_dists[0] != 0):
             # Set up the figure
-            fig = plt.figure(figsize=figsize)
+            plt.figure(figsize=figsize)
             ax = plt.gca()
 
             ax.hist(self(radius, True).value, bins=bins, color=colour)
@@ -742,7 +758,7 @@ class BaseModel1D(metaclass=ABCMeta):
             plt.tight_layout()
             plt.show()
         else:
-            warn("You have not added parameter distributions to this model")
+            warn("You have not added parameter distributions to this model", stacklevel=2)
 
     def par_dist_view(self, bins: str | int = "auto", colour: str = "lightseagreen") -> None:
         """
@@ -848,7 +864,7 @@ class BaseModel1D(metaclass=ABCMeta):
 
     def view(
         self,
-        radii: Quantity = None,
+        radii: Quantity | None = None,
         xscale: str = "log",
         yscale: str = "log",
         figsize: tuple = (8, 8),
@@ -905,7 +921,7 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._model_pars
 
     @model_pars.setter
-    def model_pars(self, new_vals: list[Quantity]):
+    def model_pars(self, new_vals: list[Quantity]) -> None:
         """
         Property that allows the current parameter values of the model to be set.
 
@@ -937,7 +953,7 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._model_par_errs
 
     @model_par_errs.setter
-    def model_par_errs(self, new_vals: list[Quantity]):
+    def model_par_errs(self, new_vals: list[Quantity]) -> None:
         """
         Property that allows the current parameter uncertainties of the model to be set. Quantities representing
         uncertainties may have one or two entries, with single element quantities assumed to represent
@@ -984,7 +1000,7 @@ class BaseModel1D(metaclass=ABCMeta):
         Property that returns the current priors on parameters of the model, these will be used by any
         fitting function that sets priors on parameters. Each entry in this list will be a dictionary with
         two keys 'prior' and 'type'. The value for prior will be an astropy quantity, and the value for type
-        will be a prior type (so uniform, gaussian, etc.)
+        will be a prior type (so uniform, gaussian, etc.).
 
         :return: A list of astropy quantities representing the values of the start parameters of this model.
         :rtype: List[Quantity]
@@ -992,11 +1008,11 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._par_priors
 
     @par_priors.setter
-    def par_priors(self, new_vals: list[dict[str, Quantity | str]]):
+    def par_priors(self, new_vals: list[dict[str, Quantity | str]]) -> None:
         """
         Property setter for the parameter priors of this model. The user should supply a list of dictionaries
         which describe the characteristic values of the prior and its type, for instance:
-        [{'prior': Quantity([1, 1000], 'kpc'), 'type': 'uniform'}, {'prior': Quantity([0, 3]), 'type': 'uniform'}]
+        [{'prior': Quantity([1, 1000], 'kpc'), 'type': 'uniform'}, {'prior': Quantity([0, 3]), 'type': 'uniform'}].
 
         Which describes a uniform prior between 1 and 1000kpc on the first prior, and a uniform prior
         between 0 and 3 on the second. The types of prior supported by XGA can be accessed using the
@@ -1069,9 +1085,9 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._x_lims
 
     @x_lims.setter
-    def x_lims(self, new_val: Quantity):
+    def x_lims(self, new_val: Quantity) -> None:
         """
-        Property to set the x limits within which the model is considered valid
+        Property to set the x limits within which the model is considered valid.
 
         :param Quantity new_val: The new x-limits, first element lower, second element upper.
         """
@@ -1161,7 +1177,7 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._par_dists
 
     @par_dists.setter
-    def par_dists(self, new_vals: list[Quantity]):
+    def par_dists(self, new_vals: list[Quantity]) -> None:
         if len(new_vals) != len(self._par_dists):
             raise ValueError("The new list of parameter distributions must have an entry for each model parameter.")
         elif not all([p.unit.is_equivalent(self._par_units[p_ind]) for p_ind, p in enumerate(new_vals)]):
@@ -1188,7 +1204,7 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._fit_warnings
 
     @fit_warning.setter
-    def fit_warning(self, new_val: str):
+    def fit_warning(self, new_val: str) -> None:
         """
         Property setter to add warnings from a fit to the model.
 
@@ -1201,30 +1217,30 @@ class BaseModel1D(metaclass=ABCMeta):
         self._fit_warnings += new_val
 
     @property
-    def acceptance_fraction(self) -> int:
+    def acceptance_fraction(self) -> float | None:
         """
         Property getter for the acceptance fraction of an MCMC fit (if one has been associated with this model).
 
         :return: The acceptance fraction.
-        :rtype: int
+        :rtype: float
         """
         return self._acc_frac
 
     @acceptance_fraction.setter
-    def acceptance_fraction(self, new_val: int):
+    def acceptance_fraction(self, new_val: float) -> None:
         """
         Setter for the acceptance fraction of an MCMC fit run on this model. If an ensemble sampler
         (like emcee) was used then this will be the average acceptance fraction of all the chains.
 
-        :param int new_val: The new acceptance fraction to add.
+        :param float new_val: The new acceptance fraction to add.
         """
         self._acc_frac = new_val
 
     @property
-    def emcee_sampler(self) -> em.EnsembleSampler:
+    def emcee_sampler(self) -> em.EnsembleSampler | None:
         """
         Property getter for the emcee sampler used to fit this model, if applicable. By default this will be
-        None, as the it has to be set externally, as the model won't necessarily be fit by emcee
+        None, as it has to be set externally, as the model won't necessarily be fit by emcee.
 
         :return: The emcee sampler used to fit this model.
         :rtype: em.EnsembleSampler
@@ -1232,7 +1248,7 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._emcee_sampler
 
     @emcee_sampler.setter
-    def emcee_sampler(self, new_val: em.EnsembleSampler):
+    def emcee_sampler(self, new_val: em.EnsembleSampler) -> None:
         """
         Property setter for an emcee sampler to be added to this model.
 
@@ -1241,11 +1257,11 @@ class BaseModel1D(metaclass=ABCMeta):
         self._emcee_sampler = new_val
 
     @property
-    def cut_off(self) -> int:
+    def cut_off(self) -> int | None:
         """
         Property getter for the number of steps that an MCMC fitting method decided should be removed for burn-in.
-         By default this will be None, as the it has to be set externally, as the model won't necessarily
-         be fit by emcee
+        By default this will be None, as it has to be set externally, as the model won't necessarily
+        be fit by emcee.
 
         :return: The number of steps to be removed for burn-in.
         :rtype: int
@@ -1253,7 +1269,7 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._cut_off
 
     @cut_off.setter
-    def cut_off(self, new_val: int):
+    def cut_off(self, new_val: int) -> None:
         """
         Property setter for the number of steps to removed from MCMC chains as burn-in.
 
@@ -1262,7 +1278,7 @@ class BaseModel1D(metaclass=ABCMeta):
         self._cut_off = new_val
 
     @property
-    def fit_method(self) -> str:
+    def fit_method(self) -> str | None:
         """
         Property getter for the method used to fit the model instance, this will be None if no fit has been
         run using this model.
@@ -1273,7 +1289,7 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._fit_method
 
     @fit_method.setter
-    def fit_method(self, new_val: str):
+    def fit_method(self, new_val: str) -> None:
         """
         Set the fit method used on this model.
 
@@ -1296,7 +1312,7 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._par_names
 
     @property
-    def success(self) -> bool:
+    def success(self) -> bool | None:
         """
         If an fit has been run using this model then this property will tell you whether the fit method considered
         it to be 'successful' or not. If no fit has been run using this model then the value is None.
@@ -1307,16 +1323,16 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._success
 
     @success.setter
-    def success(self, new_val: bool):
+    def success(self, new_val: bool) -> None:
         """
-        This is for an external fit method to set whether the fit run using this model was successful or not
+        This is for an external fit method to set whether the fit run using this model was successful or not.
 
         :param bool new_val: True for successful, False for failed.
         """
         self._success = new_val
 
     @property
-    def profile(self):
+    def profile(self) -> BaseProfile1D | None:
         """
         The profile that this model has been fit to.
 
@@ -1327,7 +1343,7 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._profile
 
     @profile.setter
-    def profile(self, new_val):
+    def profile(self, new_val: BaseProfile1D | None) -> None:
         """
         The property setter for the profile that this model has been fit to.
 

@@ -142,7 +142,7 @@ def _setup_global(
     # We want to return a dictionary of telescope keys and values that are a list of len(sources) where
     # each element in the list is a boolean indicated whether a glob temp has been measured
     # ie. has_glob_temp = {'xmm' : [True, True, False], 'erosita' : [True, True, True]}
-    has_glob_temp = {key: [] for key in src_telescopes}
+    has_glob_temp: dict[str, list[bool]] = {key: [] for key in src_telescopes}
     for src_ind, src in enumerate(sources):
         # We cycle over the telescopes in the Sample and not the Source, so that every list in
         # has_glob_temp is the same length

@@ -1,7 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 13:03. Copyright (c) The Contributors
 
-from typing import Union, List
 
 import numpy as np
 
@@ -11,11 +10,11 @@ from xga.sources import BaseSource
 from xga.sourcetools._common import _get_all_telescopes
 
 
-def check_tel_associated(sources: Union[BaseSource, BaseSample], telescope: Union[str, List[str], None]) -> List[str]:
+def check_tel_associated(sources: BaseSource | BaseSample, telescope: str | list[str] | None) -> list[str]:
     """
     Simple check meant to be used on user-specified telescope names, to ensure they are associated with at
-    least one source. If None is passed for telescope then all telescope names associated with a source will
-    be returned
+    least one source.
+    If None is passed for telescope then all telescope names associated with a source will be returned.
 
     :param BaseSource/BaseSample sources: XGA source/sample to validate telescope names against, or to retrieve
         all associated telescopes for.
@@ -38,8 +37,7 @@ def check_tel_associated(sources: Union[BaseSource, BaseSample], telescope: Unio
         good_tel = np.array([t in all_tels for t in telescope])
         if not all(good_tel):
             which_bad = ", ".join(np.array(telescope)[~good_tel])
-            raise TelescopeNotAssociatedError("Telescopes {t} are not associated with any "
-                                              "source".format(t=which_bad))
+            raise TelescopeNotAssociatedError(f"Telescopes {which_bad} are not associated with any source")
 
     # If we get here then there are no problems with whatever the user passed in, so we choose whether we're looking
     #  at all the associated telescopes or a subset defined by the user

@@ -10,4 +10,3 @@ Tutorials
     Spectroscopy with XGA <notebooks/tutorials/spectroscopy.ipynb>
     Multi-Mission XGA <notebooks/tutorials/multimission.ipynb>
     Generating Scaling Relations <notebooks/tutorials/scaling_relations.ipynb>
-

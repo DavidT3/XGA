@@ -1,5 +1,8 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/15/26, 2:40 PM. Copyright (c) The Contributors.
+# ruff: noqa: N999
+"""End-to-end pipeline for measuring galaxy cluster X-ray luminosities, temperatures, and overdensity radii."""
+
 from warnings import warn
 
 import numpy as np
@@ -41,14 +44,14 @@ def luminosity_temperature_pipeline(
     hi_en: Quantity = Quantity(7.9, "keV"),
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
-    over_sample: float = None,
+    min_sn: float | None = None,
+    over_sample: float | None = None,
     back_inn_rad_factor: float = 1.05,
     back_out_rad_factor: float = 1.5,
     clean_obs: bool = True,
     clean_obs_threshold: float = 0.7,
-    save_samp_results_path: str = None,
-    save_rad_history_path: str = None,
+    save_samp_results_path: str | None = None,
+    save_rad_history_path: str | None = None,
     cosmo: Cosmology = DEFAULT_COSMO,
     telescope: str = "xmm",
     search_distance: Quantity = None,
@@ -251,8 +254,8 @@ def luminosity_temperature_pipeline(
         )
     elif rad_temp_rel.telescope != telescope:
         raise ValueError(
-            f"The relation passed for the 'rad_temp_rel' argument was made for the {rad_temp_rel.telescope} telescope, but "
-            f"this pipeline is running for the {telescope} telescope (specified by the 'telescope' "
+            f"The relation passed for the 'rad_temp_rel' argument was made for the {rad_temp_rel.telescope} "
+            f"telescope, but this pipeline is running for the {telescope} telescope (specified by the 'telescope' "
             "argument)."
         )
 
@@ -349,13 +352,13 @@ def luminosity_temperature_pipeline(
     elif freeze_temp and temp_lum_rel.core_radius_fraction != rad_temp_rel.core_radius_fraction:
         raise ValueError(
             "The core radius used to construct the relation passed as the 'temp_lum_rel' "
-            f"argument ({temp_lum_rel.core_radius_fraction}), does not match that of the passed temperature-radius relation "
-            f"({rad_temp_rel.core_radius_fraction})."
+            f"argument ({temp_lum_rel.core_radius_fraction}), does not match that of the passed temperature-radius "
+            f"relation ({rad_temp_rel.core_radius_fraction})."
         )
     elif freeze_temp and rad_temp_rel.telescope != telescope:
         raise ValueError(
-            f"The relation passed for the 'temp_lum_rel' argument was made for the {temp_lum_rel.telescope} telescope, but "
-            f"this pipeline is running for the {telescope} telescope (specified by the 'telescope' "
+            f"The relation passed for the 'temp_lum_rel' argument was made for the {temp_lum_rel.telescope} "
+            f"telescope, but this pipeline is running for the {telescope} telescope (specified by the 'telescope' "
             "argument)."
         )
 
@@ -489,7 +492,9 @@ def luminosity_temperature_pipeline(
 
             # Just to be safe I'm adding a check to make sure bad_gen has entries
             if len(bad_gen) == 0:
-                raise ProductGenerationError("Failed to identify sources for which spectrum generation failed.")
+                raise ProductGenerationError(
+                    "Failed to identify sources for which spectrum generation failed."
+                ) from err
 
             # We define the indices that WON'T have been removed from the sample (so these can be used to address
             #  things like the pr_rs quantity we defined up top
@@ -1002,7 +1007,7 @@ def luminosity_temperature_pipeline(
     #  of this pipeline I assemble a radius history dataframe (for all clusters that were initially in the
     #  ClusterSample), and want the final column to declare if they converged or not.
     rad_hist_acc_rad = []
-    for row_ind, row in loaded_samp_data.iterrows():
+    for _row_ind, row in loaded_samp_data.iterrows():
         if row["name"] in samp.names:
             # Did this radius converge?
             converged = acc_rad[np.argwhere(samp.names == row["name"])[0][0]]

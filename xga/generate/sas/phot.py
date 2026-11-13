@@ -8,6 +8,7 @@ compatible with source/sample instances that have XMM observations associated.
 
 import os
 from random import randint
+from typing import Any
 
 import numpy as np
 from astropy.units import Quantity, deg
@@ -33,7 +34,7 @@ def evselect_image(
     add_expr: str = "",
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A convenient Python wrapper for a configuration of the SAS evselect command that makes images.
     Images will be generated for every observation associated with every source passed to this function.
@@ -151,7 +152,7 @@ def eexpmap(
     hi_en: Quantity = Quantity(2.0, "keV"),
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A convenient Python wrapper for the SAS eexpmap command.
     Expmaps will be generated for every observation associated with every source passed to this function.
@@ -208,9 +209,9 @@ def eexpmap(
     sources_extras = []
     sources_types = []
     for source in sources:
-        cmds = []
-        final_paths = []
-        extra_info = []
+        cmds: list[str] = []
+        final_paths: list[str] = []
+        extra_info: list[dict[str, Any]] = []
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
         #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
@@ -300,7 +301,7 @@ def emosaic(
     psf_iter: int = 15,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A convenient Python wrapper for the SAS emosaic command. Every image associated with the source,
     that is in the energy band specified by the user, will be added together.
@@ -486,7 +487,7 @@ def psfgen(
     psf_model: str = "ELLBETA",
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A wrapper for the psfgen SAS task. Used to generate XGA PSF objects, which in turn can be used to correct
     XGA images/ratemaps for optical effects. By default we use the ELLBETA model reported in Read et al. 2011

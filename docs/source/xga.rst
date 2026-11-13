@@ -14,4 +14,3 @@ xga package
    xga.relations
    xga.models
    xga.tools
-

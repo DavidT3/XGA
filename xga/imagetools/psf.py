@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 2:06 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
 
 """XGA submodule that implements methods of correcting for and modeling PSF effects."""
 
@@ -166,12 +166,14 @@ def rl_psf(
     # Should have cleaned it so that only those sources that need it will have PSFs generated
     psfgen(sub_sources, bins, psf_model, num_cores=num_cores)
 
+    def err_callback(err: BaseException) -> None:
+        raise err
+
     corr_prog_message = "PSF Correcting Observations - Currently {}"
     with tqdm(
         desc=corr_prog_message.format(""), total=len(sub_sources), disable=len(sub_sources) == 0
     ) as corr_progress:
         for source in sub_sources:
-            source: BaseSource
             # Updates the source name in the message every iteration
             corr_progress.set_description(corr_prog_message.format(source.name))
 
@@ -213,21 +215,18 @@ def rl_psf(
                 # Nasty nested list to store each step for each PSF in
                 # The starting array full of 0.5 values is what is used in the skimage implementation
                 storage = [[np.full(full_im_data.shape, 0.5)] for i in range(len(psf_grid))]
+
+                # This is what is triggered when each rl_step call is done
+                def callback(results_in: tuple[np.ndarray, int], cur_storage: list = storage) -> None:
+                    # Reading out results
+                    proc_chunk, stor_ind = results_in
+                    # Storing the results in the storage listss
+                    cur_storage[stor_ind].append(proc_chunk)
+
                 # Iterating over the steps
                 for _i in range(iterations):
                     # Sets up a multiprocessing pool
                     with Pool(num_cores) as pool:
-                        # This is what is triggered when each rl_step call is done
-                        def callback(results_in):
-                            nonlocal storage
-                            # Reading out results
-                            proc_chunk, stor_ind = results_in
-                            # Storing the results in the storage listss
-                            storage[stor_ind].append(proc_chunk)
-
-                        def err_callback(err):
-                            raise err
-
                         # Starts a deconvolution function for each spatial PSF, adding them to the
                         #  multiprocessing pool
                         for psf_ind, _psf in enumerate(psf_grid):
@@ -279,7 +278,8 @@ def rl_psf(
                     f"{obs_id}_{inst}_{bins}bin_{iterations}iter_{psf_model}mod_rlalgo_{lo_en.value}-"
                     f"{hi_en.value}keVpsfcorr_datacube.fits"
                 )
-                # Define this one because emosaic can't deal with fits datacubes, and thats what I use to combine images.
+                # Define this one because emosaic can't deal with fits datacubes, and thats what I use to
+                #  combine images.
                 im_name = (
                     f"{obs_id}_{inst}_{bins}bin_{iterations}iter_{psf_model}mod_rlalgo_{lo_en.value}-"
                     f"{hi_en.value}keVpsfcorr_img.fits"

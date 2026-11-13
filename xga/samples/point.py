@@ -1,5 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 11/12/2025, 17:14. Copyright (c) The Contributors
+"""Sample classes for specific point-like X-ray sources, such as X-ray emitting stars."""
 
 from warnings import warn
 
@@ -66,9 +67,9 @@ class StarSample(BaseSample):
         self,
         ra: np.ndarray,
         dec: np.ndarray,
-        distance: np.ndarray = None,
-        name: np.ndarray = None,
-        proper_motion: Quantity = None,
+        distance: np.ndarray | None = None,
+        name: np.ndarray | None = None,
+        proper_motion: Quantity | None = None,
         point_radius: Quantity = Quantity(30, "arcsec"),
         match_radius: Quantity = Quantity(10, "arcsec"),
         use_peak: bool = False,
@@ -82,22 +83,23 @@ class StarSample(BaseSample):
         clean_obs_threshold: float = 0.9,
         no_prog_bar: bool = False,
         psf_corr: bool = False,
-        telescope: str | list[str] = None,
-        search_distance: Quantity | dict = None,
-    ):
+        telescope: str | list[str] | None = None,
+        search_distance: Quantity | dict | None = None,
+    ) -> None:
         """
          The init of the StarSample XGA class.
 
          :param np.ndarray ra: The right-ascensions of the stars, in degrees.
         :param np.ndarray dec: The declinations of the stars, in degrees.
-        :param np.ndarray distance: The distances to the stars in units convertible to parsecs, optional. Default is None.
+        :param np.ndarray distance: The distances to the stars in units convertible to parsecs, optional. Default is
+            None.
         :param np.ndarray name: The names of the stars, optional. If no names are supplied
             then they will be constructed from the supplied coordinates.
         :param Quantity proper_motion: The proper motion of the stars, optional. This should be passed as a non-scalar
             astropy quantity; if magnitudes are passed it should be in the form Quantity([4, 5, 2, 7,...], 'arcsec/yr'),
             and if vectors are passed it should be in the form Quantity([[4, 2.3], [5, 4.3], [2, 2.5],
-            [7.2, 6.9],...], 'arcsec/yr'), where the first is in RA and the second in Dec. Units should be convertible to
-            arcseconds per year. Default is None
+            [7.2, 6.9],...], 'arcsec/yr'), where the first is in RA and the second in Dec. Units should be convertible
+            to arcseconds per year. Default is None
         :param Quantity point_radius: The point source analysis region radius(ii) for this sample. Either
             pass a scalar astropy quantity, or a non-scalar astropy quantity with length equal to the number of sources.
         :param Quantity match_radius: The radius within which point source regions are accepted as a match to the
@@ -197,7 +199,7 @@ class StarSample(BaseSample):
         self._distances = []
         self._proper_motions = []
         # This records which sources had a failed peak finding attempt, for a warning at the end of the declaration
-        failed_peak_find = []
+        failed_peak_find: list[str] = []
         with tqdm(desc="Setting up Stars", total=len(self._accepted_inds), disable=no_prog_bar) as dec_lb:
             for ind in range(len(self._accepted_inds)):
                 r, d = ra[self._accepted_inds[ind]], dec[self._accepted_inds[ind]]
@@ -360,7 +362,7 @@ class StarSample(BaseSample):
         """
         return Quantity(self._proper_motions)
 
-    def _del_data(self, key: int):
+    def _del_data(self, key: int) -> None:
         """
         Specific to the StarSample class, this deletes the extra data stored during the initialisation
         of this type of sample.

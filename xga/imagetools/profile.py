@@ -1,21 +1,28 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/28/26, 11:22 AM. Copyright (c) The Contributors.
-
-
-from typing import Tuple
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+"""
+The xga.imagetools.profile module contains functions for generating annular masks and measuring radial surface
+brightness profiles from XGA Image and RateMap products.
+"""
 
 import numpy as np
 from astropy.cosmology import Cosmology
-from astropy.units import Quantity, UnitBase, pix, deg, arcsec, UnitConversionError
+from astropy.units import Quantity, UnitBase, UnitConversionError, arcsec, deg, pix
 
-from .misc import pix_deg_scale, pix_rad_to_physical, physical_rad_to_pix, rad_to_ang
 from .. import DEFAULT_COSMO
 from ..products import Image, RateMap
 from ..products.profile import SurfaceBrightness1D
+from .misc import physical_rad_to_pix, pix_deg_scale, pix_rad_to_physical, rad_to_ang
 
 
-def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, shape: tuple,
-                 start_ang: Quantity = Quantity(0, 'deg'), stop_ang: Quantity = Quantity(360, 'deg')) -> np.ndarray:
+def annular_mask(
+    centre: Quantity,
+    inn_rad: np.ndarray,
+    out_rad: np.ndarray,
+    shape: tuple,
+    start_ang: Quantity = Quantity(0, "deg"),
+    stop_ang: Quantity = Quantity(360, "deg"),
+) -> np.ndarray:
     """
     A handy little function to generate annular (or circular) masks in the form of numpy arrays.
     It produces an annular mask for a given shape of image, centered at supplied coordinates, and with inner and
@@ -33,31 +40,30 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
     :return: The generated mask array.
     :rtype: np.ndarray
     """
-
-    if not centre.unit.is_equivalent('pix'):
+    if not centre.unit.is_equivalent("pix"):
         raise UnitConversionError("The 'centre' argument must be convertible to pixels.")
     # Split out the centre coordinates
-    cen_x = centre[0].to('pix').astype(int).value
-    cen_y = centre[1].to('pix').astype(int).value
+    cen_x = centre[0].to("pix").astype(int).value
+    cen_y = centre[1].to("pix").astype(int).value
 
     # Making use of the astropy units module, check that we are being pass actual angle values
-    if start_ang.unit not in ['deg', 'rad']:
-        raise ValueError("start_angle unit type {} is not an accepted angle unit, "
-                         "please use deg or rad.".format(start_ang.unit))
-    elif stop_ang.unit not in ['deg', 'rad']:
-        raise ValueError("stop_angle unit type {} is not an accepted angle unit, "
-                         "please use deg or rad.".format(stop_ang.unit))
+    if start_ang.unit not in ["deg", "rad"]:
+        raise ValueError(
+            f"start_angle unit type {start_ang.unit} is not an accepted angle unit, please use deg or rad."
+        )
+    elif stop_ang.unit not in ["deg", "rad"]:
+        raise ValueError(f"stop_angle unit type {stop_ang.unit} is not an accepted angle unit, please use deg or rad.")
     # Enforcing some common sense rules on the angles
     elif start_ang >= stop_ang:
         raise ValueError("start_ang cannot be greater than or equal to stop_ang.")
-    elif start_ang > Quantity(360, 'deg') or stop_ang > Quantity(360, 'deg'):
+    elif start_ang > Quantity(360, "deg") or stop_ang > Quantity(360, "deg"):
         raise ValueError("start_ang and stop_ang cannot be greater than 360 degrees.")
-    elif stop_ang < Quantity(0, 'deg'):
+    elif stop_ang < Quantity(0, "deg"):
         raise ValueError("stop_ang cannot be less than 0 degrees.")
     else:
         # Don't want to pass astropy objects to numpy functions, but do need the angles in radians
-        start_ang = start_ang.to('rad').value
-        stop_ang = stop_ang.to('rad').value
+        start_ang = start_ang.to("rad").value
+        stop_ang = stop_ang.to("rad").value
 
     # Check that if the inner and outer radii are arrays, they're the same length
     if isinstance(inn_rad, (np.ndarray, list)) and len(inn_rad) != len(out_rad):
@@ -77,7 +83,7 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
         out_rad = np.array([out_rad])
 
     # This sets up the cartesian coordinate grid of x and y values
-    arr_y, arr_x = np.ogrid[:shape[0], :shape[1]]
+    arr_y, arr_x = np.ogrid[: shape[0], : shape[1]]
 
     # Go to polar coordinates
     rec_x = arr_x - cen_x
@@ -87,7 +93,7 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
 
     # arctan2 does just perform arctan on two values, but then uses the signs of those values to
     # decide the quadrant of the output
-    init_arr_theta = (np.arctan2(rec_x, rec_y) - start_ang) % (2*np.pi)  # Normalising to 0-2pi range
+    init_arr_theta = (np.arctan2(rec_x, rec_y) - start_ang) % (2 * np.pi)  # Normalising to 0-2pi range
 
     # If the radius limits are an array, the arrays that describe the space we have constructed are copied
     #  into a third dimension - This allows masks for different radii to be generated in a vectorised fashion
@@ -102,7 +108,7 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
     if np.greater(inn_rad, out_rad).any():
         raise ValueError("inn_rad value cannot be greater than out_rad")
     else:
-        rad_mask = (arr_r_squared < out_rad ** 2) & (arr_r_squared >= inn_rad ** 2)
+        rad_mask = (arr_r_squared < out_rad**2) & (arr_r_squared >= inn_rad**2)
 
     # Finally, puts a cut on the allowed angle, and combined the radius and angular cuts into the final mask
     ang_mask = arr_theta <= (stop_ang - start_ang)
@@ -121,9 +127,17 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
     return ann_mask
 
 
-def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, pix_step: int = 1,
-              rad_units: UnitBase = arcsec, cosmo: Cosmology = DEFAULT_COSMO, min_central_pix_rad: int = 3,
-              start_pix_rad: int = 0) -> Tuple[np.ndarray, np.ndarray, Quantity]:
+def ann_radii(
+    im_prod: Image,
+    centre: Quantity,
+    rad: Quantity,
+    z: float | None = None,
+    pix_step: int = 1,
+    rad_units: UnitBase = arcsec,
+    cosmo: Cosmology = DEFAULT_COSMO,
+    min_central_pix_rad: int = 3,
+    start_pix_rad: int = 0,
+) -> tuple[np.ndarray, np.ndarray, Quantity]:
     """
     Will probably only ever be called by an internal brightness calculation, but two different methods
     need it so it gets its own method.
@@ -146,17 +160,17 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
     """
     # Quickly get the central coordinates in degrees as well
     deg_cen = im_prod.coord_conv(centre, deg)
-    pix_cen = im_prod.coord_conv(centre, pix)
+    # pix_cen = im_prod.coord_conv(centre, pix)
 
     # If the radius is passed in a proper distance unit, this will convert it or raise an exception
     #  if it can't
-    if rad.unit.is_equivalent('deg') or rad.unit.is_equivalent('kpc'):
+    if rad.unit.is_equivalent("deg") or rad.unit.is_equivalent("kpc"):
         rad = physical_rad_to_pix(im_prod, rad, deg_cen, z, cosmo)
     elif rad.unit == pix:
         # If the radius is already in pixels then all is well
         pass
     else:
-        raise UnitConversionError('{} is not a recognised distance unit'.format(rad.unit.to_string()))
+        raise UnitConversionError(f"{rad.unit.to_string()} is not a recognised distance unit")
 
     rad = np.ceil(rad)
 
@@ -174,10 +188,10 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
     # By this point, the rad should be in pixels
     rads = np.arange(start_pix_rad, rad.value + 1, pix_step).astype(int)
 
-    inn_rads = rads[:len(rads) - 1]
-    out_rads = rads[1:len(rads)]
+    inn_rads = rads[: len(rads) - 1]
+    out_rads = rads[1 : len(rads)]
 
-    pix_cen_rads = Quantity((inn_rads + out_rads)/2, pix)
+    pix_cen_rads = Quantity((inn_rads + out_rads) / 2, pix)
     cen_rads = pix_rad_to_physical(im_prod, pix_cen_rads, rad_units, deg_cen, z, cosmo)
 
     # If the innermost radius is zero then the innermost annulus is actually a circle and we don't want
@@ -188,11 +202,21 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
     return inn_rads, out_rads, cen_rads
 
 
-def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_inn_rad_factor: float = 1.05,
-                      back_out_rad_factor: float = 1.5, interloper_mask: np.ndarray | None = None,
-                      z: float| None = None, pix_step: int = 1, rad_units: UnitBase = arcsec,
-                      cosmo: Cosmology = DEFAULT_COSMO, min_snr: float = 0.0, min_central_pix_rad: int = 3,
-                      start_pix_rad: int = 0) -> Tuple[SurfaceBrightness1D, bool]:
+def radial_brightness(
+    rt: RateMap,
+    centre: Quantity,
+    outer_rad: Quantity,
+    back_inn_rad_factor: float = 1.05,
+    back_out_rad_factor: float = 1.5,
+    interloper_mask: np.ndarray | None = None,
+    z: float | None = None,
+    pix_step: int = 1,
+    rad_units: UnitBase = arcsec,
+    cosmo: Cosmology = DEFAULT_COSMO,
+    min_snr: float = 0.0,
+    min_central_pix_rad: int = 3,
+    start_pix_rad: int = 0,
+) -> tuple[SurfaceBrightness1D, bool]:
     """
     A simple method to calculate the average brightness in circular annuli upto the radius of
     the chosen region. The annuli are one pixel in width, and as this uses the masks that were generated
@@ -221,8 +245,9 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     :rtype: Tuple[SurfaceBrightness1D, bool]
     """
 
-    def _iterative_profile(annulus_masks: np.ndarray, inner_rads: np.ndarray, outer_rads: np.ndarray) \
-            -> Tuple[bool, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def _iterative_profile(
+        annulus_masks: np.ndarray, inner_rads: np.ndarray, outer_rads: np.ndarray
+    ) -> tuple[bool, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
         Internal function to calculate and re-bin (ONCE) a surface brightness profile. The profile, along with
         modified (if rebinned) masks and radii arrays are returned to the user. This can be called once, or iteratively
@@ -238,12 +263,13 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
         :rtype: Tuple[bool, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
         """
         # These are annular masks with interloper sources removed, sensor and edge masks applied
-        corr_ann_masks = (annulus_masks * sel_inter_mask[..., None] * sel_sensor_mask[..., None]
-                          * sel_edge_mask[..., None])
+        corr_ann_masks = (
+            annulus_masks * sel_inter_mask[..., None] * sel_sensor_mask[..., None] * sel_edge_mask[..., None]
+        )
 
         # This calculates the area of each annulus mask
         num_pix = np.sum(corr_ann_masks, axis=(0, 1))
-        ann_areas = num_pix * to_arcmin ** 2
+        ann_areas = num_pix * to_arcmin**2
 
         # Applying the annular masks, with interlopers removed, and chip edges
         masked_countrate_data = corr_ann_masks * rt_sel_data[..., None]
@@ -286,8 +312,9 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
         return another_pass, bright_profile, bright_profile_errors, annulus_masks, inner_rads, outer_rads, ann_areas
 
     if interloper_mask is not None and rt.shape != interloper_mask.shape:
-        raise ValueError("The shape of the src_mask array {0} must be the same as that of im_prod "
-                         "{1}.".format(interloper_mask.shape, rt.shape))
+        raise ValueError(
+            f"The shape of the src_mask array {interloper_mask.shape} must be the same as that of im_prod {rt.shape}."
+        )
     elif interloper_mask is None:
         interloper_mask = np.ones(rt.shape)
 
@@ -299,14 +326,15 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     pix_cen = rt.coord_conv(centre, pix)
 
     # This sets up the initial annular bin radii, as well as finding the central radii of the bins in the chosen units.
-    inn_rads, out_rads, cen_rads = ann_radii(rt, centre, outer_rad, z, pix_step, rad_units, cosmo,
-                                             min_central_pix_rad, start_pix_rad)
+    inn_rads, out_rads, cen_rads = ann_radii(
+        rt, centre, outer_rad, z, pix_step, rad_units, cosmo, min_central_pix_rad, start_pix_rad
+    )
 
     # These calculate the inner and out pixel radii for the background mask - placed in arrays because the
     #  annular mask function expects iterable radii. As pixel radii have to be integer for generating a mask,
     #  I've used ceil.
-    back_inn_rad = np.array([np.ceil(out_rads[-1]*back_inn_rad_factor).astype(int)])
-    back_out_rad = np.array([np.ceil(out_rads[-1]*back_out_rad_factor).astype(int)])
+    back_inn_rad = np.array([np.ceil(out_rads[-1] * back_inn_rad_factor).astype(int)])
+    back_out_rad = np.array([np.ceil(out_rads[-1] * back_out_rad_factor).astype(int)])
 
     # This is not how this function used to work, but we now cut out the count-rate map data that is relevant to
     #  the current profile - i.e. to just outside the outer background radius. We do this to avoid huge memory
@@ -316,11 +344,15 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     #  side length 2*(outer background radius + buffer)
     edge_buffer = 2
     # The lower and upper indexing bounds to select the relevant data - for the x-axis
-    y_sel_lims = [int(np.floor((pix_cen[1].value-back_out_rad[0])-edge_buffer)),
-                  int(np.ceil((pix_cen[1].value+back_out_rad[0])+edge_buffer+1))]
+    y_sel_lims = [
+        int(np.floor((pix_cen[1].value - back_out_rad[0]) - edge_buffer)),
+        int(np.ceil((pix_cen[1].value + back_out_rad[0]) + edge_buffer + 1)),
+    ]
     # Same but for the y-axis
-    x_sel_lims = [int(np.floor((pix_cen[0].value-back_out_rad[0])-edge_buffer)),
-                  int(np.ceil((pix_cen[0].value+back_out_rad[0])+edge_buffer+1))]
+    x_sel_lims = [
+        int(np.floor((pix_cen[0].value - back_out_rad[0]) - edge_buffer)),
+        int(np.ceil((pix_cen[0].value + back_out_rad[0]) + edge_buffer + 1)),
+    ]
 
     # Checks the calculated slicing boundaries against the size of the image
     if x_sel_lims[0] < 0 or y_sel_lims[0] < 0 or x_sel_lims[1] > rt.shape[1] or y_sel_lims[1] > rt.shape[0]:
@@ -329,12 +361,12 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     # Selecting the relevant count-rate, count, and exposure information using the indexing bounds we defined - all
     #  three sets of data are used in this process, though the count/exposure information is the same as the
     #  rate information. It is just easier this way I think
-    rt_sel_data = rt.data[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]].copy()
-    im_sel_data = rt.image.data[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]].copy()
-    ex_sel_data = rt.expmap.data[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]].copy()
+    rt_sel_data = rt.data[y_sel_lims[0] : y_sel_lims[1], x_sel_lims[0] : x_sel_lims[1]].copy()
+    im_sel_data = rt.image.data[y_sel_lims[0] : y_sel_lims[1], x_sel_lims[0] : x_sel_lims[1]].copy()
+    ex_sel_data = rt.expmap.data[y_sel_lims[0] : y_sel_lims[1], x_sel_lims[0] : x_sel_lims[1]].copy()
 
     # The new central coordinate is really just the x-y middle of the slice we just made of the ratemap data
-    sel_cen = Quantity([rt_sel_data.shape[1]/2, rt_sel_data.shape[0]/2], 'pix').astype(int)
+    sel_cen = Quantity([rt_sel_data.shape[1] / 2, rt_sel_data.shape[0] / 2], "pix").astype(int)
 
     # Using my annular mask function to make a nice background region, which will be corrected for instrumental
     #  stuff and interlopers in a second
@@ -344,24 +376,26 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     #  in the background mask
     # Bit ugly. However, we're applying the same slice that we did to the data arrays - cutting down the
     #  various masks to just those parts actually relevant to the radial profile being generated
-    sel_sensor_mask = rt.sensor_mask[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]]
-    sel_edge_mask = rt.edge_mask[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]]
-    sel_inter_mask = interloper_mask[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]]
-    corr_back_mask = (back_mask * sel_sensor_mask * sel_edge_mask * sel_inter_mask)
+    sel_sensor_mask = rt.sensor_mask[y_sel_lims[0] : y_sel_lims[1], x_sel_lims[0] : x_sel_lims[1]]
+    sel_edge_mask = rt.edge_mask[y_sel_lims[0] : y_sel_lims[1], x_sel_lims[0] : x_sel_lims[1]]
+    sel_inter_mask = interloper_mask[y_sel_lims[0] : y_sel_lims[1], x_sel_lims[0] : x_sel_lims[1]]
+    corr_back_mask = back_mask * sel_sensor_mask * sel_edge_mask * sel_inter_mask
 
     # Calculates the area of the background region in arcmin^2
     back_pix = np.sum(corr_back_mask, axis=(0, 1))
     back_area = back_pix * to_arcmin**2
     if back_area == 0:
-        raise ValueError("The background mask combined with the sensor mask is is all zeros, this is probably"
-                         " because you're looking at a large cluster at a low redshift.")
+        raise ValueError(
+            "The background mask combined with the sensor mask is is all zeros, this is probably"
+            " because you're looking at a large cluster at a low redshift."
+        )
     # Per pix is the background which has been divided by the number of pixels
     count_bg_per_pix = np.sum(im_sel_data * corr_back_mask, axis=(0, 1)) / back_pix
     # This is where the pixels have been converted into an actual area measurement in arcmin units
     countrate_bg_per_area = np.sum(rt_sel_data * corr_back_mask, axis=(0, 1)) / back_area
 
     # Defined here so we can use the where argument in np.sqrt
-    err_calc = (im_sel_data - count_bg_per_pix) + 2*count_bg_per_pix
+    err_calc = (im_sel_data - count_bg_per_pix) + 2 * count_bg_per_pix
     # Errors on the raw photon counts
     count_err_map = np.zeros(rt_sel_data.shape)
     # Turning those into count rate errors
@@ -381,8 +415,9 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     # This gets switched to false if the signal to noise conditions are not fulfilled
     calculate_profile = True
     while calculate_profile:
-        calculate_profile, br_prof, br_errs, ann_masks, inn_rads, \
-            out_rads, areas = _iterative_profile(ann_masks, inn_rads, out_rads)
+        calculate_profile, br_prof, br_errs, ann_masks, inn_rads, out_rads, areas = _iterative_profile(
+            ann_masks, inn_rads, out_rads
+        )
 
     if len(inn_rads) == 0:
         # This means that rebinning failed, and the profile couldn't be made greater than the minimum signal to noise
@@ -408,33 +443,71 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
 
     cen_rads = (final_inn_rads + final_out_rads) / 2
     deg_cen_rads = (deg_inn_rads + deg_out_rads) / 2
-    rad_err = (final_out_rads-final_inn_rads) / 2
+    rad_err = (final_out_rads - final_inn_rads) / 2
 
-    if outer_rad.unit.is_equivalent('deg'):
+    if outer_rad.unit.is_equivalent("deg"):
         deg_outer_rad = outer_rad.to("deg")
     elif outer_rad.unit == pix:
         deg_outer_rad = pix_rad_to_physical(rt, outer_rad, deg, centre, z, cosmo)
     else:
-        deg_outer_rad = rad_to_ang(outer_rad, z, cosmo).to('deg')
+        deg_outer_rad = rad_to_ang(outer_rad, z, cosmo).to("deg")
 
     deg_cen = rt.coord_conv(centre, deg)
     # Now I've finally implemented some profile product classes I can just smoosh everything into a convenient product
-    br_prof = SurfaceBrightness1D(rt, cen_rads, Quantity(br_prof, 'ct/(s*arcmin**2)'), deg_cen, pix_step, min_snr,
-                                  deg_outer_rad, rad_err, Quantity(br_errs, 'ct/(s*arcmin**2)'),
-                                  Quantity(countrate_bg_per_area, 'ct/(s*arcmin**2)'),
-                                  np.insert(out_rads, 0, inn_rads[0]), np.concatenate([back_inn_rad, back_out_rad]),
-                                  Quantity(areas, 'arcmin**2'), deg_cen_rads, succeeded, True, rt.telescope)
+    sb_prof = SurfaceBrightness1D(
+        rt,
+        cen_rads,
+        Quantity(br_prof, "ct/(s*arcmin**2)"),
+        deg_cen,
+        pix_step,
+        min_snr,
+        deg_outer_rad,
+        rad_err,
+        Quantity(br_errs, "ct/(s*arcmin**2)"),
+        Quantity(countrate_bg_per_area, "ct/(s*arcmin**2)"),
+        np.insert(out_rads, 0, inn_rads[0]),
+        np.concatenate([back_inn_rad, back_out_rad]),
+        Quantity(areas, "arcmin**2"),
+        deg_cen_rads,
+        succeeded,
+        True,
+        rt.telescope,
+    )
 
-    return br_prof, succeeded
+    return sb_prof, succeeded
 
 
 # TODO REWRITE THESE AT SOME POINT
-def pizza_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarray,
-                     centre: Quantity, rad: Quantity, num_slices: int = 4,
-                     z: float = None, pix_step: int = 1, cen_rad_units: UnitBase = arcsec,
-                     cosmo=DEFAULT_COSMO) -> Tuple[np.ndarray, Quantity, Quantity, np.float64, np.ndarray, np.ndarray]:
+def pizza_brightness(
+    im_prod: Image,
+    src_mask: np.ndarray,
+    back_mask: np.ndarray,
+    centre: Quantity,
+    rad: Quantity,
+    num_slices: int = 4,
+    z: float | None = None,
+    pix_step: int = 1,
+    cen_rad_units: UnitBase = arcsec,
+    cosmo: Cosmology = DEFAULT_COSMO,
+) -> tuple[np.ndarray, Quantity, Quantity, np.float64, np.ndarray, np.ndarray]:
+    """
+    A placeholder function for generating azimuthal sector ('pizza') radial surface brightness profiles from an XGA
+    Image or RateMap product. Support for pizza profile product objects has not yet been implemented.
 
-    raise NotImplementedError("The supporting infrastructure to allow pizza profile product objects hasn't been"
-                              " written yet sorry!")
-
-
+    :param Image/RateMap im_prod: The Image or RateMap product to measure the azimuthal surface brightness profiles
+        from.
+    :param np.ndarray src_mask: Mask array removing interloper sources from the analysis region.
+    :param np.ndarray back_mask: Mask array defining the background region.
+    :param Quantity centre: The central coordinates around which to divide the image into azimuthal sectors.
+    :param Quantity rad: The outer radius of the azimuthal profile analysis region.
+    :param int num_slices: The number of equal azimuthal slices ('pizza' sectors) to divide the region into.
+    :param float z: The redshift of the source, required if physical radius units are requested.
+    :param int pix_step: The width of each annulus in pixels, default is 1.
+    :param UnitBase cen_rad_units: The output units for the profile bin centre radii, default is arcsec.
+    :param Cosmology cosmo: An astropy cosmology instance for converting angular radii to physical units.
+    :return: Azimuthal radial surface brightness profiles and associated radii, background, and masks.
+    :rtype: Tuple[np.ndarray, Quantity, Quantity, np.float64, np.ndarray, np.ndarray]
+    """
+    raise NotImplementedError(
+        "The supporting infrastructure to allow pizza profile product objects hasn't been written yet sorry!"
+    )

@@ -1,12 +1,14 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 3:12 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+"""Functions for matching input source coordinates to available X-ray observations and source regions."""
+
 from __future__ import annotations
 
 import gc
 import os
 from copy import deepcopy
 from multiprocessing import Pool
-from typing import Union, Tuple, List, overload, Literal
+from typing import TYPE_CHECKING, Any, Literal, overload
 from warnings import warn
 
 import numpy as np
@@ -18,20 +20,29 @@ from pandas import DataFrame
 from regions import PixelRegion, Regions, SkyRegion
 from tqdm import tqdm
 
-from .. import (CENSUS, BLACKLIST, NUM_CORES, xga_conf, DEFAULT_TELE_SEARCH_DIST, SRC_REGION_COLOURS,
-                check_telescope_choices, PRETTY_TELESCOPE_NAMES)
-from ..exceptions import NoMatchFoundError, NoRegionsError, NoProductAvailableError
+from .. import (
+    BLACKLIST,
+    CENSUS,
+    DEFAULT_TELE_SEARCH_DIST,
+    NUM_CORES,
+    PRETTY_TELESCOPE_NAMES,
+    SRC_REGION_COLOURS,
+    check_telescope_choices,
+    xga_conf,
+)
+from ..exceptions import NoMatchFoundError, NoProductAvailableError, NoRegionsError, XGADeveloperError
+
+if TYPE_CHECKING:
+    from ..products.phot import ExpMap, Image
 
 # Global variables for worker processes to store pre-calculated coordinates and products
 #  This ensures the indexing and serialization costs are paid only once per worker, not once per chunk.
-WORKER_TEL_COORDS = {}
-WORKER_EXP_MAPS = {}
+WORKER_TEL_COORDS: dict[str, SkyCoord] = {}
+WORKER_EXP_MAPS: dict[str, dict[str, list[ExpMap]]] = {}
 
 
-def _worker_init(census_coords: dict = None, exp_map_dict: dict = None):
-    """
-    Initializer for worker processes to store pre-calculated data in global scope.
-    """
+def _worker_init(census_coords: dict | None = None, exp_map_dict: dict | None = None) -> None:
+    """Initializer for worker processes to store pre-calculated data in global scope."""
     global WORKER_TEL_COORDS
     global WORKER_EXP_MAPS
     if census_coords is not None:
@@ -40,7 +51,7 @@ def _worker_init(census_coords: dict = None, exp_map_dict: dict = None):
         WORKER_EXP_MAPS = exp_map_dict
 
 
-def _dist_from_source(search_ra: float, search_dec: float, cur_reg: SkyRegion):
+def _dist_from_source(search_ra: float, search_dec: float, cur_reg: SkyRegion) -> float:
     """
     Calculates the distance between the centre of a supplied region, and the position of the source. We use the
     Haversine formula to determine the separation on the surface of a sphere.
@@ -49,23 +60,33 @@ def _dist_from_source(search_ra: float, search_dec: float, cur_reg: SkyRegion):
     :rtype: float
     :return: Distance between region centre and source position, in degrees.
     """
-    r_ra = cur_reg.center.ra.to('radian').value
-    r_dec = cur_reg.center.dec.to('radian').value
+    r_ra = cur_reg.center.ra.to("radian").value
+    r_dec = cur_reg.center.dec.to("radian").value
 
     # The numpy trig functions want everything in radians, so we make sure that is the case
     search_ra = search_ra * (np.pi / 180)
     search_dec = search_dec * (np.pi / 180)
 
     # Then just use the Haversine formula to calculate the separation
-    hav_sep = 2 * np.arcsin(np.sqrt((np.sin((search_dec - r_dec) / 2) ** 2)
-                                    + np.cos(r_dec) * np.cos(search_dec) * np.sin((search_ra - r_ra) / 2) ** 2))
+    hav_sep = 2 * np.arcsin(
+        np.sqrt(
+            (np.sin((search_dec - r_dec) / 2) ** 2)
+            + np.cos(r_dec) * np.cos(search_dec) * np.sin((search_ra - r_ra) / 2) ** 2
+        )
+    )
     # Converted from radians to degrees - not using quantities in this internal function
     return hav_sep / (np.pi / 180)
 
 
-def _vectorized_separation_match(src_ra: np.ndarray, src_dec: np.ndarray, src_indices: np.ndarray,
-                                telescope: List[str], distance: dict,
-                                census_coords: dict = None, return_flat: bool = False) -> Tuple[dict, dict]:
+def _vectorized_separation_match(
+    src_ra: np.ndarray,
+    src_dec: np.ndarray,
+    src_indices: np.ndarray,
+    telescope: list[str],
+    distance: dict,
+    census_coords: dict | None = None,
+    return_flat: bool = False,
+) -> tuple[dict, dict]:
     """
     Internal function that performs vectorized coordinate matching for a set of sources against a set of telescopes.
     Used by both the serial and parallel paths of separation_match.
@@ -85,40 +106,41 @@ def _vectorized_separation_match(src_ra: np.ndarray, src_dec: np.ndarray, src_in
     """
     # Sparse results: {telescope: {global_index: matches_df}}
     if not return_flat:
-        tel_matches = {tel: {} for tel in telescope}
-        tel_bl = {tel: {} for tel in telescope}
+        tel_matches: Any = {tel: {} for tel in telescope}
+        tel_bl: Any = {tel: {} for tel in telescope}
     else:
         tel_matches = []
         tel_bl = []
 
     # We also need an array of SkyCoords for the sources
-    src_coords = SkyCoord(ra=src_ra, dec=src_dec, unit='deg')
+    src_coords = SkyCoord(ra=src_ra, dec=src_dec, unit="deg")
 
     for tel in telescope:
         # We grab the census for the current telescope, and drop any rows that have a NaN coordinate
-        rel_census = CENSUS[tel].dropna(subset=['RA_PNT', 'DEC_PNT'])
+        rel_census = CENSUS[tel].dropna(subset=["RA_PNT", "DEC_PNT"])
         if len(rel_census) == 0:
             continue
 
         # And the blacklist for the current telescope
         rel_bl = BLACKLIST[tel]
         # We identify all ObsIDs that are completely blacklisted for this telescope
-        excl_cols = [col for col in rel_bl.columns if 'EXCLUDE' in col]
+        excl_cols = [col for col in rel_bl.columns if "EXCLUDE" in col]
         if len(excl_cols) > 0:
-            is_fully_bl = np.logical_and.reduce([rel_bl[col].values == True for col in excl_cols])
+            is_fully_bl = np.logical_and.reduce([rel_bl[col].eq(True).values for col in excl_cols])
             fully_bl_df = rel_bl[is_fully_bl]
-            fully_bl_obsids = set(fully_bl_df['ObsID'].values)
+            fully_bl_obsids = set(fully_bl_df["ObsID"].values)
         else:
             fully_bl_df = DataFrame(columns=rel_bl.columns)
             fully_bl_obsids = set()
 
-        # We determine the coordinates for the census entries - either from passed argument, worker global, or manual calc
+        # We determine the coordinates for the census entries - either from passed argument, worker global,
+        #  or manual calc
         if census_coords is not None and tel in census_coords:
             tel_coords = census_coords[tel]
         elif tel in WORKER_TEL_COORDS:
             tel_coords = WORKER_TEL_COORDS[tel]
         else:
-            tel_coords = SkyCoord(ra=rel_census['RA_PNT'].values, dec=rel_census['DEC_PNT'].values, unit='deg')
+            tel_coords = SkyCoord(ra=rel_census["RA_PNT"].values, dec=rel_census["DEC_PNT"].values, unit="deg")
 
         # We need to make sure the search distance is a scalar if it only has one entry
         search_dist = distance[tel]
@@ -133,38 +155,38 @@ def _vectorized_separation_match(src_ra: np.ndarray, src_dec: np.ndarray, src_in
             # We create a dataframe of all matches
             matched_census = rel_census.iloc[idx_tel].copy()
             # We add the source index so we can group the results later
-            matched_census['src_idx'] = src_indices[idx_src]
+            matched_census["src_idx"] = src_indices[idx_src]
             # We also add the distance to the source
-            matched_census['dist'] = d2d.to('deg').value
+            matched_census["dist"] = d2d.to("deg").value
             # We also mark which ones are fully blacklisted
-            matched_census['is_bl'] = matched_census['ObsID'].isin(fully_bl_obsids)
+            matched_census["is_bl"] = matched_census["ObsID"].isin(fully_bl_obsids)
             # Add telescope name
-            matched_census['telescope'] = tel
+            matched_census["telescope"] = tel
 
             if not return_flat:
                 # We group by source index to process the results for each source
-                matched_groups = matched_census.groupby('src_idx')
+                matched_groups = matched_census.groupby("src_idx")
 
                 # We iterate through the sources that had at least one match
                 for s_idx, group in matched_groups:
                     # These are the observations that are not completely blacklisted
-                    matches_df = group.loc[~group['is_bl']].drop(columns=['src_idx', 'is_bl', 'telescope'])
+                    matches_df = group.loc[~group["is_bl"]].drop(columns=["src_idx", "is_bl", "telescope"])
                     # And these are the ones that were matching but are completely blacklisted
-                    bl_obs = group.loc[group['is_bl'], 'ObsID'].values
-                    all_excl_df = fully_bl_df[fully_bl_df['ObsID'].isin(bl_obs)]
+                    bl_obs = group.loc[group["is_bl"], "ObsID"].values
+                    all_excl_df = fully_bl_df[fully_bl_df["ObsID"].isin(bl_obs)]
 
                     tel_matches[tel][s_idx] = matches_df
                     tel_bl[tel][s_idx] = all_excl_df
             else:
                 # For flat results we just split into matches and blacklisted
-                tel_matches.append(matched_census.loc[~matched_census['is_bl']].drop(columns=['is_bl']))
+                tel_matches.append(matched_census.loc[~matched_census["is_bl"]].drop(columns=["is_bl"]))
 
-                bl_obs = matched_census.loc[matched_census['is_bl'], 'ObsID'].unique()
+                bl_obs = matched_census.loc[matched_census["is_bl"], "ObsID"].unique()
                 if len(bl_obs) > 0:
                     # We need to map src_idx back to the blacklist entries
                     # This is slightly complex because fully_bl_df doesn't have src_idx
-                    bl_matches = matched_census.loc[matched_census['is_bl'], ['src_idx', 'ObsID', 'dist', 'telescope']]
-                    bl_df = fully_bl_df.merge(bl_matches, on='ObsID')
+                    bl_matches = matched_census.loc[matched_census["is_bl"], ["src_idx", "ObsID", "dist", "telescope"]]
+                    bl_df = fully_bl_df.merge(bl_matches, on="ObsID")
                     tel_bl.append(bl_df)
 
     if return_flat:
@@ -172,21 +194,21 @@ def _vectorized_separation_match(src_ra: np.ndarray, src_dec: np.ndarray, src_in
             tel_matches = pd.concat(tel_matches, ignore_index=True)
         else:
             # Create an empty dataframe with correct columns if no matches
-            cols = list(CENSUS[telescope[0]].columns) + ['src_idx', 'dist', 'telescope']
+            cols = list(CENSUS[telescope[0]].columns) + ["src_idx", "dist", "telescope"]
             tel_matches = DataFrame(columns=cols)
 
         if len(tel_bl) > 0:
             tel_bl = pd.concat(tel_bl, ignore_index=True)
         else:
-            cols = list(BLACKLIST[telescope[0]].columns) + ['src_idx', 'dist', 'telescope']
+            cols = list(BLACKLIST[telescope[0]].columns) + ["src_idx", "dist", "telescope"]
             tel_bl = DataFrame(columns=cols)
 
     return tel_matches, tel_bl
 
 
-
-def _on_obs_id(ra: float, dec: float, exp_maps: Union[ExpMap, List[ExpMap]], s_idx: int = None) \
-        -> Tuple[float, float, np.ndarray, int]:
+def _on_obs_id(
+    ra: float, dec: float, exp_maps: ExpMap | list[ExpMap], s_idx: int | None = None
+) -> tuple[float, float, np.ndarray | None, int | None]:
     """
     Internal function used by the on_detector_match function to check whether a passed coordinate falls directly on a
     camera for a single (or set of) ObsID(s). Checks whether exposure time is 0 at the coordinate.
@@ -201,12 +223,6 @@ def _on_obs_id(ra: float, dec: float, exp_maps: Union[ExpMap, List[ExpMap]], s_i
     :return: The input RA, input dec, ObsID match array, and source index.
     :rtype: Tuple[float, float, np.ndarray, int]
     """
-
-    # Makes sure that the exp_maps variable is iterable, whether there is just one ExpMap or a set, makes it easier
-    #  to write just one piece of code that deals with either type of input
-    if isinstance(exp_maps, str):
-        obs_id = [exp_maps]
-
     # Possible that multiple exposure maps per ObsID-inst have been passed - we shall just make sure that we only
     #  use one per ObsID-Instrument
     exp_for_use = {}
@@ -227,7 +243,7 @@ def _on_obs_id(ra: float, dec: float, exp_maps: Union[ExpMap, List[ExpMap]], s_i
         for inst in exp_for_use[o]:
             ex = exp_for_use[o][inst]
             try:
-                if ex.get_exp(Quantity([ra, dec], 'deg')) != 0:
+                if ex.get_exp(Quantity([ra, dec], "deg")) != 0:
                     cur_det = True
                     # We unload the exposure map data from memory
                     ex.unload()
@@ -243,18 +259,21 @@ def _on_obs_id(ra: float, dec: float, exp_maps: Union[ExpMap, List[ExpMap]], s_i
         if cur_det:
             det.append(o)
 
-    # If the list of ObsIDs with data is empty then its set to None, otherwise turned into a numpy array
-    if len(det) == 0:
-        det = None
-    else:
-        det = np.array(det)
+    # If the list of ObsIDs with data is empty, then it's set to None, otherwise turned into a numpy array
+    det_arr: np.ndarray | None = None if len(det) == 0 else np.array(det)
 
-    return ra, dec, det, s_idx
+    return ra, dec, det_arr, s_idx
 
 
-def _in_region(ra: Union[float, List[float], np.ndarray], dec: Union[float, List[float], np.ndarray],
-               s_indices: Union[int, List[int], np.ndarray], obs_id: str,
-               telescope: str, im: 'Image', allowed_colours: List[str]) -> Tuple[str, dict]:
+def _in_region(
+    ra: float | list[float] | np.ndarray,
+    dec: float | list[float] | np.ndarray,
+    s_indices: int | list[int] | np.ndarray,
+    obs_id: str,
+    telescope: str,
+    im: Image,
+    allowed_colours: list[str],
+) -> tuple[str, dict]:
     """
     Internal function to search a particular ObsID's region files for matches to the sources defined in the RA
     and Dec arguments. This is achieved using the Regions module, and a region is a 'match' to a source if the
@@ -272,14 +291,13 @@ def _in_region(ra: Union[float, List[float], np.ndarray], dec: Union[float, List
         indices of the sources passed in), and the values are lists of region objects.
     :rtype: Tuple[str, dict]
     """
-
     if isinstance(ra, float):
         ra = [ra]
         dec = [dec]
         s_indices = [s_indices]
 
     # From that ObsID construct a path to the relevant region file using the XGA config
-    reg_path = xga_conf["{}_FILES".format(telescope.upper())]["region_file"].format(obs_id=obs_id)
+    reg_path = xga_conf[f"{telescope.upper()}_FILES"]["region_file"].format(obs_id=obs_id)
 
     # This dictionary stores the match regions for each coordinate
     matched = {}
@@ -290,12 +308,11 @@ def _in_region(ra: Union[float, List[float], np.ndarray], dec: Union[float, List
         #               "search.".format(obs_id))
 
         # Reading in the region file using the Regions module
-        og_ds9_regs = np.array(Regions.read(reg_path, format='ds9').regions)
+        og_ds9_regs = np.array(Regions.read(reg_path, format="ds9").regions)
 
         # There's nothing for us to do if there are no regions in the region file, so we continue onto the next
         #  possible ObsID match (if there is one) - same deal if there is no WCS information in the image
         if len(og_ds9_regs) != 0 and im.radec_wcs is not None:
-
             # Make sure to convert the regions to sky coordinates if they in pixels (just on principle in case
             #  any DO match and are returned to the user, I would much give them image agnostic regions).
             if any([isinstance(r, PixelRegion) for r in og_ds9_regs]):
@@ -316,8 +333,12 @@ def _in_region(ra: Union[float, List[float], np.ndarray], dec: Union[float, List
                     diff_sort = np.array([_dist_from_source(cur_ra, cur_dec, r) for r in ds9_regs]).argsort()
                     # Unfortunately due to a limitation of the regions module I think you need images
                     #  to do this contains match...
-                    within = np.array([reg.contains(SkyCoord(cur_ra, cur_dec, unit='deg'), im.radec_wcs)
-                                       for reg in ds9_regs[diff_sort[0:5]]])
+                    within = np.array(
+                        [
+                            reg.contains(SkyCoord(cur_ra, cur_dec, unit="deg"), im.radec_wcs)
+                            for reg in ds9_regs[diff_sort[0:5]]
+                        ]
+                    )
 
                     # Make sure to re-order the region list to match the sorted within array
                     ds9_regs = ds9_regs[diff_sort]
@@ -326,13 +347,16 @@ def _in_region(ra: Union[float, List[float], np.ndarray], dec: Union[float, List
                     within = np.pad(within, [0, len(diff_sort) - len(within)])
                     match_within = ds9_regs[within]
                 # In the case of only one region being in the list, we simplify the above expression
-                elif ds9_regs[0] is not None and len(ds9_regs) == 1 and \
-                        ds9_regs[0].contains(SkyCoord(cur_ra, cur_dec, unit='deg'), im.radec_wcs):
+                elif (
+                    ds9_regs[0] is not None
+                    and len(ds9_regs) == 1
+                    and ds9_regs[0].contains(SkyCoord(cur_ra, cur_dec, unit="deg"), im.radec_wcs)
+                ):
                     match_within = ds9_regs
                 else:
                     match_within = np.array([])
 
-                match_within = [r for r in match_within if r.visual['edgecolor'] in allowed_colours]
+                match_within = [r for r in match_within if r.visual["edgecolor"] in allowed_colours]
                 if len(match_within) != 0:
                     matched[s_idx] = match_within
 
@@ -342,7 +366,7 @@ def _in_region(ra: Union[float, List[float], np.ndarray], dec: Union[float, List
     return obs_id, matched
 
 
-def _process_flat_init_match(src_ra: np.ndarray, src_dec: np.ndarray, res_df: DataFrame):
+def _process_flat_init_match(src_ra: np.ndarray, src_dec: np.ndarray, res_df: DataFrame) -> tuple[dict, list, dict]:
     """
     An internal function that takes the flat results of a separation match and assembles the mapping of ObsIDs to
     source coordinates/indices.
@@ -354,22 +378,22 @@ def _process_flat_init_match(src_ra: np.ndarray, src_dec: np.ndarray, res_df: Da
         source coordinates/indices to ObsIDs (ObsIDs are the keys).
     :rtype: Tuple[dict, list, dict]
     """
-    telescopes = res_df['telescope'].unique().tolist()
+    telescopes = res_df["telescope"].unique().tolist()
     all_indices = list(range(len(src_ra)))
 
-    final_obs_ids = {tel: [] for tel in telescopes}
-    final_obs_id_srcs = {tel: {} for tel in telescopes}
+    final_obs_ids: dict[str, list] = {tel: [] for tel in telescopes}
+    final_obs_id_srcs: dict[str, dict] = {tel: {} for tel in telescopes}
 
     # Group by telescope first to simplify processing
-    for tel, tel_group in res_df.groupby('telescope'):
-        final_obs_ids[tel] = tel_group['ObsID'].unique().tolist()
+    for tel, tel_group in res_df.groupby("telescope"):
+        final_obs_ids[tel] = tel_group["ObsID"].unique().tolist()
 
         # We need RA, Dec, and global index for each match
         # We use a vectorized approach with sorting and splitting to avoid expensive groupby('ObsID')
         #  on potentially millions of rows
-        tel_group = tel_group.sort_values('ObsID')
-        obs_ids = tel_group['ObsID'].values
-        src_indices = tel_group['src_idx'].values
+        tel_group = tel_group.sort_values("ObsID")
+        obs_ids = tel_group["ObsID"].values
+        src_indices = tel_group["src_idx"].values
 
         # Identify where the ObsID changes to split the arrays
         unique_obs, split_indices = np.unique(obs_ids, return_index=True)
@@ -386,13 +410,14 @@ def _process_flat_init_match(src_ra: np.ndarray, src_dec: np.ndarray, res_df: Da
         split_data = np.split(combined_data, split_points)
 
         # Construct the mapping: {obs_id: [[ra, dec, global_idx], ...]}
-        final_obs_id_srcs[tel] = dict(zip(unique_obs, split_data))
+        final_obs_id_srcs[tel] = dict(zip(unique_obs, split_data, strict=False))
 
     return final_obs_ids, all_indices, final_obs_id_srcs
 
 
-def _process_init_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
-                        initial_results: dict):
+def _process_init_match(
+    src_ra: float | np.ndarray, src_dec: float | np.ndarray, initial_results: dict | list
+) -> tuple[list, dict, list, dict, dict, dict, dict]:
     """
     An internal function that takes the results of a separation match and assembles the lists of unique ObsIDs for
     the requested telescopes which are of interest to the coordinate(s) we're searching for data for. Sets of RA
@@ -434,7 +459,7 @@ def _process_init_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, 
     #  data (so if all the input coordinates fall near an observation) then numpy tries to be clever and just turns
     #  it into a 3D array - this throws off the rest of the code. As such I add a DataFrame at the end with no data
     #  to makes sure numpy doesn't screw me over like that.
-    initial_results += [{tel:  DataFrame(columns=initial_results[0][tel].columns) for tel in telescopes}]
+    initial_results += [{tel: DataFrame(columns=initial_results[0][tel].columns) for tel in telescopes}]
     for tel in telescopes:
         # This constructs a masking array that tells us which of the coordinates had any sort of return from
         #  separation_match for the current telescope - if further check is True then a coordinate fell near an
@@ -457,7 +482,7 @@ def _process_init_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, 
         # Nested list comprehension that extracts all the ObsIDs that are mentioned in the initial matching
         #  information, turning that into a set removes any duplicates, and then it gets turned back into a list.
         # This is just used to know what exposure maps need to be generated
-        obs_ids = list(set([o for t in rel_res for o in t['ObsID'].values]))
+        obs_ids = list(set([o for t in rel_res for o in t["ObsID"].values]))
         final_obs_ids[tel] = obs_ids
 
         # This assembles a big numpy array with every source coordinate and its ObsIDs (source coordinate will have one
@@ -465,9 +490,14 @@ def _process_init_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, 
         repeats = [len(cur_res) for cur_res in rel_res]
 
         if len(rel_res) != 0:
-            full_info = np.vstack([np.concatenate([cur_res['ObsID'].to_numpy() for cur_res in rel_res]),
-                                   np.repeat(rel_ra, repeats), np.repeat(rel_dec, repeats),
-                                   np.repeat(np.array(all_indices)[further_check[:-1]], repeats)]).T
+            full_info = np.vstack(
+                [
+                    np.concatenate([cur_res["ObsID"].to_numpy() for cur_res in rel_res]),
+                    np.repeat(rel_ra, repeats),
+                    np.repeat(rel_dec, repeats),
+                    np.repeat(np.array(all_indices)[further_check[:-1]], repeats),
+                ]
+            ).T
         else:
             full_info = np.array([])
 
@@ -477,7 +507,9 @@ def _process_init_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, 
     return initial_results, final_obs_ids, all_indices, final_res, final_ra, final_dec, final_obs_id_srcs
 
 
-def census_match(telescope: str | list | None = None, obs_ids: List[str] | dict | None = None) -> Tuple[dict[str, pd.DataFrame], dict[str, pd.DataFrame]]:
+def census_match(
+    telescope: str | list | None = None, obs_ids: list[str] | dict | None = None
+) -> tuple[dict[str, pd.DataFrame], dict[str, pd.DataFrame]]:
     """
     Returns XGA census entries (with ObsID, ra, and dec) that are not completely blacklisted, for the specified
     telescope(s). This is an extremely simple function, and could be largely replicated by just working with the
@@ -496,7 +528,6 @@ def census_match(telescope: str | list | None = None, obs_ids: List[str] | dict 
         completely excluded in the blacklist.
     :rtype: Tuple[dict, dict]
     """
-
     # This function checks the choices of telescopes, raising errors if there are problems, and returning a list of
     #  validated telescope names (even if there is only one).
     telescope = check_telescope_choices(telescope)
@@ -504,21 +535,28 @@ def census_match(telescope: str | list | None = None, obs_ids: List[str] | dict 
     # Here we parse the ObsID information (that the user can give us to limit the ObsIDs that should be considered
     #  for this particular 'match'), to try to account for the different formats of information that can be passed
     if obs_ids is not None and not isinstance(obs_ids, (dict, list)):
-        raise TypeError("The 'obs_ids' argument must either be None, a list of ObsIDs (for a single telescope), or a "
-                        "dictionary of lists of ObsIDs (for multiple telescopes).")
+        raise TypeError(
+            "The 'obs_ids' argument must either be None, a list of ObsIDs (for a single telescope), or a "
+            "dictionary of lists of ObsIDs (for multiple telescopes)."
+        )
     # In this case all observations are valid for all telescopes
     elif obs_ids is None:
         obs_ids = {tel: None for tel in telescope}
     # If a list of ObsIDs is passed, but multiple telescopes are under consideration, then we can't really know what
     #  to do so we have to throw an error
     elif obs_ids is not None and isinstance(obs_ids, list) and len(telescope) > 1:
-        raise TypeError("It is not possible to pass a list of ObsIDs when multiple telescopes have been passed, please "
-                        "pass a dictionary of lists of ObsIDs.")
+        raise TypeError(
+            "It is not possible to pass a list of ObsIDs when multiple telescopes have been passed, please "
+            "pass a dictionary of lists of ObsIDs."
+        )
     # However, if dictionary is passed for ObsIDs and doesn't relate to the telescopes we're looking at, we will
     #  be forgiving and just use all observations
     elif obs_ids is not None and isinstance(obs_ids, dict) and all([tel not in obs_ids for tel in telescope]):
-        warn("None of the telescopes specified were contained in the obs_ids dictionary; defaulting to using all "
-             "viable observations.", stacklevel=2)
+        warn(
+            "None of the telescopes specified were contained in the obs_ids dictionary; defaulting to using all "
+            "viable observations.",
+            stacklevel=2,
+        )
         obs_ids = {tel: None for tel in telescope}
     # Here ObsIDs for some telescopes are passed - so for the others we'll use all observations
     elif obs_ids is not None and isinstance(obs_ids, dict) and any([tel not in obs_ids for tel in telescope]):
@@ -536,21 +574,22 @@ def census_match(telescope: str | list | None = None, obs_ids: List[str] | dict 
         # We grab the observation census for the current telescope, and drop any rows that have a NaN coordinate (this
         #  can happen for calibration pointings, and pointings where X-ray telescopes weren't used, for telescopes that
         #  have non X-ray telescopes, like the OM on XMM).
-        rel_census = CENSUS[tel].dropna(subset=['RA_PNT', 'DEC_PNT']).copy()
+        rel_census = CENSUS[tel].dropna(subset=["RA_PNT", "DEC_PNT"]).copy()
         # To make the output entirely the same as the matches on position we add a NaN distance column
-        rel_census['dist'] = np.nan
+        rel_census["dist"] = np.nan
         if rel_obs_ids is not None:
             # If the ObsIDs under consideration for a particular telescope have been limited, then we include only
             #  those ObsIDs that the user wanted us to include
-            rel_census = rel_census[rel_census['ObsID'].isin(rel_obs_ids)]
+            rel_census = rel_census[rel_census["ObsID"].isin(rel_obs_ids)]
         rel_blacklist = BLACKLIST[tel]
 
         # Locate any ObsIDs that are in the blacklist, then test to see whether ALL the instruments are to be excluded
-        in_bl = rel_blacklist[rel_blacklist['ObsID'].isin(rel_census[rel_census["ObsID"].isin(rel_blacklist["ObsID"]
-                                                                                              )]['ObsID'])]
+        in_bl = rel_blacklist[
+            rel_blacklist["ObsID"].isin(rel_census[rel_census["ObsID"].isin(rel_blacklist["ObsID"])]["ObsID"])
+        ]
         # Firstly we locate the 'exclude_{INST NAME}' columns for this telescope's blacklist
-        excl_col = [col for col in in_bl.columns if 'EXCLUDE' in col]
-        all_excl = in_bl[np.logical_and.reduce([in_bl[excl] == True for excl in excl_col])]
+        excl_col = [col for col in in_bl.columns if "EXCLUDE" in col]
+        all_excl = in_bl[np.logical_and.reduce([in_bl[excl].eq(True) for excl in excl_col])]
 
         # These are the observations that have at  least some usable data.
         all_incl = rel_census[~rel_census["ObsID"].isin(all_excl["ObsID"])]
@@ -562,33 +601,47 @@ def census_match(telescope: str | list | None = None, obs_ids: List[str] | dict 
     return results, bl_results
 
 
-def _vectorized_separation_match_wrapper(args):
-    """
-    Wrapper for _vectorized_separation_match to be used with multiprocessing.imap.
-    """
+def _vectorized_separation_match_wrapper(args: tuple) -> tuple[dict | DataFrame, dict | DataFrame]:
+    """Wrapper for _vectorized_separation_match to be used with multiprocessing.imap."""
     return _vectorized_separation_match(*args)
 
 
 @overload
-def separation_match(src_ra: float | np.ndarray, src_dec: float| np.ndarray,
-                     distance: Quantity | dict | None = None, telescope: str | List[str] | None = None,
-                     num_cores: int = NUM_CORES, show_warnings: bool = True,
-                     return_flat: Literal[False] = False,) \
-        -> Tuple[dict[str, pd.DataFrame], dict[str, pd.DataFrame]]: ...
+def separation_match(
+    src_ra: float | np.ndarray,
+    src_dec: float | np.ndarray,
+    distance: Quantity | dict | None = None,
+    telescope: str | list[str] | None = None,
+    num_cores: int = NUM_CORES,
+    show_warnings: bool = True,
+    return_flat: Literal[False] = False,
+) -> tuple[
+    dict[str, pd.DataFrame] | list[dict[str, pd.DataFrame]],
+    dict[str, pd.DataFrame] | list[dict[str, pd.DataFrame]],
+]: ...
+
 
 @overload
-def separation_match(src_ra: float | np.ndarray, src_dec: float| np.ndarray,
-                     distance: Quantity | dict | None = None, telescope: str | List[str] | None = None,
-                     num_cores: int = NUM_CORES, show_warnings: bool = True,
-                     return_flat: Literal[True] = True,) \
-        -> Tuple[pd.DataFrame, pd.DataFrame]: ...
+def separation_match(
+    src_ra: float | np.ndarray,
+    src_dec: float | np.ndarray,
+    distance: Quantity | dict | None = None,
+    telescope: str | list[str] | None = None,
+    num_cores: int = NUM_CORES,
+    show_warnings: bool = True,
+    return_flat: Literal[True] = True,
+) -> tuple[pd.DataFrame, pd.DataFrame]: ...
 
 
-def separation_match(src_ra: float | np.ndarray, src_dec: float| np.ndarray,
-                     distance: Quantity | dict | None = None, telescope: str | List[str] | None = None,
-                     num_cores: int = NUM_CORES, show_warnings: bool = True,
-                     return_flat: bool = False) \
-        -> Tuple[Union[dict, List[dict], pd.DataFrame], Union[dict, List[dict], pd.DataFrame]]:
+def separation_match(
+    src_ra: float | np.ndarray,
+    src_dec: float | np.ndarray,
+    distance: Quantity | dict | None = None,
+    telescope: str | list[str] | None = None,
+    num_cores: int = NUM_CORES,
+    show_warnings: bool = True,
+    return_flat: bool = False,
+) -> tuple[dict | list[dict] | pd.DataFrame, dict | list[dict] | pd.DataFrame]:
     """
     Returns XGA census entries (with ObsID, ra, and dec) that match to the input coordinates (either a single
     coordinate or a set). This is done for a set of telescopes (or a single telescope), and a match is made by the
@@ -617,7 +670,6 @@ def separation_match(src_ra: float | np.ndarray, src_dec: float| np.ndarray,
         completely excluded in the blacklist.
     :rtype: Tuple[Union[dict, List[dict], pd.DataFrame], Union[dict, List[dict], pd.DataFrame]]
     """
-
     # This function checks the choices of telescopes, raising errors if there are problems, and returning a list of
     #  validated telescope names (even if there is only one).
     telescope = check_telescope_choices(telescope)
@@ -629,15 +681,20 @@ def separation_match(src_ra: float | np.ndarray, src_dec: float| np.ndarray,
         distance = {t: DEFAULT_TELE_SEARCH_DIST[t] for t in telescope}
     # Whereas if the user has passed a dictionary of values and NONE of the keys are for the requested telescopes,
     #  then I think they're probably confused, and we throw an error
-    elif type(distance) == dict and all([t not in distance for t in telescope]):
-        raise KeyError("When it is a dictionary, the 'distance' argument must contain an entry for every mission "
-                       "specified by 'telescope'.")
+    elif isinstance(distance, dict) and all([t not in distance for t in telescope]):
+        raise KeyError(
+            "When it is a dictionary, the 'distance' argument must contain an entry for every mission "
+            "specified by 'telescope'."
+        )
     # However if the passed dictionary contains SOME of the requested telescopes, then we fill in the rest with the
     #  default values - I think it is probably more convenient
-    elif type(distance) == dict and any([t not in distance for t in telescope]):
+    elif isinstance(distance, dict) and any([t not in distance for t in telescope]):
         if show_warnings:
-            warn("A dictionary of search distances that did not contain all requested telescopes has been "
-                 "passed, default values have been used for the missing telescopes.", stacklevel=2)
+            warn(
+                "A dictionary of search distances that did not contain all requested telescopes has been "
+                "passed, default values have been used for the missing telescopes.",
+                stacklevel=2,
+            )
         distance = {t: distance[t] if t in distance else DEFAULT_TELE_SEARCH_DIST[t] for t in telescope}
     elif isinstance(distance, Quantity):
         # Just make sure that distance is a dictionary whatever, to simplify the code later
@@ -653,7 +710,7 @@ def separation_match(src_ra: float | np.ndarray, src_dec: float| np.ndarray,
         src_dec = np.array([src_dec])
         num_cores = 1
     # Don't want one input being a single number and one being an array
-    elif type(src_ra) != type(src_dec):
+    elif type(src_ra) is not type(src_dec):
         raise TypeError("src_ra and src_dec must be the same type, either both floats or both arrays.")
 
     # The prog_dis variable controls whether the tqdm progress bar is displayed or not, don't want it to be there
@@ -667,22 +724,25 @@ def separation_match(src_ra: float | np.ndarray, src_dec: float| np.ndarray,
     #  this function is being called from
     if num_cores == 1:
         # The tqdm progress bar is handled here for the serial path
-        with tqdm(desc='Searching for telescope observations near source coordinates',
-                  total=1, disable=prog_dis) as onwards:
+        with tqdm(
+            desc="Searching for telescope observations near source coordinates", total=1, disable=prog_dis
+        ) as onwards:
             # Serial vectorized matching
             # Format: {telescope: {global_index: DataFrame}}
             all_indices = np.arange(len(src_ra))
-            sparse_results, sparse_bl = _vectorized_separation_match(src_ra, src_dec, all_indices, telescope, distance,
-                                                                    return_flat=return_flat)
+            sparse_results, sparse_bl = _vectorized_separation_match(
+                src_ra, src_dec, all_indices, telescope, distance, return_flat=return_flat
+            )
             onwards.update(1)
     else:
         # We pre-calculate the census coordinates for each telescope to avoid redundant indexing in workers
         pre_calc_census = {}
         for tel in telescope:
-            rel_census = CENSUS[tel].dropna(subset=['RA_PNT', 'DEC_PNT'])
+            rel_census = CENSUS[tel].dropna(subset=["RA_PNT", "DEC_PNT"])
             if len(rel_census) > 0:
-                pre_calc_census[tel] = SkyCoord(ra=rel_census['RA_PNT'].values, dec=rel_census['DEC_PNT'].values,
-                                                unit='deg')
+                pre_calc_census[tel] = SkyCoord(
+                    ra=rel_census["RA_PNT"].values, dec=rel_census["DEC_PNT"].values, unit="deg"
+                )
 
         # Determine chunk size - aiming for ~4 chunks per core
         chunk_size = max(1, len(src_ra) // (num_cores * 4))
@@ -694,8 +754,10 @@ def separation_match(src_ra: float | np.ndarray, src_dec: float| np.ndarray,
         idx_chunks = np.array_split(np.arange(len(src_ra)), num_chunks)
 
         # Prepare arguments for the map function
-        map_args = [(ra_chunks[i], dec_chunks[i], idx_chunks[i], telescope, distance, None, return_flat)
-                    for i in range(num_chunks)]
+        map_args = [
+            (ra_chunks[i], dec_chunks[i], idx_chunks[i], telescope, distance, None, return_flat)
+            for i in range(num_chunks)
+        ]
 
         # We set up the pool with an initializer to store the census coordinates in worker global scope
         if not return_flat:
@@ -705,9 +767,10 @@ def separation_match(src_ra: float | np.ndarray, src_dec: float| np.ndarray,
             sparse_results = []
             sparse_bl = []
 
-        with tqdm(desc="Searching for telescope observations near source coordinates",
-                  total=num_chunks) as onwards, Pool(num_cores, initializer=_worker_init,
-                                                     initargs=(pre_calc_census,)) as pool:
+        with (
+            tqdm(desc="Searching for telescope observations near source coordinates", total=num_chunks) as onwards,
+            Pool(num_cores, initializer=_worker_init, initargs=(pre_calc_census,)) as pool,
+        ):
             # imap to process chunks and preserve order while supporting a progress bar
             for chunk_res, chunk_bl in pool.imap(_vectorized_separation_match_wrapper, map_args):
                 # Merge the sparse results from each chunk
@@ -726,9 +789,9 @@ def separation_match(src_ra: float | np.ndarray, src_dec: float| np.ndarray,
                 sparse_bl = pd.concat(sparse_bl, ignore_index=True)
             else:
                 # Should have been handled in _vectorized_separation_match but just in case
-                cols = list(CENSUS[telescope[0]].columns) + ['src_idx', 'dist', 'telescope']
+                cols = list(CENSUS[telescope[0]].columns) + ["src_idx", "dist", "telescope"]
                 sparse_results = DataFrame(columns=cols)
-                cols = list(BLACKLIST[telescope[0]].columns) + ['src_idx', 'dist', 'telescope']
+                cols = list(BLACKLIST[telescope[0]].columns) + ["src_idx", "dist", "telescope"]
                 sparse_bl = DataFrame(columns=cols)
 
     if return_flat:
@@ -736,22 +799,27 @@ def separation_match(src_ra: float | np.ndarray, src_dec: float| np.ndarray,
         # But we still need to check for matches to raise the NoMatchFoundError
         if len(sparse_results) == 0:
             if len(src_ra) == 1:
-                raise NoMatchFoundError("No {t} observations found within {a} of ra={r} "
-                                        "dec={d}.".format(r=round(src_ra[0], 4),
-                                                          d=round(src_dec[0], 4),
-                                                          a='/'.join([str(distance[t].to('deg')) for t in telescope]),
-                                                          t='/'.join(telescope)))
+                raise NoMatchFoundError(
+                    "No {t} observations found within {a} of ra={r} dec={d}.".format(
+                        r=round(src_ra[0], 4),
+                        d=round(src_dec[0], 4),
+                        a="/".join([str(distance[t].to("deg")) for t in telescope]),
+                        t="/".join(telescope),
+                    )
+                )
             else:
-                raise NoMatchFoundError("No {t} observation found within {a} of any input coordinate "
-                                        "pairs.".format(a='/'.join([str(distance[t].to('deg')) for t in telescope]),
-                                                        t='/'.join(telescope)))
+                raise NoMatchFoundError(
+                    "No {t} observation found within {a} of any input coordinate pairs.".format(
+                        a="/".join([str(distance[t].to("deg")) for t in telescope]), t="/".join(telescope)
+                    )
+                )
         return sparse_results, sparse_bl
 
     # --- Assembly Pass ---
 
     # We now assemble the final result list of dictionaries from the sparse maps.
     # We use a single empty template for sources with no matches to save time/memory.
-    empty_res = {tel: DataFrame(columns=list(CENSUS[tel].columns) + ['dist']) for tel in telescope}
+    empty_res = {tel: DataFrame(columns=list(CENSUS[tel].columns) + ["dist"]) for tel in telescope}
     empty_bl = {tel: DataFrame(columns=BLACKLIST[tel].columns) for tel in telescope}
 
     # Final lists to return
@@ -786,25 +854,29 @@ def separation_match(src_ra: float | np.ndarray, src_dec: float| np.ndarray,
         # As in this case there is only one source, we can include more information in our error message telling
         #  the user that there are no matches
         if tot_res == 0:
-            raise NoMatchFoundError("No {t} observations found within {a} of ra={r} "
-                                    "dec={d}.".format(r=round(src_ra[0], 4),
-                                                      d=round(src_dec[0], 4),
-                                                      a='/'.join([str(distance[t].to('deg')) for t in telescope]),
-                                                      t='/'.join(telescope)))
+            raise NoMatchFoundError(
+                "No {t} observations found within {a} of ra={r} dec={d}.".format(
+                    r=round(src_ra[0], 4),
+                    d=round(src_dec[0], 4),
+                    a="/".join([str(distance[t].to("deg")) for t in telescope]),
+                    t="/".join(telescope),
+                )
+            )
     # If all the dataframes in the results list are length zero, then none of the coordinates has a
     #  valid ObsID
     elif all([sum([len(r[tel]) for tel in r]) == 0 for r in results]):
-        raise NoMatchFoundError("No {t} observation found within {a} of any input coordinate "
-                                "pairs.".format(a='/'.join([str(distance[t].to('deg')) for t in telescope]),
-                                                t='/'.join(telescope)))
+        raise NoMatchFoundError(
+            "No {t} observation found within {a} of any input coordinate pairs.".format(
+                a="/".join([str(distance[t].to("deg")) for t in telescope]), t="/".join(telescope)
+            )
+        )
 
     return results, bl_results
 
 
-def _vectorized_on_detector_match(telescope: List[str],
-                                 obs_id_chunks: dict,
-                                 obs_to_src_indices: dict,
-                                 exp_map_dict: dict = None) -> list:
+def _vectorized_on_detector_match(
+    telescope: list[str], obs_id_chunks: dict, obs_to_src_indices: dict, exp_map_dict: dict | None = None
+) -> list:
     """
     Internal function that performs vectorized detector matching for a set of ObsIDs.
     Used by both the serial and parallel paths of on_detector_match.
@@ -846,7 +918,7 @@ def _vectorized_on_detector_match(telescope: List[str],
 
             # Coordinates to check for this ObsID - taken directly from the info array
             #  to avoid passing massive coordinate arrays to workers
-            coords = Quantity(info[:, :2], 'deg')
+            coords = Quantity(info[:, :2], "deg")
 
             # We use a set to keep track of which sources in the sample fall on the detector for this ObsID
             detected_indices = set()
@@ -854,7 +926,7 @@ def _vectorized_on_detector_match(telescope: List[str],
                 # We convert to pixel coordinates, but ignore any that fall outside the image
                 # This avoids the ValueError mentioned by the user
                 # We use atleast_2d to ensure that we can index it consistently even for a single source
-                pix_coords = np.atleast_2d(ex.coord_conv(coords, 'pix', ignore_bad_pix_coord=True).value)
+                pix_coords = np.atleast_2d(ex.coord_conv(coords, "pix", ignore_bad_pix_coord=True).value)
 
                 # We manually check for valid pixel coordinates
                 # pix_coords is (N, 2) array where [:, 0] is x and [:, 1] is y
@@ -884,17 +956,18 @@ def _vectorized_on_detector_match(telescope: List[str],
     return matches
 
 
-
-def _vectorized_on_detector_match_wrapper(args):
-    """
-    Wrapper for _vectorized_on_detector_match to be used with multiprocessing.imap.
-    """
+def _vectorized_on_detector_match_wrapper(args: tuple) -> list:
+    """Wrapper for _vectorized_on_detector_match to be used with multiprocessing.imap."""
     return _vectorized_on_detector_match(*args)
 
 
-def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
-                      distance: Union[Quantity, dict] = None, telescope: Union[str, List[str]] = None,
-                      num_cores: int = NUM_CORES) -> Union[dict, np.ndarray]:
+def on_detector_match(
+    src_ra: float | np.ndarray,
+    src_dec: float | np.ndarray,
+    distance: Quantity | dict | None = None,
+    telescope: str | list[str] | None = None,
+    num_cores: int = NUM_CORES,
+) -> dict | np.ndarray:
     """
     A matching function that checks whether supplied coordinates lie on a detector by using exposure maps to determine
     the exposure time at the supplied coordinates. Of course, this means that we need an idea of which observations
@@ -961,14 +1034,15 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
     # We run exposure map generation for the ObsIDs - this ensures they are all on disk before workers start
     #  We use a unified multi-telescope function for this.
     from ..generate.multitelescope.phot import all_telescope_expmaps
+
     all_telescope_expmaps(obs_src, num_cores=num_cores, telescope=telescope)
 
     # We retrieve all ExpMap objects and organize them into a lookup dictionary
     # format: {tel: {obs_id: [ExpMaps]}}
     # We retrieve them in bulk per telescope to avoid many get_products calls
-    exp_map_dict = {tel: {} for tel in obs_src.telescopes}
+    exp_map_dict: dict[str, dict[str, list]] = {tel: {} for tel in obs_src.telescopes}
     for tel in obs_src.telescopes:
-        all_exps = obs_src.get_products('expmap', telescope=tel, just_obj=False)
+        all_exps = obs_src.get_products("expmap", telescope=tel, just_obj=False)
         for out in all_exps:
             # out is [telescope, obs_id, inst, info_key, obj]
             o = out[1]
@@ -980,7 +1054,7 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
     all_obs_pairs = [(tel, o) for tel in obs_src.telescopes for o in obs_src.obs_ids[tel]]
 
     if num_cores == 1:
-        with tqdm(desc='Ensuring coordinates fall on detector', total=1, disable=prog_dis) as onwards:
+        with tqdm(desc="Ensuring coordinates fall on detector", total=1, disable=prog_dis) as onwards:
             # Serial vectorized matching on all ObsIDs at once
             # We wrap the pairs in a dict format the function expects
             obs_id_chunks = {tel: obs_src.obs_ids[tel] for tel in obs_src.telescopes}
@@ -992,16 +1066,16 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
         chunk_size = max(1, num_obs // (num_cores * 4))
 
         # Split the pairs into chunks
-        pair_chunks = [all_obs_pairs[i:i + chunk_size] for i in range(0, num_obs, chunk_size)]
+        pair_chunks = [all_obs_pairs[i : i + chunk_size] for i in range(0, num_obs, chunk_size)]
 
         # Prepare arguments for the map function
         # We slice the dictionaries so each task only carries the metadata it needs
         map_args = []
         for chunk in pair_chunks:
             # Group pairs back into {tel: [obs_ids]} for the worker
-            chunk_obs_id_dict = {}
-            chunk_obs_to_src = {}
-            chunk_exp_maps = {}
+            chunk_obs_id_dict: dict[str, list] = {}
+            chunk_obs_to_src: dict[str, dict] = {}
+            chunk_exp_maps: dict[str, dict] = {}
             for tel, o in chunk:
                 if tel not in chunk_obs_id_dict:
                     chunk_obs_id_dict[tel] = []
@@ -1016,15 +1090,17 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
         # We pre-calculate the census coordinates for each telescope to avoid redundant indexing in workers
         pre_calc_census = {}
         for tel in telescope:
-            rel_census = CENSUS[tel].dropna(subset=['RA_PNT', 'DEC_PNT'])
+            rel_census = CENSUS[tel].dropna(subset=["RA_PNT", "DEC_PNT"])
             if len(rel_census) > 0:
-                pre_calc_census[tel] = SkyCoord(ra=rel_census['RA_PNT'].values, dec=rel_census['DEC_PNT'].values,
-                                                unit='deg')
+                pre_calc_census[tel] = SkyCoord(
+                    ra=rel_census["RA_PNT"].values, dec=rel_census["DEC_PNT"].values, unit="deg"
+                )
 
         all_matches = []
-        with tqdm(desc="Ensuring coordinates fall on detector",
-                  total=len(map_args), disable=prog_dis) as onwards, Pool(num_cores, initializer=_worker_init,
-                                                                         initargs=(pre_calc_census,)) as pool:
+        with (
+            tqdm(desc="Ensuring coordinates fall on detector", total=len(map_args), disable=prog_dis) as onwards,
+            Pool(num_cores, initializer=_worker_init, initargs=(pre_calc_census,)) as pool,
+        ):
             for chunk_matches in pool.imap(_vectorized_on_detector_match_wrapper, map_args):
                 # Merge flat results [(src_idx, tel, obs_id), ...]
                 all_matches.extend(chunk_matches)
@@ -1060,15 +1136,17 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
         # We need to make sure we check if results[tel] is not None
         tot_res = 0
         for tel in results:
-             if results[tel] is not None:
-                  tot_res += len(results[tel])
+            if results[tel] is not None:
+                tot_res += len(results[tel])
 
         # As in this case there is only one source, we can include more information in our error message telling
         #  the user that there are no matches
         if tot_res == 0:
-            raise NoMatchFoundError("The coordinates ra={r} dec={d} do not fall on any {t} "
-                                    "observations.".format(r=round(src_ra[0], 4), d=round(src_dec[0], 4),
-                                                           t='/'.join(telescope)))
+            raise NoMatchFoundError(
+                "The coordinates ra={r} dec={d} do not fall on any {t} observations.".format(
+                    r=round(src_ra[0], 4), d=round(src_dec[0], 4), t="/".join(telescope)
+                )
+            )
     # If all the entries in the results list are None for all telescopes
     else:
         # Check if any source has any detections
@@ -1082,18 +1160,23 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
                 break
 
         if not any_detections:
-            raise NoMatchFoundError("No coordinate pairs fall on any {t} observations.".format(t='/'.join(telescope)))
+            raise NoMatchFoundError("No coordinate pairs fall on any {t} observations.".format(t="/".join(telescope)))
 
     # If it was an array input, return as array
     if not isinstance(results, dict):
-         results = np.array(results)
+        return np.array(results)
 
     return results
 
 
-def region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],  src_type: Union[str, List[str]],
-                 distance: Union[Quantity, dict] = None, telescope: Union[str, list] = None,
-                 num_cores: int = NUM_CORES) -> np.ndarray:
+def region_match(
+    src_ra: float | np.ndarray,
+    src_dec: float | np.ndarray,
+    src_type: str | list[str],
+    distance: Quantity | dict | None = None,
+    telescope: str | list | None = None,
+    num_cores: int = NUM_CORES,
+) -> np.ndarray:
     """
     A function which, if XGA has been configured with access to pre-generated region files, will search for region
     matches for a set of source coordinates passed in by the user. A region match is defined as when a source
@@ -1133,8 +1216,9 @@ def region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
     # Also checks to make sure that no illegal values for src_type have been passed (SRC_REGION_COLOURS basically
     #  maps from region colours to source types).
     if any([st not in SRC_REGION_COLOURS for st in src_type]):
-        raise ValueError("The values supported for 'src_type' are "
-                         "{}".format(', '.join(list(SRC_REGION_COLOURS.keys()))))
+        raise ValueError(
+            "The values supported for 'src_type' are {}".format(", ".join(list(SRC_REGION_COLOURS.keys())))
+        )
 
     # Ugly but oh well, constructs the list of region colours that we can match to from the source types
     # that the user chose
@@ -1144,7 +1228,7 @@ def region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
 
     # We ensure that the RA and Decs are in arrays, even if there is only one coordinate - also in the case of a
     #  single coordinate we set the number of cores to one
-    if type(src_ra) != type(src_dec):
+    if type(src_ra) is not type(src_dec):
         raise TypeError("'src_ra' and 'src_dec' arguments must be the same type; either floats or arrays.")
     elif isinstance(src_ra, float):
         src_ra = np.array([src_ra])
@@ -1170,9 +1254,9 @@ def region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
     #  region file information available in the configuration section
     tel_reg_avail = []
     for tel in obs_src.telescopes:
-        rel_sec = "{t}_FILES".format(t=tel.upper())
+        rel_sec = f"{tel.upper()}_FILES"
 
-        default_reg = "/this/is/optional/{t}_obs/regions/{obs_id}/regions.reg".format(t=tel, obs_id='{obs_id}')
+        default_reg = "/this/is/optional/{t}_obs/regions/{obs_id}/regions.reg".format(t=tel, obs_id="{obs_id}")
         # Checks to make sure that the user has actually pointed XGA at a set of region files (and images they were
         #  generated from, in case said region files are in pixel coordinates).
         if xga_conf[rel_sec]["region_file"] == default_reg:
@@ -1181,17 +1265,20 @@ def region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
             tel_reg_avail.append(True)
 
     if not any(tel_reg_avail):
-        raise NoRegionsError("The configuration file does not contain information on region files for any relevant "
-                             "telescope, so this function cannot continue.")
+        raise NoRegionsError(
+            "The configuration file does not contain information on region files for any relevant "
+            "telescope, so this function cannot continue."
+        )
 
     # This is the dictionary in which matching information is stored
     # Top level keys are now source indices
-    reg_match_info = {idx: {} for idx in all_repr}
+    reg_match_info: dict[int, dict] = {idx: {} for idx in all_repr}
     # If the user only wants us to use one core, then we don't make a Pool because that would just add overhead
     if num_cores == 1:
         for tel in obs_src.telescopes:
-            with tqdm(desc="Searching for {t} ObsID region matches".format(t=PRETTY_TELESCOPE_NAMES[tel]),
-                      total=len(uniq_obs_ids[tel])) as onwards:
+            with tqdm(
+                desc=f"Searching for {PRETTY_TELESCOPE_NAMES[tel]} ObsID region matches", total=len(uniq_obs_ids[tel])
+            ) as onwards:
                 # Here we iterate through the ObsIDs that the initial match found to possibly have sources on - I
                 #  considered this more efficient than iterating through the sources and possibly reading in WCS
                 #  information for the same ObsID in many different processes (the non-parallelised version just calls
@@ -1208,13 +1295,18 @@ def region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
                     try:
                         rel_im = obs_src.get_images(cur_obs_id, telescope=tel)[0]
                     except NoProductAvailableError:
-                        warn("No pre-existing image can be found for {t}-{o}; this is required for checking if regions "
-                             "and coordinates intersect.".format(t=tel, o=cur_obs_id), stacklevel=2)
+                        warn(
+                            f"No pre-existing image can be found for {tel}-{cur_obs_id}; this is required for "
+                            "checking if regions and coordinates intersect.",
+                            stacklevel=2,
+                        )
                         onwards.update(1)
                         continue
 
                     # Runs the matching function
-                    match_inf = _in_region(cur_ra_arr, cur_dec_arr, cur_idx_arr, cur_obs_id, tel, rel_im, allowed_colours)
+                    match_inf = _in_region(
+                        cur_ra_arr, cur_dec_arr, cur_idx_arr, cur_obs_id, tel, rel_im, allowed_colours
+                    )
                     # Adds to the match storage dictionary, but so that the top keys are source representations, and
                     #  the lower level keys are ObsIDs
                     for s_idx in match_inf[1]:
@@ -1227,34 +1319,40 @@ def region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
     else:
         for tel in obs_src.telescopes:
             # This is to store exceptions that are raised in separate processes, so they can all be raised at the end.
-            search_errors = []
+            search_errors: list[BaseException] = []
             # We setup a Pool with the number of cores the user specified (or the default).
-            with tqdm(desc="Searching for {t} ObsID region matches".format(t=PRETTY_TELESCOPE_NAMES[tel]),
-                      total=len(uniq_obs_ids[tel])) as onwards, Pool(num_cores) as pool:
+            with (
+                tqdm(
+                    desc=f"Searching for {PRETTY_TELESCOPE_NAMES[tel]} ObsID region matches",
+                    total=len(uniq_obs_ids[tel]),
+                ) as onwards,
+                Pool(num_cores) as pool,
+            ):
                 # This is called when a match process finished successfully, and the results need storing
-                def match_loop_callback(match_info):
-                    nonlocal onwards  # The progress bar will need updating
+                def match_loop_callback(
+                    match_info: tuple[str, dict], cur_tel: str = tel, cur_onwards: tqdm = onwards
+                ) -> None:
                     nonlocal reg_match_info
                     # Adds to the match storage dictionary, but so that the top keys are source indices, and
                     #  the lower level keys are ObsIDs
                     for s_idx in match_info[1]:
                         if s_idx not in reg_match_info:
-                             reg_match_info[s_idx] = {}
+                            reg_match_info[s_idx] = {}
 
-                        if tel not in reg_match_info[s_idx]:
-                            reg_match_info[s_idx][tel] = {match_info[0]: match_info[1][s_idx]}
+                        if cur_tel not in reg_match_info[s_idx]:
+                            reg_match_info[s_idx][cur_tel] = {match_info[0]: match_info[1][s_idx]}
                         else:
-                            reg_match_info[s_idx][tel][match_info[0]] = match_info[1][s_idx]
+                            reg_match_info[s_idx][cur_tel][match_info[0]] = match_info[1][s_idx]
 
-                    onwards.update(1)
+                    cur_onwards.update(1)
 
                 # This is called when a process errors out.
-                def error_callback(err):
-                    nonlocal onwards
-                    nonlocal search_errors
+                def error_callback(
+                    err: BaseException, cur_onwards: tqdm = onwards, cur_errors: list = search_errors
+                ) -> None:
                     # Stores the exception object in a list for later.
-                    search_errors.append(err)
-                    onwards.update(1)
+                    cur_errors.append(err)
+                    cur_onwards.update(1)
 
                 for cur_obs_id in obs_id_srcs[tel]:
                     if cur_obs_id not in obs_src.obs_ids[tel]:
@@ -1271,29 +1369,38 @@ def region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
                     try:
                         rel_im = obs_src.get_images(cur_obs_id, telescope=tel)[0]
                     except NoProductAvailableError:
-                        warn("No pre-existing image can be found for {t}-{o}; this is required for checking if regions "
-                             "and coordinates intersect.".format(t=tel, o=cur_obs_id), stacklevel=2)
+                        warn(
+                            f"No pre-existing image can be found for {tel}-{cur_obs_id}; this is required for "
+                            "checking if regions and coordinates intersect.",
+                            stacklevel=2,
+                        )
                         onwards.update(1)
                         continue
 
                     # Runs the matching function
-                    # match_inf = _in_region(cur_ra_arr, cur_dec_arr, cur_idx_arr, cur_obs_id, tel, rel_im, allowed_colours)
-                    pool.apply_async(_in_region, args=(cur_ra_arr, cur_dec_arr, cur_idx_arr, cur_obs_id,  tel, rel_im,
-                                                       allowed_colours),
-                                     callback=match_loop_callback, error_callback=error_callback)
+                    # match_inf = _in_region(
+                    #     cur_ra_arr, cur_dec_arr, cur_idx_arr, cur_obs_id, tel, rel_im, allowed_colours
+                    # )
+                    pool.apply_async(
+                        _in_region,
+                        args=(cur_ra_arr, cur_dec_arr, cur_idx_arr, cur_obs_id, tel, rel_im, allowed_colours),
+                        callback=match_loop_callback,
+                        error_callback=error_callback,
+                    )
 
                 pool.close()  # No more tasks can be added to the pool
                 pool.join()  # Joins the pool, the code will only move on once the pool is empty.
 
             # If any errors occurred during the matching process, they are all raised here as a grouped exception
             if len(search_errors) != 0:
-                raise ExceptionGroup("The following exceptions were raised in the multi-threaded region finder",
-                                     search_errors)
+                raise ExceptionGroup(
+                    "The following exceptions were raised in the multi-threaded region finder", search_errors
+                )
 
     # This formats the match and no-match information so that the output is the same length and order as the input
     #  source lists
     to_return = []
-    for s_idx in all_repr: # all_repr is now range(len(src_ra))
+    for s_idx in all_repr:  # all_repr is now range(len(src_ra))
         to_ret_en = {}
         if s_idx in reg_match_info:
             for tel in reg_match_info[s_idx]:
@@ -1306,14 +1413,15 @@ def region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
             to_return.append(None)
 
     # Makes it into an array rather than a list
-    to_return = np.array(to_return)
-
-    return to_return
+    return np.array(to_return)
 
 
-def simple_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
-                     distance: Quantity = Quantity(30.0, 'arcmin'), num_cores: int = NUM_CORES) \
-        -> Tuple[Union[DataFrame, List[DataFrame]], Union[DataFrame, List[DataFrame]]]:
+def simple_xmm_match(
+    src_ra: float | np.ndarray,
+    src_dec: float | np.ndarray,
+    distance: Quantity = Quantity(30.0, "arcmin"),
+    num_cores: int = NUM_CORES,
+) -> tuple[DataFrame | list[DataFrame], DataFrame | list[DataFrame]]:
     """
     Returns XMM ObsIDs within a given distance from the input ra and dec values.
 
@@ -1329,18 +1437,23 @@ def simple_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
         containing information on observations that would have been a match, but that are in the blacklist.
     :rtype: Tuple[Union[DataFrame, List[DataFrame]], Union[DataFrame, List[DataFrame]]]
     """
-    warn("The XGA 'simple_xmm_match' function is now a wrapper for the more general 'separation_match' "
-         "function, which can search multiple telescopes, and will be removed soon.", stacklevel=2)
+    warn(
+        "The XGA 'simple_xmm_match' function is now a wrapper for the more general 'separation_match' "
+        "function, which can search multiple telescopes, and will be removed soon.",
+        stacklevel=2,
+    )
     # This is now a wrapper for the new separation_match function, because 'simple_xmm_match' is the equivalent
     #  from when XGA only supported XMM - this function will eventually be removed.
-    res, bl_res = separation_match(src_ra, src_dec, distance, 'xmm', num_cores)
+    res, bl_res = separation_match(src_ra, src_dec, distance, "xmm", num_cores)
     # Two possible outputs, depending on whether there is a single input coordinate or multiple - the return needs
     #  to be exactly as it would have been from the original, so we make sure there are no dictionaries
-    if isinstance(res, list):
-        res = [r['xmm'] for r in res]
-        bl_res = [br['xmm'] for br in bl_res]
+    if isinstance(res, list) and isinstance(bl_res, list):
+        xmm_res: DataFrame | list[DataFrame] = [r["xmm"] for r in res]
+        xmm_bl_res: DataFrame | list[DataFrame] = [br["xmm"] for br in bl_res]
     else:
-        res = res['xmm']
-        bl_res = bl_res['xmm']
+        if not isinstance(res, dict) or not isinstance(bl_res, dict):
+            raise XGADeveloperError("Expected separation_match results to both be dicts or both be lists.")
+        xmm_res = res["xmm"]
+        xmm_bl_res = bl_res["xmm"]
 
-    return res, bl_res
+    return xmm_res, xmm_bl_res

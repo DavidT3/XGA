@@ -1,9 +1,14 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 9:50 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+"""
+This module defines the XGA Spectrum and AnnularSpectra product classes for storing and interacting with
+X-ray spectra and their associated response and background files.
+"""
 
 import os
 import re
 from copy import deepcopy
+from typing import Any
 from warnings import warn
 
 import numpy as np
@@ -23,6 +28,7 @@ from ..exceptions import (
     NotAssociatedError,
     ParameterNotAssociatedError,
     ProductNotUsableError,
+    XGADeveloperError,
     XGASetIDError,
 )
 from ..products.profile import APECNormalisation1D, Generic1D, ProjectedGasMetallicity1D, ProjectedGasTemperature1D
@@ -88,7 +94,7 @@ class Spectrum(BaseProduct):
         b_arf_path: str = "",
         telescope: str | None = None,
         check_exists: bool = True,
-    ):
+    ) -> None:
         """
         The init of the Spectrum class, sets up both the base product behind the Spectrum and the specific
         information/abilities that a spectrum needs.
@@ -147,7 +153,7 @@ class Spectrum(BaseProduct):
             self._why_unusable.append("BackSpecPathDoesNotExist")
 
         if b_rmf_path != "" and os.path.exists(b_rmf_path):
-            self._back_rmf = b_rmf_path
+            self._back_rmf: str | None = b_rmf_path
         elif b_rmf_path == "":
             self._back_rmf = None
         else:
@@ -156,7 +162,7 @@ class Spectrum(BaseProduct):
             self._why_unusable.append("BackRMFPathDoesNotExist")
 
         if b_arf_path != "" and (not check_exists or os.path.exists(b_arf_path)):
-            self._back_arf = b_arf_path
+            self._back_arf: str | None = b_arf_path
         elif b_arf_path == "":
             self._back_arf = None
         else:
@@ -194,24 +200,24 @@ class Spectrum(BaseProduct):
                 self._why_unusable.append("FITSIOOSError")
 
         # Here we store the fit information
-        self._exp = None
-        self._plot_data = {}
-        self._luminosities = {}
-        self._abs_luminosities = {}
-        self._count_rate = {}
+        self._exp: float | None = None
+        self._plot_data: dict[str, Any] = {}
+        self._luminosities: dict[str, Any] = {}
+        self._abs_luminosities: dict[str, Any] = {}
+        self._count_rate: dict[str, Any] = {}
         # self._fit_stat = {}
         # self._test_stat = {}
 
         # This is specifically for fakeit runs (for cntrate - lum conversions) on the ARF/RMF
         #  associated with this Spectrum
-        self._conv_factors = {}
+        self._conv_factors: dict[str, Any] = {}
 
         # This set of properties describe the configuration of evselect/specgroup during generation
         self._grouped = grouped
         self._min_counts = min_counts
         self._min_sn = min_sn
         if self._grouped and self._min_counts is not None:
-            self._grouped_on = "counts"
+            self._grouped_on: str | None = "counts"
         elif self._grouped and self._min_sn is not None:
             self._grouped_on = "signal to noise"
         else:
@@ -264,51 +270,51 @@ class Spectrum(BaseProduct):
 
         # This attribute is set via the property, ONLY if this spectrum is considered to be a member of a set
         #  of annular spectra. It describes which position in the set this spectrum has
-        self._ann_ident = None
+        self._ann_ident: int | None = None
         # This holds a unique random identifier for the set itself, and again will only be set from outside
-        self._set_ident = None
+        self._set_ident: int | None = None
 
         # We also setup empty attributes (akin to the data attribute in the Image class) to store the actual
         #  data from the spectrum and background spectrum should they ever need to be read into memory from the file
         #  by this object
         # First the raw counts per channel of the source spectrum
-        self._spec_counts = None
+        self._spec_counts: np.ndarray | None = None
         # Secondly the channels with which each count data point is associated
-        self._spec_channels = None
+        self._spec_channels: np.ndarray | None = None
         # And finally attributes to store the group and quality of each data entry (group showing how they were
         #  grouped from the original raw spectrum and quality contains a quality flag 0=good 1=not good)
-        self._spec_group = None
-        self._spec_quality = None
+        self._spec_group: np.ndarray | None = None
+        self._spec_quality: np.ndarray | None = None
         # Also add an attribute to store the overall header of the spectrum
-        self._prim_spec_header = None
+        self._prim_spec_header: FITSHDR | None = None
         # And an attribute for the SPECTRUM table header
-        self._spec_spec_header = None
+        self._spec_spec_header: FITSHDR | None = None
 
         # Now all of the same but for the background spectrum
-        self._back_counts = None
-        self._back_channels = None
-        self._back_group = None
-        self._back_quality = None
-        self._prim_back_header = None
-        self._spec_back_header = None
+        self._back_counts: np.ndarray | None = None
+        self._back_channels: np.ndarray | None = None
+        self._back_group: np.ndarray | None = None
+        self._back_quality: np.ndarray | None = None
+        self._prim_back_header: FITSHDR | None = None
+        self._spec_back_header: FITSHDR | None = None
 
         # Attributes to store ARF information
         # The actual effective area information will live in this attribute
-        self._arf_eff_area = None
+        self._arf_eff_area: Quantity | None = None
         # The corresponding energy bounds will be stored in these attributes
-        self._arf_lo_en = None
-        self._arf_hi_en = None
+        self._arf_lo_en: Quantity | None = None
+        self._arf_hi_en: Quantity | None = None
 
         # Attributes to store RMF information
         # This is a one is a bit of a cop out for now, I'm going to store the entire redist matrix table because
         #  I don't know if I'm actually going to do anything with it
-        self._redist_matrix_info = None
+        self._redist_matrix_info: np.ndarray | None = None
         # Here I will store lookup information to convert channels to a lower and upper energy bound
-        self._rmf_channels = None
-        self._rmf_channels_lo_en = None
-        self._rmf_channels_hi_en = None
+        self._rmf_channels: np.ndarray | None = None
+        self._rmf_channels_lo_en: Quantity | None = None
+        self._rmf_channels_hi_en: Quantity | None = None
 
-    def _update_spec_headers(self, which_spec: str):
+    def _update_spec_headers(self, which_spec: str) -> None:
         """
         An internal method that will 'push' the current class attributes that hold the paths to data products
         (like ARF and RMF) to the relevant spectrum file.
@@ -348,7 +354,7 @@ class Spectrum(BaseProduct):
                         del spec_fits["SPECTRUM"].header["ANCRFILE"]
                     spec_fits["SPECTRUM"].header["ANCRFILE"] = self._back_arf
 
-    def _read_on_demand(self, src_spec: bool = True):
+    def _read_on_demand(self, src_spec: bool = True) -> None:
         """
         Internal method to read the spectrum (or background spectrum) associated with this Spectrum object into
         memory when it is requested by another method. Doing it on-demand saves on wasting memory.
@@ -391,10 +397,10 @@ class Spectrum(BaseProduct):
                     if "QUALITY" in all_dat.dtype.names:
                         self._back_quality = all_dat["QUALITY"]
 
-            except OSError:
+            except OSError as err:
                 raise FileNotFoundError(
                     f"FITSIO read cannot open {rel_path} - this product is associated with {self.src_name}."
-                )
+                ) from err
 
         else:
             reasons = ", ".join(self.not_usable_reasons)
@@ -403,10 +409,11 @@ class Spectrum(BaseProduct):
                 f"access data from it; the reason given is: {reasons}."
             )
 
-    def _read_header_on_demand(self, src_spec: bool = True, primary_header: bool = True):
+    def _read_header_on_demand(self, src_spec: bool = True, primary_header: bool = True) -> None:
         """
         Internal method to read the spectrum (or background spectrum) header associated with this Spectrum object into
         memory when it is requested by another method. Doing it on-demand saves on wasting memory. Either the header of
+        the primary table or the SPECTRUM table can be read in.
 
         :param bool src_spec: This parameter controls whether it is the source or background spectrum header that
             is read into memory. If True (the default) then the source spectrum is read, otherwise the background
@@ -433,10 +440,10 @@ class Spectrum(BaseProduct):
                     rel_path = self.background
                     self._spec_back_header = read_header(rel_path, "SPECTRUM")
 
-            except OSError:
+            except OSError as err:
                 raise FileNotFoundError(
                     f"FITSIO read cannot open {rel_path} - this product is associated with {self.src_name}."
-                )
+                ) from err
 
         else:
             reasons = ", ".join(self.not_usable_reasons)
@@ -445,7 +452,7 @@ class Spectrum(BaseProduct):
                 f"access data from it; the reason given is: {reasons}."
             )
 
-    def _read_response_on_demand(self, rmf: bool = True):
+    def _read_response_on_demand(self, rmf: bool = True) -> None:
         """
         Internal method to read the response information for this spectrum into memory. Either the redistribution
         matrix and channel-to-energy conversion information from the RMF, or the effective area as a discrete function
@@ -485,10 +492,10 @@ class Spectrum(BaseProduct):
                     # And make sure to close the arf file after reading
                     arf_read.close()
 
-            except OSError:
+            except OSError as err:
                 raise FileNotFoundError(
                     f"FITSIO read cannot open {rel_path} - this product is associated with {self.src_name}."
-                )
+                ) from err
 
         else:
             reasons = ", ".join(self.not_usable_reasons)
@@ -609,6 +616,8 @@ class Spectrum(BaseProduct):
         if self._spec_group is None:
             self._read_on_demand(True)
 
+        if self._spec_group is None:
+            raise XGADeveloperError("Spectrum grouping failed to load on demand.")
         return self._spec_group
 
     @property
@@ -624,6 +633,8 @@ class Spectrum(BaseProduct):
         if self._spec_quality is None:
             self._read_on_demand(True)
 
+        if self._spec_quality is None:
+            raise XGADeveloperError("Spectrum quality failed to load on demand.")
         return self._spec_quality
 
     @property
@@ -714,7 +725,7 @@ class Spectrum(BaseProduct):
     @property
     def back_grouping(self) -> np.ndarray:
         """
-        The grouping information from the background spectrum
+        The grouping information from the background spectrum.
 
         :rtype: np.ndarray
         :return: An array of group IDs.
@@ -725,6 +736,8 @@ class Spectrum(BaseProduct):
             # Passing false means it won't read the source spectrum, but instead the background spectrum
             self._read_on_demand(False)
 
+        if self._back_group is None:
+            raise XGADeveloperError("Spectrum back_grouping failed to load on demand.")
         return self._back_group
 
     @property
@@ -741,13 +754,15 @@ class Spectrum(BaseProduct):
         if self._back_quality is None:
             self._read_on_demand(False)
 
+        if self._back_quality is None:
+            raise XGADeveloperError("Spectrum back_quality failed to load on demand.")
         return self._back_quality
 
     @property
     def eff_area(self) -> Quantity:
         """
         The discrete effective area curve of the telescope. These area values correspond to upper and lower energy
-        bounds that can be accessed using the eff_area_lo_en and eff_area_hi_en properties
+        bounds that can be accessed using the eff_area_lo_en and eff_area_hi_en properties.
 
         :rtype: Quantity
         :return: A quantity containing the effective area values in units of cm^-2.
@@ -799,6 +814,8 @@ class Spectrum(BaseProduct):
         if self._rmf_channels is None:
             self._read_response_on_demand(rmf=True)
 
+        if self._rmf_channels is None:
+            raise XGADeveloperError("Spectrum rmf_channels failed to load on demand.")
         return self._rmf_channels
 
     @property
@@ -830,7 +847,7 @@ class Spectrum(BaseProduct):
         return self._rmf_channels_hi_en
 
     @property
-    def rmf_redist_matrix(self) -> np.ndarray:
+    def rmf_redist_matrix(self) -> np.ndarray | None:
         """
         The contents of the RMF MATRIX table.
 
@@ -850,7 +867,7 @@ class Spectrum(BaseProduct):
         return self._path
 
     @path.setter
-    def path(self, new_path: str):
+    def path(self, new_path: str) -> None:
         """
         This setter updates the path to the spectrum file, and then updates that file with the current values of
         the RMF, ARF, and background spectrum paths. WARNING: This does permanently alter the file, so use your
@@ -877,9 +894,10 @@ class Spectrum(BaseProduct):
         return self._rmf
 
     @rmf.setter
-    def rmf(self, new_path: str):
+    def rmf(self, new_path: str) -> None:
         """
         This setter updates the path to the main RMF file, then writes that change to the actual spectrum file.
+
         WARNING: This permanently alters the file, use with caution!
 
         :param str new_path: The path to the new RMF file.
@@ -907,9 +925,10 @@ class Spectrum(BaseProduct):
         return self._arf
 
     @arf.setter
-    def arf(self, new_path: str):
+    def arf(self, new_path: str) -> None:
         """
         This setter updates the path to the main ARF file, then writes that change to the actual spectrum file.
+
         WARNING: This permanently alters the file, use with caution!
 
         :param str new_path: The path to the new ARF file.
@@ -935,10 +954,11 @@ class Spectrum(BaseProduct):
         return self._back_spec
 
     @background.setter
-    def background(self, new_path: str):
+    def background(self, new_path: str) -> None:
         """
         This method is the setter for the background spectrum. It can be used to change the background
         spectrum file associated with this object, and will write that change to the actual spectrum file.
+
         WARNING: This permanently alters the file, use with caution!
 
         :param str new_path: The path to the new background spectrum.
@@ -950,7 +970,7 @@ class Spectrum(BaseProduct):
             raise FileNotFoundError("The new background spectrum file does not exist")
 
     @property
-    def background_rmf(self) -> str:
+    def background_rmf(self) -> str | None:
         """
         This method returns the path to the background spectrum's RMF file.
 
@@ -960,7 +980,7 @@ class Spectrum(BaseProduct):
         return self._back_rmf
 
     @background_rmf.setter
-    def background_rmf(self, new_path: str):
+    def background_rmf(self, new_path: str) -> None:
         """
         This setter method will change the RMF associated with the background spectrum, then write
         that change to the background spectrum file.
@@ -974,7 +994,7 @@ class Spectrum(BaseProduct):
             raise FileNotFoundError("That new background RMF file does not exist")
 
     @property
-    def background_arf(self) -> str:
+    def background_arf(self) -> str | None:
         """
         This method returns the path to the background spectrum's ARF file.
 
@@ -984,7 +1004,7 @@ class Spectrum(BaseProduct):
         return self._back_arf
 
     @background_arf.setter
-    def background_arf(self, new_path: str):
+    def background_arf(self, new_path: str) -> None:
         """
         This setter method will change the ARF associated with the background spectrum, then write
         that change to the background spectrum file.
@@ -1042,7 +1062,7 @@ class Spectrum(BaseProduct):
         return self._inner_rad
 
     @property
-    def outer_rad(self):
+    def outer_rad(self) -> Quantity:
         """
         Gives the outer radius (if circular) or radii (if elliptical - semi-major, semi-minor) of the
         region in which this spectrum was generated.
@@ -1063,7 +1083,7 @@ class Spectrum(BaseProduct):
         return self._grouped
 
     @property
-    def grouped_on(self) -> str:
+    def grouped_on(self) -> str | None:
         """
         A property stating what metric this spectrum was grouped on.
 
@@ -1073,7 +1093,7 @@ class Spectrum(BaseProduct):
         return self._grouped_on
 
     @property
-    def min_counts(self) -> int:
+    def min_counts(self) -> int | None:
         """
         A property stating the minimum number of counts allowed in a grouped channel.
 
@@ -1084,7 +1104,7 @@ class Spectrum(BaseProduct):
         return self._min_counts
 
     @property
-    def min_sn(self) -> float | int:
+    def min_sn(self) -> float | int | None:
         """
         A property stating the minimum signal to noise allowed in a grouped channel.
 
@@ -1095,7 +1115,7 @@ class Spectrum(BaseProduct):
         return self._min_sn
 
     @property
-    def over_sample(self) -> float:
+    def over_sample(self) -> float | None:
         """
         A property string stating the amount of oversampling applied by evselect during the spectrum
         generation process.
@@ -1118,7 +1138,7 @@ class Spectrum(BaseProduct):
         return self._region
 
     @property
-    def annulus_ident(self) -> int:
+    def annulus_ident(self) -> int | None:
         """
         This property returns the integer identifier of which annulus in a set this Spectrum is, if it
         is part of a set.
@@ -1129,7 +1149,7 @@ class Spectrum(BaseProduct):
         return self._ann_ident
 
     @annulus_ident.setter
-    def annulus_ident(self, new_ident: int):
+    def annulus_ident(self, new_ident: int) -> None:
         """
         This property sets the annulus identifier of this object.
 
@@ -1140,7 +1160,7 @@ class Spectrum(BaseProduct):
         self._ann_ident = new_ident
 
     @property
-    def set_ident(self) -> int:
+    def set_ident(self) -> int | None:
         """
         This property returns the random id of the spectrum set this is a part of.
 
@@ -1150,7 +1170,7 @@ class Spectrum(BaseProduct):
         return self._set_ident
 
     @set_ident.setter
-    def set_ident(self, new_ident: int):
+    def set_ident(self, new_ident: int) -> None:
         """
         This property sets the set identifier of this object.
 
@@ -1194,7 +1214,7 @@ class Spectrum(BaseProduct):
         from ..xspec.fit import FIT_FUNC_MODEL_NAMES
         from ..xspec.fitconfgen import FIT_FUNC_ARGS, fit_conf_from_function
 
-        diffs = {}
+        diffs: dict[str, dict[str, dict[str, str]]] = {}
         for mod in self.fitted_models:
             diffs.setdefault(mod, {})
             existing_fconfs = self.fitted_model_configurations[mod]
@@ -1235,7 +1255,9 @@ class Spectrum(BaseProduct):
 
         return diffs
 
-    def add_fit_data(self, model: str, tab_line, plot_data: hdu.table.TableHDU, fit_conf: str) -> None:
+    def add_fit_data(
+        self, model: str, tab_line: np.void | np.ndarray, plot_data: hdu.table.TableHDU, fit_conf: str
+    ) -> None:
         """
         Method that adds information specific to a spectrum from an XSPEC fit to this object. This includes
         individual spectrum exposure and count rate, as well as calculated luminosities, and plotting
@@ -1265,8 +1287,8 @@ class Spectrum(BaseProduct):
 
         # Constructs a dictionary of luminosities and their errors for the different energy bands
         #  in this XSPEC fit.
-        lx_dict = {}
-        abs_lx_dict = {}
+        lx_dict: dict[str, list[Any]] = {}
+        abs_lx_dict: dict[str, list[Any]] = {}
         for col in lx_cols:
             # As we now store absorbed luminosities, as well as the unabsorbed ones, we
             #  need to make a distinction here. The distinction will a) alter how we split the
@@ -1319,7 +1341,7 @@ class Spectrum(BaseProduct):
             "model": plot_data["YMODEL"][:],
         }
 
-    def _get_fit_checks(self, model: str = None, fit_conf: str | dict = None) -> tuple[str, str]:
+    def _get_fit_checks(self, model: str | None = None, fit_conf: str | dict | None = None) -> tuple[str, str]:
         """
         An internal function to perform input checks and pre-processing for get methods that access fit results, or
         other related information such as fit statistic.
@@ -1381,7 +1403,7 @@ class Spectrum(BaseProduct):
             )
         # However here they passed no fit configuration, and only one has been used for the model, so we're all good
         #  and will select it for them
-        elif fit_conf is None and len(self.fitted_model_configurations[model]) == 1:
+        elif fit_conf is None:
             fit_conf = self.fitted_model_configurations[model][0]
 
         # # We also check that
@@ -1390,6 +1412,8 @@ class Spectrum(BaseProduct):
         #     raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to this AnnularSpectra; "
         #                                       "available parameters are {a}".format(p=par, m=model, a=av_pars))
 
+        if not isinstance(model, str) or not isinstance(fit_conf, str):
+            raise XGADeveloperError("Model and fit configuration failed to resolve to strings during check.")
         return model, fit_conf
 
     def get_luminosities(
@@ -1399,7 +1423,7 @@ class Spectrum(BaseProduct):
         hi_en: Quantity | None = None,
         fit_conf: str | dict | None = None,
         absorbed_lum: bool = False,
-    ):
+    ) -> dict | list:
         """
         Returns the luminosities measured for this spectrum from a given model.
 
@@ -1452,7 +1476,7 @@ class Spectrum(BaseProduct):
         else:
             return self._abs_luminosities[model][fit_conf][en_key]
 
-    def get_rate(self, model: str = None, fit_conf: str | dict = None) -> Quantity:
+    def get_rate(self, model: str | None = None, fit_conf: str | dict | None = None) -> Quantity:
         """
         Fetches the count rate for a particular model fitted to this spectrum.
 
@@ -1533,7 +1557,7 @@ class Spectrum(BaseProduct):
         rel_vals = self._conv_factors[model][en_key]
         return rel_vals["factor"], rel_vals["lum"], rel_vals["rate"]
 
-    def get_plot_data(self, model: str = None, fit_conf: str | dict = None) -> dict:
+    def get_plot_data(self, model: str | None = None, fit_conf: str | dict | None = None) -> dict:
         """
         Simply grabs the plot data dictionary for a given model, if the spectrum has had a fit performed on it.
 
@@ -1625,7 +1649,9 @@ class Spectrum(BaseProduct):
 
         return converted_vals
 
-    def get_grouped_data(self, count_rate: bool = True) -> tuple[Quantity]:
+    def get_grouped_data(
+        self, count_rate: bool = True
+    ) -> tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity]:
         """
         In many cases a spectrum is 'grouped' after generation, which involves combining sequential channels to
         increase the signal-to-noise. This method reads any grouping information in the spectrum associated with
@@ -1826,8 +1852,8 @@ class Spectrum(BaseProduct):
         yscale: str = "linear",
         fontsize: int | float = 14,
         show_model_fits: bool = True,
-        model: str = None,
-        fit_conf: str | dict = None,
+        model: str | None = None,
+        fit_conf: str | dict | None = None,
         show_residuals: bool = False,
     ) -> Axes:
         """
@@ -2190,11 +2216,11 @@ class Spectrum(BaseProduct):
         yscale: str = "linear",
         fontsize: int | float = 14,
         show_model_fits: bool = True,
-        save_path: str = None,
-        model: str = None,
-        fit_conf: str | dict = None,
+        save_path: str | None = None,
+        model: str | None = None,
+        fit_conf: str | dict | None = None,
         show_residuals: bool = False,
-        legend_fontsize: int | float = None,
+        legend_fontsize: int | float | None = None,
     ) -> None:
         """
         A method for viewing the data associated with this Spectrum instance.
@@ -2294,7 +2320,7 @@ class AnnularSpectra(BaseAggregateProduct):
     :param List[Spectrum] spectra: A list of XGA spectrum objects which make up this set.
     """
 
-    def __init__(self, spectra: list[Spectrum]):
+    def __init__(self, spectra: list[Spectrum]) -> None:
         """
         The init method for the AnnularSpectra class, performs checks and organizes the spectra which
         have been passed in, for easy retrieval.
@@ -2336,7 +2362,8 @@ class AnnularSpectra(BaseAggregateProduct):
         set_idents = set([s.set_ident for s in spectra])
         if len(set_idents) != 1:
             raise XGASetIDError(
-                f"All annular spectrum components must have matching set IDs, the following are present - ({set_idents})."
+                f"All annular spectrum components must have matching set IDs, the following are "
+                f"present - ({set_idents})."
             )
 
         # Just put the set ID into an attribute in case anyone ever wants to know it
@@ -2344,7 +2371,9 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Here I run through all the spectra and access their annulus_ident property, that way we can determine how
         #  many annuli there are and start storing spectra appropriately
-        uniq_ann_ids = list(set([s.annulus_ident for s in spectra]))
+        if any(s.annulus_ident is None for s in spectra):
+            raise ValueError("All spectra passed to AnnularSpectra must have a non-None annulus_ident.")
+        uniq_ann_ids = list({s.annulus_ident for s in spectra if s.annulus_ident is not None})
 
         if min(uniq_ann_ids) != 0 or max(uniq_ann_ids) != (len(uniq_ann_ids) - 1):
             raise ValueError(
@@ -2358,7 +2387,7 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # While the official ObsID and Instrument of this product are 'combined', I do still
         #  want to know which ObsIDs and instruments the spectra belong to
-        inst_dict = {o: [] for o in [s.obs_id for s in spectra]}
+        inst_dict: dict[str, list[str]] = {o: [] for o in [s.obs_id for s in spectra]}
         for s in spectra:
             if s.instrument not in inst_dict[s.obs_id]:
                 inst_dict[s.obs_id].append(s.instrument)
@@ -2379,8 +2408,8 @@ class AnnularSpectra(BaseAggregateProduct):
         # This can be set through a property, as products shouldn't have any knowledge of their source
         #  other than the name. And someone might define one of these source-lessly. It will contain radii
         #  which are proper, not in degrees
-        self._proper_radii = None
-        self._proper_ann_centres = None
+        self._proper_radii: Quantity | None = None
+        self._proper_ann_centres: Quantity | None = None
 
         # self._component_products = {ai: {o: {i: None for i in self._instruments[o]} for o in self.obs_ids}
         #                             for ai in range(self._num_ann)}
@@ -2405,7 +2434,7 @@ class AnnularSpectra(BaseAggregateProduct):
         self._min_counts = spectra[0].min_counts
         self._min_sn = spectra[0].min_sn
         if self._grouped and self._min_counts is not None:
-            self._grouped_on = "counts"
+            self._grouped_on: str | None = "counts"
         elif self._grouped and self._min_sn is not None:
             self._grouped_on = "signal to noise"
         else:
@@ -2456,26 +2485,26 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # The total exposure of the combined spectra. Will be overwritten if multiple models are fit, but
         #  as its a property of the spectra and not the fit it should always be the same
-        self._total_exp = {ai: None for ai in range(self._num_ann)}
+        self._total_exp: dict[int, float | None] = {ai: None for ai in range(self._num_ann)}
         # These will be stored on a per model basis
-        self._total_count_rate = {ai: {} for ai in range(self._num_ann)}
-        self._test_stat = {ai: {} for ai in range(self._num_ann)}
-        self._fit_stat = {ai: {} for ai in range(self._num_ann)}
-        self._dof = {ai: {} for ai in range(self._num_ann)}
+        self._total_count_rate: dict[int, dict[str, Any]] = {ai: {} for ai in range(self._num_ann)}
+        self._test_stat: dict[int, dict[str, Any]] = {ai: {} for ai in range(self._num_ann)}
+        self._fit_stat: dict[int, dict[str, Any]] = {ai: {} for ai in range(self._num_ann)}
+        self._dof: dict[int, dict[str, Any]] = {ai: {} for ai in range(self._num_ann)}
 
         # Finally the most important outputs, the fit results and luminosities. There obviously is some data
         #  duplication here with the source, but this will be so convenient I don't care
-        self._fit_results = {ai: {} for ai in range(self._num_ann)}
-        self._luminosities = {ai: {} for ai in range(self._num_ann)}
+        self._fit_results: dict[int, dict[str, Any]] = {ai: {} for ai in range(self._num_ann)}
+        self._luminosities: dict[int, dict[str, Any]] = {ai: {} for ai in range(self._num_ann)}
 
         # Observation order for an annulus describes, for results with multiple entries like normalisation can if
         #  it is not linked across multiple spectra during fitting, what order the fit results are in.
-        self._obs_order = {ai: {} for ai in range(self._num_ann)}
+        self._obs_order: dict[int, dict[str, Any]] = {ai: {} for ai in range(self._num_ann)}
 
         # This dictionary will store the paths to cross-arfs that might be generated for this annular spectrum. That
         #  is why there are two layers of annulus identifiers - each annulus gets one arf per every OTHER annulus
         #  (not itself)
-        self._cross_arfs = {
+        self._cross_arfs: dict[str, dict[str, dict[int, dict[int, str | None]]]] = {
             o: {
                 i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai} for ai in range(self._num_ann)}
                 for i in self._instruments[o]
@@ -2486,21 +2515,21 @@ class AnnularSpectra(BaseAggregateProduct):
         #  might do to plot the response curves for instance, then the 'read on demand' method for the cross-arfs will
         #  store them in these attributes - the key structure is the same as the above _cross_arfs attribute that
         #  stores the paths to the files
-        self._cross_arf_lo_ens = {
+        self._cross_arf_lo_ens: dict[str, dict[str, dict[int, dict[int, Quantity | None]]]] = {
             o: {
                 i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai} for ai in range(self._num_ann)}
                 for i in self._instruments[o]
             }
             for o in self.obs_ids
         }
-        self._cross_arf_hi_ens = {
+        self._cross_arf_hi_ens: dict[str, dict[str, dict[int, dict[int, Quantity | None]]]] = {
             o: {
                 i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai} for ai in range(self._num_ann)}
                 for i in self._instruments[o]
             }
             for o in self.obs_ids
         }
-        self._cross_arf_eff_areas = {
+        self._cross_arf_eff_areas: dict[str, dict[str, dict[int, dict[int, Quantity | None]]]] = {
             o: {
                 i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai} for ai in range(self._num_ann)}
                 for i in self._instruments[o]
@@ -2510,15 +2539,15 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Attributes to store ARF information
         # The actual effective area information will live in this attribute
-        self._arf_eff_area = None
+        self._arf_eff_area: Quantity | None = None
         # The corresponding energy bounds will be stored in these attributes
-        self._arf_lo_en = None
-        self._arf_hi_en = None
+        self._arf_lo_en: Quantity | None = None
+        self._arf_hi_en: Quantity | None = None
 
     # The src_name setter and getter have been overridden because there is an easier way of setting
     #  the source name for all spectra
     @property
-    def src_name(self) -> str:
+    def src_name(self) -> str | None:
         """
         Method to return the name of the object a product is associated with. The product becomes
         aware of this once it is added to a source object.
@@ -2529,7 +2558,7 @@ class AnnularSpectra(BaseAggregateProduct):
         return self._src_name
 
     @src_name.setter
-    def src_name(self, name: str):
+    def src_name(self, name: str) -> None:
         """
         Property setter for the src_name attribute of a product, should only really be called by a source object,
         not by a user.
@@ -2584,7 +2613,7 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         return self.get_spectra(self._num_ann - 1, obs_id, inst).background
 
-    def background_rmf(self, obs_id: str, inst: str) -> str:
+    def background_rmf(self, obs_id: str, inst: str) -> str | None:
         """
         This method returns the path to the background spectrum's RMF for a particular ObsID and
         instrument. It is the RMF of the background associated with the outermost annulus of this object.
@@ -2596,7 +2625,7 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         return self.get_spectra(self._num_ann - 1, obs_id, inst).background_rmf
 
-    def background_arf(self, obs_id: str, inst: str) -> str:
+    def background_arf(self, obs_id: str, inst: str) -> str | None:
         """
         This method returns the path to the background spectrum's ARF for a particular ObsID and
         instrument. It is the ARF of the background associated with the outermost annulus of this object.
@@ -2630,7 +2659,9 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         return self._instruments
 
-    def get_spectra(self, annulus_ident, obs_id: str = None, inst: str = None) -> list[Spectrum] | Spectrum:
+    def get_spectra(
+        self, annulus_ident: int, obs_id: str | None = None, inst: str | None = None
+    ) -> list[Spectrum] | Spectrum:
         """
         This is the getter for the spectra stored in the AnnularSpectra data storage structure. They can
         be retrieved based on annulus identifier, ObsID, and instrument.
@@ -2642,7 +2673,7 @@ class AnnularSpectra(BaseAggregateProduct):
         :rtype: Union[List[Spectrum], Spectrum]
         """
 
-        def unpack_list(to_unpack: list):
+        def unpack_list(to_unpack: list) -> None:
             """
             A recursive function to go through every layer of a nested list and flatten it all out. It
             doesn't return anything because to make life easier the 'results' are appended to a variable
@@ -2676,7 +2707,7 @@ class AnnularSpectra(BaseAggregateProduct):
 
         matches = []
         for match in dict_search(annulus_ident, self._component_products):
-            out = []
+            out: list[Any] = []
             unpack_list(match)
             if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None):
                 matches.append(out[-1])
@@ -2726,7 +2757,7 @@ class AnnularSpectra(BaseAggregateProduct):
         return self._ann_centres
 
     @property
-    def proper_radii(self) -> Quantity:
+    def proper_radii(self) -> Quantity | None:
         """
         A property to return the boundary radii of the constituent annuli in kpc. This has
         to be set using the setter first, otherwise the value is None.
@@ -2742,7 +2773,7 @@ class AnnularSpectra(BaseAggregateProduct):
         return to_return
 
     @proper_radii.setter
-    def proper_radii(self, new_vals: Quantity):
+    def proper_radii(self, new_vals: Quantity) -> None:
         """
         A setter for the proper radii property.
 
@@ -2766,7 +2797,7 @@ class AnnularSpectra(BaseAggregateProduct):
         self._proper_ann_centres = Quantity(mid_radii, new_vals.unit)
 
     @property
-    def proper_annulus_centres(self) -> Quantity:
+    def proper_annulus_centres(self) -> Quantity | None:
         """
         Returns the centres of all the annuli, in the units of proper radii which the user has to have
         set through the property setter.
@@ -2777,7 +2808,7 @@ class AnnularSpectra(BaseAggregateProduct):
         return self._proper_ann_centres
 
     @property
-    def set_ident(self) -> int:
+    def set_ident(self) -> int | None:
         """
         This property returns the ID of this set of spectra.
 
@@ -2809,7 +2840,7 @@ class AnnularSpectra(BaseAggregateProduct):
         return self._grouped
 
     @property
-    def grouped_on(self) -> str:
+    def grouped_on(self) -> str | None:
         """
         A property stating what metric the spectra in this set were grouped on.
 
@@ -2819,7 +2850,7 @@ class AnnularSpectra(BaseAggregateProduct):
         return self._grouped_on
 
     @property
-    def min_counts(self) -> int:
+    def min_counts(self) -> int | None:
         """
         A property stating the minimum number of counts allowed in a grouped channel for the spectra in this set.
 
@@ -2830,7 +2861,7 @@ class AnnularSpectra(BaseAggregateProduct):
         return self._min_counts
 
     @property
-    def min_sn(self) -> float | int:
+    def min_sn(self) -> float | int | None:
         """
         A property stating the minimum signal to noise allowed in a grouped channel for the spectra in this set.
 
@@ -2841,7 +2872,7 @@ class AnnularSpectra(BaseAggregateProduct):
         return self._min_sn
 
     @property
-    def over_sample(self) -> float:
+    def over_sample(self) -> float | None:
         """
         A property string stating the amount of oversampling applied by evselect during the generation
         of the spectra in this set. e.g. if over_sample=3 then the minimum width of a group is
@@ -2979,7 +3010,7 @@ class AnnularSpectra(BaseAggregateProduct):
         #  other annulus
         self._cross_arfs[obs_id][inst][src_ann_id][cross_ann_id] = arf
 
-    def get_cross_arf_paths(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None) -> dict:
+    def get_cross_arf_paths(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int | None = None) -> dict:
         """
         This method allows the user to retrieve cross-arf paths for a specific ObsID-instrument spectrum of an
         annulus. For instance, passing an ObsID and Instrument, along with a src_ann_id of 1, to an annular spectrum
@@ -3034,7 +3065,7 @@ class AnnularSpectra(BaseAggregateProduct):
             )
         return rel_arfs
 
-    def get_cross_arf_lo_ens(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None) -> dict:
+    def get_cross_arf_lo_ens(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int | None = None) -> dict:
         """
         A method that will retrieve the lower energy bound data from cross-arfs associated with this annular
         spectrum. A set of cross-arf lower energy bounds can be retrieved for a particular source annulus, or
@@ -3073,7 +3104,7 @@ class AnnularSpectra(BaseAggregateProduct):
 
         return rel_lo_ens
 
-    def get_cross_arf_hi_ens(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None) -> dict:
+    def get_cross_arf_hi_ens(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int | None = None) -> dict:
         """
         A method that will retrieve the upper energy bound data from cross-arfs associated with this annular
         spectrum. A set of cross-arf upper energy bounds can be retrieved for a particular source annulus, or
@@ -3112,7 +3143,7 @@ class AnnularSpectra(BaseAggregateProduct):
 
         return rel_hi_ens
 
-    def get_cross_arf_eff_areas(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None) -> dict:
+    def get_cross_arf_eff_areas(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int | None = None) -> dict:
         """
         A method that will retrieve the effective area data from cross-arfs associated with this annular
         spectrum. A set of cross-arf effective areas can be retrieved for a particular source annulus, or
@@ -3150,7 +3181,9 @@ class AnnularSpectra(BaseAggregateProduct):
 
         return rel_eff_areas
 
-    def _read_cross_arf_on_demand(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None):
+    def _read_cross_arf_on_demand(
+        self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int | None = None
+    ) -> None:
         """
         An internal method to read cross-arf data into memory only when required by some other method or property
         of this function - that way we don't unnecessarily take up memory.
@@ -3251,7 +3284,7 @@ class AnnularSpectra(BaseAggregateProduct):
             # The parameters available will obviously be dynamic, so have to find out what they are and then
             #  then for each result find the +- errors.
             par_headers = [n for n in tab_line[ai].dtype.names if n not in not_par]
-            mod_res = {}
+            mod_res: dict[str, dict[str, list[float]]] = {}
             for par in par_headers:
                 # The parameter name and the parameter index used by XSPEC are separated by |
                 par_info = par.split("|")
@@ -3284,7 +3317,7 @@ class AnnularSpectra(BaseAggregateProduct):
             self._luminosities[ai][model][fit_conf] = lums[ai]
 
     def _get_fit_checks(
-        self, annulus_ident: int, model: str = None, par: str = None, fit_conf: str | dict = None
+        self, annulus_ident: int, model: str | None = None, par: str | None = None, fit_conf: str | dict | None = None
     ) -> tuple[str, str]:
         """
         An internal function to perform input checks and pre-processing for get methods that access fit results, or
@@ -3350,7 +3383,7 @@ class AnnularSpectra(BaseAggregateProduct):
             )
         # However here they passed no fit configuration, and only one has been used for the model, so we're all good
         #  and will select it for them
-        elif fit_conf is None and len(self.fitted_model_configurations[model]) == 1:
+        elif fit_conf is None:
             fit_conf = self.fitted_model_configurations[model][0]
 
         # Have to check that the user has passed a legal annulus ID, otherwise we'll be getting key errors down the
@@ -3382,9 +3415,13 @@ class AnnularSpectra(BaseAggregateProduct):
                 f"{av_pars}"
             )
 
+        if not isinstance(model, str) or not isinstance(fit_conf, str):
+            raise XGADeveloperError("Model and fit configuration failed to resolve to strings during check.")
         return model, fit_conf
 
-    def get_results(self, annulus_ident: int, model: str = None, par: str = None, fit_conf: str | dict = None):
+    def get_results(
+        self, annulus_ident: int, model: str | None = None, par: str | None = None, fit_conf: str | dict | None = None
+    ) -> dict[str, np.ndarray] | np.ndarray:
         """
         Important method that will retrieve fit results from the AnnularSpectra object. Either for a specific
         parameter of the supplied model combination, or for all of them. If a specific parameter is requested,
@@ -3434,7 +3471,9 @@ class AnnularSpectra(BaseAggregateProduct):
         else:
             return proc_data[par]
 
-    def get_fit_statistic(self, annulus_ident: int, model: str = None, fit_conf: str | dict = None):
+    def get_fit_statistic(
+        self, annulus_ident: int, model: str | None = None, fit_conf: str | dict | None = None
+    ) -> float:
         """
         Method that will retrieve fit statistic from the AnnularSpectra object. If no model name is supplied, but
         only one model has been fit to this annular spectrum, then that model will be automatically selected - this
@@ -3453,7 +3492,9 @@ class AnnularSpectra(BaseAggregateProduct):
 
         return self._fit_stat[annulus_ident][model][fit_conf]
 
-    def get_test_statistic(self, annulus_ident: int, model: str = None, fit_conf: str | dict = None):
+    def get_test_statistic(
+        self, annulus_ident: int, model: str | None = None, fit_conf: str | dict | None = None
+    ) -> float:
         """
         Method that will retrieve test statistic from the AnnularSpectra object. If no model name is supplied, but
         only one model has been fit to this annular spectrum, then that model will be automatically selected - this
@@ -3475,10 +3516,10 @@ class AnnularSpectra(BaseAggregateProduct):
     def get_luminosities(
         self,
         annulus_ident: int,
-        model: str = None,
-        lo_en: Quantity = None,
-        hi_en: Quantity = None,
-        fit_conf: str | dict = None,
+        model: str | None = None,
+        lo_en: Quantity | None = None,
+        hi_en: Quantity | None = None,
+        fit_conf: str | dict | None = None,
     ) -> Quantity | dict[str, Quantity]:
         """
         This will retrieve luminosities of specific annuli from fits performed on this AnnularSpectra object.
@@ -3544,8 +3585,14 @@ class AnnularSpectra(BaseAggregateProduct):
             return parsed_lum
 
     def generate_profile(
-        self, model: str, par: str, par_unit: Unit | str, fit_conf: str | dict = None
-    ) -> BaseProfile1D | ProjectedGasTemperature1D | ProjectedGasMetallicity1D:
+        self, model: str, par: str, par_unit: Unit | str, fit_conf: str | dict | None = None
+    ) -> (
+        BaseProfile1D
+        | ProjectedGasTemperature1D
+        | ProjectedGasMetallicity1D
+        | list[BaseProfile1D | ProjectedGasTemperature1D | ProjectedGasMetallicity1D | None]
+        | None
+    ):
         """
         This generates a radial profile of the requested fit parameter using the stored results from
         an XSPEC model fit run on this AnnularSpectra. The profile is added to AnnularSpectra internal
@@ -3598,7 +3645,7 @@ class AnnularSpectra(BaseAggregateProduct):
                 par_data["combined"].append(cur_data)
 
         # For storing the profiles generated here
-        profs = []
+        profs: list[BaseProfile1D | ProjectedGasTemperature1D | ProjectedGasMetallicity1D | None] = []
         # If there is only one profile to be generated (which means the quantity of interest was linked across
         #  spectra during the fit), then this will just iterate once and obs_key will be combined
         for obs_key in par_data:
@@ -3707,7 +3754,7 @@ class AnnularSpectra(BaseAggregateProduct):
                 profs.append(None)
 
         if len(profs) == 1:
-            profs = profs[0]
+            return profs[0]
 
         return profs
 
@@ -3874,9 +3921,9 @@ class AnnularSpectra(BaseAggregateProduct):
         yscale: str = "linear",
         fontsize: int | float = 14,
         show_model_fits: bool = True,
-        save_path: str = None,
-        model: str = None,
-        fit_conf: str | dict = None,
+        save_path: str | None = None,
+        model: str | None = None,
+        fit_conf: str | dict | None = None,
     ) -> None:
         """
         A view method that allows all spectra from a particular annulus to be displayed on the same axis.
@@ -3922,7 +3969,6 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Create figure object
         plt.figure(figsize=figsize)
-        fig = plt.figure(figsize=figsize)
         ax = plt.gca()
         for sp in rel_spec:
             ax = sp.get_view(
@@ -3962,8 +4008,8 @@ class AnnularSpectra(BaseAggregateProduct):
         self,
         obs_id: str,
         inst: str,
-        model: str = None,
-        fit_conf: str | dict = None,
+        model: str | None = None,
+        fit_conf: str | dict | None = None,
         elevation_angle: int = 30,
         azimuthal_angle: int = -60,
         figsize: tuple = (12, 8),
@@ -3975,7 +4021,7 @@ class AnnularSpectra(BaseAggregateProduct):
         bck_colour: str = "firebrick",
         grouped: bool = True,
         fontsize: int | float = 14,
-        legend_fontsize: int | float = None,
+        legend_fontsize: int | float | None = None,
     ) -> None:
         """
         This view method is one of several in the AnnularSpectra class, and will display data and associated model
@@ -4302,8 +4348,8 @@ class AnnularSpectra(BaseAggregateProduct):
                                 ax.errorbar(plot_x, ys, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+", zorder=1)
                             plot_cnt += 1
                         else:
-                            # Don't want to re-plot data points as they should be identical, so if there is another model
-                            #  only it will be plotted
+                            # Don't want to re-plot data points as they should be identical, so if there is another
+                            #  model only it will be plotted
                             plot_mod = cur_fit_data["model"][sel_x]
 
                         # The model line is put on
@@ -4339,8 +4385,8 @@ class AnnularSpectra(BaseAggregateProduct):
 
     def view(
         self,
-        model: str = None,
-        fit_conf: str | dict = None,
+        model: str | None = None,
+        fit_conf: str | dict | None = None,
         figsize: tuple = (12, 8),
         elevation_angle: int = 30,
         azimuthal_angle: int = -60,
@@ -4365,7 +4411,7 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         # This is a complete bodge, but just putting it here stops my IDE (PyCharm), from removing the import when it
         #  commits, because it's trying to be clever. It's a behaviour I normally appreciate, but not here.
-        Axes3D
+        _ = Axes3D
 
         # Setup the figure as we normally would
         fig = plt.figure(figsize=figsize)
@@ -4383,7 +4429,7 @@ class AnnularSpectra(BaseAggregateProduct):
         # The colour dictionary is to store a colour for a specific ObsID-instrument combo once its
         #  first been plotted - this is because we want the same ObsID-instrument combos to have the same colours
         #  for all annuli
-        colour_dict = {}
+        colour_dict: dict[str, dict[str, Any]] = {}
         # Set up lists to hold line handlers and labels for the legend we add at the end
         handlers = []
         labels = []
@@ -4472,10 +4518,18 @@ class AnnularSpectra(BaseAggregateProduct):
     def __len__(self) -> int:
         """
         The length of a AnnularSpectra is the number of annuli, so essentially a proxy for num_annuli.
+
         :return: The num_annuli property.
         :rtype: int
         """
         return self._num_ann
 
-    def __getitem__(self, ind):
+    def __getitem__(self, ind: int) -> Spectrum:
+        """
+        Returns the component Spectrum object corresponding to the supplied index.
+
+        :param int ind: The index of the component Spectrum to return.
+        :return: The selected component Spectrum object.
+        :rtype: Spectrum
+        """
         return self.all_spectra[ind]

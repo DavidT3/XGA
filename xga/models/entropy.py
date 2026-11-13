@@ -1,7 +1,6 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 12:44. Copyright (c) The Contributors
-
-from typing import Union, List
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+"""The xga.models.entropy module defines analytical 1D models for galaxy cluster radial specific entropy profiles."""
 
 from astropy.units import Quantity, Unit, UnitConversionError, kpc
 
@@ -21,8 +20,13 @@ class CoreConstPowerEntropy(BaseModel1D):
     :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
         used start values. The units are checked against default start values.
     """
-    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('keV cm^2'),
-                 cust_start_pars: List[Quantity] = None):
+
+    def __init__(
+        self,
+        x_unit: str | Unit = "kpc",
+        y_unit: str | Unit = Unit("keV cm^2"),
+        cust_start_pars: list[Quantity] | None = None,
+    ) -> None:
         """
         The init of a subclass of the XGA BaseModel1D class, describing a model of how entropy changes with radius -
         this one is almost constant in the core and behaves as a power-law in the outskirts.
@@ -33,12 +37,11 @@ class CoreConstPowerEntropy(BaseModel1D):
         if isinstance(y_unit, str):
             y_unit = Unit(y_unit)
 
-        poss_y_units = [Unit('keV cm^2')]
+        poss_y_units = [Unit("keV cm^2")]
         y_convertible = [u.is_equivalent(y_unit) for u in poss_y_units]
         if not any(y_convertible):
             allowed = ", ".join([u.to_string() for u in poss_y_units])
-            raise UnitConversionError("{p} is not convertible to any of the allowed units; "
-                                      "{a}".format(p=y_unit.to_string(), a=allowed))
+            raise UnitConversionError(f"{y_unit.to_string()} is not convertible to any of the allowed units; {allowed}")
         else:
             yu_ind = y_convertible.index(True)
 
@@ -47,14 +50,11 @@ class CoreConstPowerEntropy(BaseModel1D):
         x_convertible = [u.is_equivalent(x_unit) for u in poss_x_units]
         if not any(x_convertible):
             allowed = ", ".join([u.to_string() for u in poss_x_units])
-            raise UnitConversionError("{p} is not convertible to any of the allowed units; "
-                                      "{a}".format(p=x_unit.to_string(), a=allowed))
-        else:
-            xu_ind = x_convertible.index(True)
+            raise UnitConversionError(f"{x_unit.to_string()} is not convertible to any of the allowed units; {allowed}")
 
-        k_zero_starts = [Quantity(75, 'keV cm^2')]
-        k_100kpc = [Quantity(100, 'keV cm^2')]
-        alpha = Quantity(1, '')
+        k_zero_starts = [Quantity(75, "keV cm^2")]
+        k_100kpc = [Quantity(100, "keV cm^2")]
+        alpha = Quantity(1, "")
 
         start_pars = [k_zero_starts[yu_ind], k_100kpc[yu_ind], alpha]
 
@@ -63,25 +63,36 @@ class CoreConstPowerEntropy(BaseModel1D):
             # This method also returns the custom start pars converted to exactly the same units as the default
             start_pars = self.compare_units(cust_start_pars, start_pars)
 
-        kz_priors = [{'prior': Quantity([1, 300], 'keV cm^2'), 'type': 'uniform'}]
-        k100_priors = [{'prior': Quantity([1, 500], 'keV cm^2'), 'type': 'uniform'}]
-        alpha_priors = {'prior': Quantity([-4, 4], ''), 'type': 'uniform'}
+        kz_priors = [{"prior": Quantity([1, 300], "keV cm^2"), "type": "uniform"}]
+        k100_priors = [{"prior": Quantity([1, 500], "keV cm^2"), "type": "uniform"}]
+        alpha_priors = {"prior": Quantity([-4, 4], ""), "type": "uniform"}
 
         priors = [kz_priors[yu_ind], k100_priors[yu_ind], alpha_priors]
 
         nice_pars = [r"$K_{0}$", r"$K_{100\rm{kpc}}$", r"$\alpha$"]
-        info_dict = {'author': 'Cavagnolo et al.', 'year': 2009,
-                     'reference': 'https://doi.org/10.1088/0067-0049/182/1/12',
-                     'general': "A model to fit galaxy cluster radial entropy profiles, made\n"
-                                "up of a constant core combined with a power law that\n"
-                                "dominates in the outskirts."
-                     }
+        info_dict = {
+            "author": "Cavagnolo et al.",
+            "year": 2009,
+            "reference": "https://doi.org/10.1088/0067-0049/182/1/12",
+            "general": "A model to fit galaxy cluster radial entropy profiles, made\n"
+            "up of a constant core combined with a power law that\n"
+            "dominates in the outskirts.",
+        }
 
-        super().__init__(x_unit, y_unit, start_pars, priors, 'coreconst_power_entropy',
-                         'Constant Core and Power-Law Profile', nice_pars, 'Gas Entropy', info_dict)
+        super().__init__(
+            x_unit,
+            y_unit,
+            start_pars,
+            priors,
+            "coreconst_power_entropy",
+            "Constant Core and Power-Law Profile",
+            nice_pars,
+            "Gas Entropy",
+            info_dict,
+        )
 
     @staticmethod
-    def model(x: Quantity, k_zero: Quantity, k_100kpc: Quantity, alpha: Quantity) -> Quantity:
+    def model(x: Quantity, k_zero: Quantity, k_100kpc: Quantity, alpha: Quantity) -> Quantity:  # type: ignore[override]
         """
         The model function for the constant-core and power-law entropy model.
 
@@ -94,9 +105,9 @@ class CoreConstPowerEntropy(BaseModel1D):
         :rtype: Quantity
         """
         if type(x) is Quantity:
-            result = k_zero + (k_100kpc * (x / Quantity(100, 'kpc'))**alpha)
+            result = k_zero + (k_100kpc * (x / Quantity(100, "kpc")) ** alpha)
         else:
-            result = k_zero + (k_100kpc * (x / 100)**alpha)
+            result = k_zero + (k_100kpc * (x / 100) ** alpha)
 
         return result
 
@@ -114,8 +125,13 @@ class PowerEntropy(BaseModel1D):
     :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
         used start values. The units are checked against default start values.
     """
-    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('keV cm^2'),
-                 cust_start_pars: List[Quantity] = None):
+
+    def __init__(
+        self,
+        x_unit: str | Unit = "kpc",
+        y_unit: str | Unit = Unit("keV cm^2"),
+        cust_start_pars: list[Quantity] | None = None,
+    ) -> None:
         """
         The init of a subclass of the XGA BaseModel1D class, describing a model of how entropy changes with radius -
         this one is almost constant in the core and behaves as a power-law in the outskirts.
@@ -126,12 +142,11 @@ class PowerEntropy(BaseModel1D):
         if isinstance(y_unit, str):
             y_unit = Unit(y_unit)
 
-        poss_y_units = [Unit('keV cm^2')]
+        poss_y_units = [Unit("keV cm^2")]
         y_convertible = [u.is_equivalent(y_unit) for u in poss_y_units]
         if not any(y_convertible):
             allowed = ", ".join([u.to_string() for u in poss_y_units])
-            raise UnitConversionError("{p} is not convertible to any of the allowed units; "
-                                      "{a}".format(p=y_unit.to_string(), a=allowed))
+            raise UnitConversionError(f"{y_unit.to_string()} is not convertible to any of the allowed units; {allowed}")
         else:
             yu_ind = y_convertible.index(True)
 
@@ -140,13 +155,10 @@ class PowerEntropy(BaseModel1D):
         x_convertible = [u.is_equivalent(x_unit) for u in poss_x_units]
         if not any(x_convertible):
             allowed = ", ".join([u.to_string() for u in poss_x_units])
-            raise UnitConversionError("{p} is not convertible to any of the allowed units; "
-                                      "{a}".format(p=x_unit.to_string(), a=allowed))
-        else:
-            xu_ind = x_convertible.index(True)
+            raise UnitConversionError(f"{x_unit.to_string()} is not convertible to any of the allowed units; {allowed}")
 
-        k_100kpc = [Quantity(100, 'keV cm^2')]
-        alpha = Quantity(1, '')
+        k_100kpc = [Quantity(100, "keV cm^2")]
+        alpha = Quantity(1, "")
 
         start_pars = [k_100kpc[yu_ind], alpha]
 
@@ -155,23 +167,33 @@ class PowerEntropy(BaseModel1D):
             # This method also returns the custom start pars converted to exactly the same units as the default
             start_pars = self.compare_units(cust_start_pars, start_pars)
 
-        k100_priors = [{'prior': Quantity([1, 500], 'keV cm^2'), 'type': 'uniform'}]
-        alpha_priors = {'prior': Quantity([-4, 4], ''), 'type': 'uniform'}
+        k100_priors = [{"prior": Quantity([1, 500], "keV cm^2"), "type": "uniform"}]
+        alpha_priors = {"prior": Quantity([-4, 4], ""), "type": "uniform"}
 
         priors = [k100_priors[yu_ind], alpha_priors]
 
         nice_pars = [r"$K_{100\rm{kpc}}$", r"$\alpha$"]
-        info_dict = {'author': 'Cavagnolo et al.', 'year': 2009,
-                     'reference': 'https://doi.org/10.1088/0067-0049/182/1/12',
-                     'general': "A very simple model to fit galaxy cluster radial\n"
-                                "entropy profiles; a power law."
-                     }
+        info_dict = {
+            "author": "Cavagnolo et al.",
+            "year": 2009,
+            "reference": "https://doi.org/10.1088/0067-0049/182/1/12",
+            "general": "A very simple model to fit galaxy cluster radial\nentropy profiles; a power law.",
+        }
 
-        super().__init__(x_unit, y_unit, start_pars, priors, 'power_entropy',
-                         'Power-Law Profile', nice_pars, 'Gas Entropy', info_dict)
+        super().__init__(
+            x_unit,
+            y_unit,
+            start_pars,
+            priors,
+            "power_entropy",
+            "Power-Law Profile",
+            nice_pars,
+            "Gas Entropy",
+            info_dict,
+        )
 
     @staticmethod
-    def model(x: Quantity, k_100kpc: Quantity, alpha: Quantity) -> Quantity:
+    def model(x: Quantity, k_100kpc: Quantity, alpha: Quantity) -> Quantity:  # type: ignore[override]
         """
         The model function for the power-law entropy model.
 
@@ -182,15 +204,15 @@ class PowerEntropy(BaseModel1D):
         :rtype: Quantity
         """
         if type(x) is Quantity:
-            result = k_100kpc * (x / Quantity(100, 'kpc'))**alpha
+            result = k_100kpc * (x / Quantity(100, "kpc")) ** alpha
         else:
-            result = k_100kpc * (x / 100)**alpha
+            result = k_100kpc * (x / 100) ** alpha
 
         return result
 
 
 # So that things like fitting functions can be written generally to support different models
 # "power":
-ENTROPY_MODELS = {"coreconst_power_entropy": CoreConstPowerEntropy, 'power_entropy': PowerEntropy}
+ENTROPY_MODELS = {"coreconst_power_entropy": CoreConstPowerEntropy, "power_entropy": PowerEntropy}
 ENTROPY_MODELS_PUB_NAMES = {n: m().publication_name for n, m in ENTROPY_MODELS.items()}
 ENTROPY_MODELS_PAR_NAMES = {n: m().par_publication_names for n, m in ENTROPY_MODELS.items()}

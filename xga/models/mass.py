@@ -1,13 +1,15 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:06 PM. Copyright (c) The Contributors.
-
-from typing import Union, List
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+"""
+The xga.models.mass module contains analytical 1D models for describing galaxy cluster cumulative radial mass profiles
+(including NFW, isothermal King, and Vikhlinin hydrostatic mass models).
+"""
 
 import numpy as np
-from astropy.units import Quantity, Unit, UnitConversionError, kpc, deg
+from astropy.units import Quantity, Unit, UnitConversionError, deg, kpc
 
+from ..utils import r200, r500, r2500
 from .base import BaseModel1D
-from ..utils import r500, r200, r2500
 
 
 class NFW(BaseModel1D):
@@ -26,25 +28,28 @@ class NFW(BaseModel1D):
     :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
         used start values. The units are checked against default start values.
     """
-    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('Msun'),
-                 cust_start_pars: List[Quantity] = None):
+
+    def __init__(
+        self,
+        x_unit: str | Unit = "kpc",
+        y_unit: str | Unit = Unit("Msun"),
+        cust_start_pars: list[Quantity] | None = None,
+    ) -> None:
         """
         The init of a subclass of the XGA BaseModel1D class, describing the shape of cumulative mass profiles for
         a galaxy cluster based on the NFW mass density profile.
         """
-
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
             x_unit = Unit(x_unit)
         if isinstance(y_unit, str):
             y_unit = Unit(y_unit)
 
-        poss_y_units = [Unit('Msun')]
+        poss_y_units = [Unit("Msun")]
         y_convertible = [u.is_equivalent(y_unit) for u in poss_y_units]
         if not any(y_convertible):
             allowed = ", ".join([u.to_string() for u in poss_y_units])
-            raise UnitConversionError("{p} is not convertible to any of the allowed units; "
-                                      "{a}".format(p=y_unit.to_string(), a=allowed))
+            raise UnitConversionError(f"{y_unit.to_string()} is not convertible to any of the allowed units; {allowed}")
         else:
             yu_ind = y_convertible.index(True)
 
@@ -52,16 +57,20 @@ class NFW(BaseModel1D):
         x_convertible = [u.is_equivalent(x_unit) for u in poss_x_units]
         if not any(x_convertible):
             allowed = ", ".join([u.to_string() for u in poss_x_units])
-            raise UnitConversionError("{p} is not convertible to any of the allowed units; "
-                                      "{a}".format(p=x_unit.to_string(), a=allowed))
+            raise UnitConversionError(f"{x_unit.to_string()} is not convertible to any of the allowed units; {allowed}")
         else:
             xu_ind = x_convertible.index(True)
 
-        r_scale_starts = [Quantity(100, 'kpc'), Quantity(0.2, 'deg'), Quantity(0.05, r200), Quantity(0.1, r500),
-                         Quantity(0.5, r2500)]
+        r_scale_starts = [
+            Quantity(100, "kpc"),
+            Quantity(0.2, "deg"),
+            Quantity(0.05, r200),
+            Quantity(0.1, r500),
+            Quantity(0.5, r2500),
+        ]
         # We will implement the NFW mass profile with a rho_0 normalization parameter, a density - and leave in the
         #  volume integration terms - rather than fitting for some mass normalization
-        norm_starts = [Quantity(1e+13, 'Msun/Mpc^3')]
+        norm_starts = [Quantity(1e13, "Msun/Mpc^3")]
 
         start_pars = [r_scale_starts[xu_ind], norm_starts[yu_ind]]
         if cust_start_pars is not None:
@@ -69,26 +78,30 @@ class NFW(BaseModel1D):
             # This method also returns the custom start pars converted to exactly the same units as the default
             start_pars = self.compare_units(cust_start_pars, start_pars)
 
-        r_core_priors = [{'prior': Quantity([0, 2000], 'kpc'), 'type': 'uniform'},
-                         {'prior': Quantity([0, 1], 'deg'), 'type': 'uniform'},
-                         {'prior': Quantity([0, 1], r200), 'type': 'uniform'},
-                         {'prior': Quantity([0, 1], r500), 'type': 'uniform'},
-                         {'prior': Quantity([0, 1], r2500), 'type': 'uniform'}]
-        norm_priors = [{'prior': Quantity([1e+12, 1e+16], 'Msun/Mpc^3'), 'type': 'uniform'}]
+        r_core_priors = [
+            {"prior": Quantity([0, 2000], "kpc"), "type": "uniform"},
+            {"prior": Quantity([0, 1], "deg"), "type": "uniform"},
+            {"prior": Quantity([0, 1], r200), "type": "uniform"},
+            {"prior": Quantity([0, 1], r500), "type": "uniform"},
+            {"prior": Quantity([0, 1], r2500), "type": "uniform"},
+        ]
+        norm_priors = [{"prior": Quantity([1e12, 1e16], "Msun/Mpc^3"), "type": "uniform"}]
 
         priors = [r_core_priors[xu_ind], norm_priors[yu_ind]]
 
         nice_pars = [r"$R_{\rm{s}}$", r"$\rho_{0}$"]
-        info_dict = {'author': 'Navarro J, Frenk C, White S', 'year': '1997',
-                     'reference': 'https://ui.adsabs.harvard.edu/abs/1997ApJ...490..493N/abstract',
-                     'general': 'The cumulative mass version of the NFW mass-density profile for galaxy \n'
-                                'clusters - normally used to describe dark matter profiles.'}
+        info_dict = {
+            "author": "Navarro J, Frenk C, White S",
+            "year": "1997",
+            "reference": "https://ui.adsabs.harvard.edu/abs/1997ApJ...490..493N/abstract",
+            "general": "The cumulative mass version of the NFW mass-density profile for galaxy \n"
+            "clusters - normally used to describe dark matter profiles.",
+        }
 
-        super().__init__(x_unit, y_unit, start_pars, priors, 'nfw', 'NFW Profile', nice_pars, 'Mass',
-                         info_dict)
+        super().__init__(x_unit, y_unit, start_pars, priors, "nfw", "NFW Profile", nice_pars, "Mass", info_dict)
 
     @staticmethod
-    def model(x: Quantity, r_scale: Quantity, rho_zero: Quantity) -> Quantity:
+    def model(x: Quantity, r_scale: Quantity, rho_zero: Quantity) -> Quantity:  # type: ignore[override]
         """
         The model function for the constant-core and power-law entropy model.
 
@@ -98,9 +111,8 @@ class NFW(BaseModel1D):
         :return: The y values corresponding to the input x values.
         :rtype: Quantity
         """
-
         norm_rad = x / r_scale
-        result = 4*np.pi*rho_zero*np.power(r_scale, 3)*(np.log(1 + norm_rad) - (norm_rad / (1 + norm_rad)))
+        result = 4 * np.pi * rho_zero * np.power(r_scale, 3) * (np.log(1 + norm_rad) - (norm_rad / (1 + norm_rad)))
         return result
 
 

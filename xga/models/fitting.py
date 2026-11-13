@@ -1,15 +1,22 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:21. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+"""
+The xga.models.fitting module contains log-likelihood, prior, and posterior probability functions used when fitting
+XGA 1D profile models with MCMC samplers.
+"""
 
-from typing import List
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
-
 
 # This set of functions is to support the MCMC fitting found in the BaseProfile class(es) - its here because
 #  local functions can't be pickled
 
-def log_likelihood(theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.ndarray, m_func) -> np.ndarray:
+
+def log_likelihood(
+    theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.ndarray, m_func: Callable[..., Any]
+) -> np.ndarray:
     """
     Uses a simple Gaussian likelihood function, returns the logged value.
 
@@ -24,13 +31,13 @@ def log_likelihood(theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.nd
     """
     # Just in case something goes wrong in the model function
     try:
-        lik = -np.sum(np.log(y_err*np.sqrt(2*np.pi)) + (((y - m_func(r, *theta))**2) / (2*y_err**2)))
+        lik = -np.sum(np.log(y_err * np.sqrt(2 * np.pi)) + (((y - m_func(r, *theta)) ** 2) / (2 * y_err**2)))
     except ZeroDivisionError:
         lik = np.nan
     return lik
 
 
-def log_uniform_prior(theta: np.ndarray, pr: List) -> float:
+def log_uniform_prior(theta: np.ndarray, pr: list) -> float:
     """
     This function acts as a uniform prior. Using the limits for the parameters in the chosen
     model (either user defined or default), the function checks whether the passed theta values
@@ -56,8 +63,9 @@ def log_uniform_prior(theta: np.ndarray, pr: List) -> float:
     return ret_val
 
 
-def log_prob(theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.ndarray,
-             m_func, pr) -> np.ndarray:
+def log_prob(
+    theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.ndarray, m_func: Callable[..., Any], pr: list
+) -> np.ndarray | float:
     """
     The combination of the log prior and log likelihood.
 
@@ -82,7 +90,3 @@ def log_prob(theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.ndarray,
         ret_val = -np.inf
 
     return ret_val
-
-
-
-

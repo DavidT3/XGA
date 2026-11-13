@@ -1,14 +1,16 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:21. Copyright (c) The Contributors
-
-from typing import Union, List
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+"""
+The xga.models.temperature module defines analytical 1D models for describing galaxy cluster radial gas temperature
+profiles (such as simplified and full Vikhlinin temperature models).
+"""
 
 import numpy as np
 from astropy.constants import k_B
-from astropy.units import Quantity, Unit, UnitConversionError, kpc, deg
+from astropy.units import Quantity, Unit, UnitConversionError, deg, kpc
 
+from ..utils import r200, r500, r2500
 from .base import BaseModel1D
-from ..utils import r500, r200, r2500
 
 
 class SimpleVikhlininTemperature1D(BaseModel1D):
@@ -23,8 +25,13 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
     :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
         used start values. The units are checked against default start values.
     """
-    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('keV'),
-                 cust_start_pars: List[Quantity] = None):
+
+    def __init__(
+        self,
+        x_unit: str | Unit = "kpc",
+        y_unit: str | Unit = Unit("keV"),
+        cust_start_pars: list[Quantity] | None = None,
+    ) -> None:
         """
         The init of a subclass of the XGA BaseModel1D class, describing a simple version of the galaxy cluster
         temperature profile model created by Vikhlinin et al.
@@ -35,12 +42,11 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
         if isinstance(y_unit, str):
             y_unit = Unit(y_unit)
 
-        poss_y_units = [Unit('keV'), Unit('K')]
+        poss_y_units = [Unit("keV"), Unit("K")]
         y_convertible = [u.is_equivalent(y_unit) for u in poss_y_units]
         if not any(y_convertible):
             allowed = ", ".join([u.to_string() for u in poss_y_units])
-            raise UnitConversionError("{p} is not convertible to any of the allowed units; "
-                                      "{a}".format(p=y_unit.to_string(), a=allowed))
+            raise UnitConversionError(f"{y_unit.to_string()} is not convertible to any of the allowed units; {allowed}")
         else:
             yu_ind = y_convertible.index(True)
 
@@ -48,56 +54,104 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
         x_convertible = [u.is_equivalent(x_unit) for u in poss_x_units]
         if not any(x_convertible):
             allowed = ", ".join([u.to_string() for u in poss_x_units])
-            raise UnitConversionError("{p} is not convertible to any of the allowed units; "
-                                      "{a}".format(p=x_unit.to_string(), a=allowed))
+            raise UnitConversionError(f"{x_unit.to_string()} is not convertible to any of the allowed units; {allowed}")
         else:
             xu_ind = x_convertible.index(True)
 
-        r_cool_starts = [Quantity(50, 'kpc'), Quantity(0.01, 'deg'), Quantity(0.05, r200), Quantity(0.1, r500),
-                         Quantity(0.5, r2500)]
-        r_tran_starts = [Quantity(200, 'kpc'), Quantity(0.015, 'deg'), Quantity(0.2, r200), Quantity(0.4, r500),
-                         Quantity(0.7, r2500)]
-        t_min_starts = [Quantity(3, 'keV'), (Quantity(3, 'keV')/k_B).to('K')]
-        t_zero_starts = [Quantity(6, 'keV'), (Quantity(6, 'keV')/k_B).to('K')]
+        r_cool_starts = [
+            Quantity(50, "kpc"),
+            Quantity(0.01, "deg"),
+            Quantity(0.05, r200),
+            Quantity(0.1, r500),
+            Quantity(0.5, r2500),
+        ]
+        r_tran_starts = [
+            Quantity(200, "kpc"),
+            Quantity(0.015, "deg"),
+            Quantity(0.2, r200),
+            Quantity(0.4, r500),
+            Quantity(0.7, r2500),
+        ]
+        t_min_starts = [Quantity(3, "keV"), (Quantity(3, "keV") / k_B).to("K")]
+        t_zero_starts = [Quantity(6, "keV"), (Quantity(6, "keV") / k_B).to("K")]
 
-        start_pars = [r_cool_starts[xu_ind], Quantity(1, ''), t_min_starts[yu_ind], t_zero_starts[yu_ind],
-                      r_tran_starts[xu_ind], Quantity(1, '')]
+        start_pars = [
+            r_cool_starts[xu_ind],
+            Quantity(1, ""),
+            t_min_starts[yu_ind],
+            t_zero_starts[yu_ind],
+            r_tran_starts[xu_ind],
+            Quantity(1, ""),
+        ]
 
         if cust_start_pars is not None:
             # If the custom start parameters can run this gauntlet without tripping an error then we're all good
             # This method also returns the custom start pars converted to exactly the same units as the default
             start_pars = self.compare_units(cust_start_pars, start_pars)
 
-        rc_priors = [{'prior': Quantity([10, 500], 'kpc'), 'type': 'uniform'},
-                     {'prior': Quantity([0.0, 0.032951243], 'deg'), 'type': 'uniform'},
-                     {'prior': Quantity([0, 0.5], r200), 'type': 'uniform'},
-                     {'prior': Quantity([0, 0.3], r500), 'type': 'uniform'},
-                     {'prior': Quantity([0, 1], r2500), 'type': 'uniform'}]
-        rt_priors = [{'prior': Quantity([100, 500], 'kpc'), 'type': 'uniform'},
-                     {'prior': Quantity([0.001, 0.032951243], 'deg'), 'type': 'uniform'},
-                     {'prior': Quantity([0.1, 0.5], r200), 'type': 'uniform'},
-                     {'prior': Quantity([0.07, 0.3], r500), 'type': 'uniform'},
-                     {'prior': Quantity([0.2, 1], r2500), 'type': 'uniform'}]
-        t0_priors = [{'prior': Quantity([0.5, 15], 'keV'), 'type': 'uniform'},
-                     {'prior': (Quantity([0.5, 15], 'keV')/k_B).to('K'), 'type': 'uniform'}]
-        tm_priors = [{'prior': Quantity([0.1, 6], 'keV'), 'type': 'uniform'},
-                     {'prior': (Quantity([0.1, 6], 'keV') / k_B).to('K'), 'type': 'uniform'}]
+        rc_priors = [
+            {"prior": Quantity([10, 500], "kpc"), "type": "uniform"},
+            {"prior": Quantity([0.0, 0.032951243], "deg"), "type": "uniform"},
+            {"prior": Quantity([0, 0.5], r200), "type": "uniform"},
+            {"prior": Quantity([0, 0.3], r500), "type": "uniform"},
+            {"prior": Quantity([0, 1], r2500), "type": "uniform"},
+        ]
+        rt_priors = [
+            {"prior": Quantity([100, 500], "kpc"), "type": "uniform"},
+            {"prior": Quantity([0.001, 0.032951243], "deg"), "type": "uniform"},
+            {"prior": Quantity([0.1, 0.5], r200), "type": "uniform"},
+            {"prior": Quantity([0.07, 0.3], r500), "type": "uniform"},
+            {"prior": Quantity([0.2, 1], r2500), "type": "uniform"},
+        ]
+        t0_priors = [
+            {"prior": Quantity([0.5, 15], "keV"), "type": "uniform"},
+            {"prior": (Quantity([0.5, 15], "keV") / k_B).to("K"), "type": "uniform"},
+        ]
+        tm_priors = [
+            {"prior": Quantity([0.1, 6], "keV"), "type": "uniform"},
+            {"prior": (Quantity([0.1, 6], "keV") / k_B).to("K"), "type": "uniform"},
+        ]
 
-        priors = [rc_priors[xu_ind], {'prior': Quantity([0, 5]), 'type': 'uniform'}, tm_priors[yu_ind],
-                  t0_priors[yu_ind], rt_priors[xu_ind], {'prior': Quantity([0, 5]), 'type': 'uniform'}]
+        priors = [
+            rc_priors[xu_ind],
+            {"prior": Quantity([0, 5]), "type": "uniform"},
+            tm_priors[yu_ind],
+            t0_priors[yu_ind],
+            rt_priors[xu_ind],
+            {"prior": Quantity([0, 5]), "type": "uniform"},
+        ]
 
         nice_pars = [r"$R_{\rm{cool}}$", r"$a_{\rm{cool}}$", r"$T_{\rm{min}}$", r"$T_{0}$", r"$R_{\rm{T}}$", r"$c$"]
-        info_dict = {'author': 'Ghirardini et al.', 'year': 2019,
-                     'reference': 'https://doi.org/10.1051/0004-6361/201833325',
-                     'general': "A simplified, 'functional', form of Vikhlinin's temperature model.\n"
-                                " This model has 6 free parameters rather than the 9 free parameters\n"
-                                " of the original"}
-        super().__init__(x_unit, y_unit, start_pars, priors, 'simple_vikhlinin_temp',
-                         'Simplified Vikhlinin Profile', nice_pars, 'Gas Temperature', info_dict)
+        info_dict = {
+            "author": "Ghirardini et al.",
+            "year": 2019,
+            "reference": "https://doi.org/10.1051/0004-6361/201833325",
+            "general": "A simplified, 'functional', form of Vikhlinin's temperature model.\n"
+            " This model has 6 free parameters rather than the 9 free parameters\n"
+            " of the original",
+        }
+        super().__init__(
+            x_unit,
+            y_unit,
+            start_pars,
+            priors,
+            "simple_vikhlinin_temp",
+            "Simplified Vikhlinin Profile",
+            nice_pars,
+            "Gas Temperature",
+            info_dict,
+        )
 
     @staticmethod
-    def model(x: Quantity, r_cool: Quantity, a_cool: Quantity, t_min: Quantity, t_zero: Quantity,  r_tran: Quantity,
-              c_power: Quantity) -> Quantity:
+    def model(  # type: ignore[override]
+        x: Quantity,
+        r_cool: Quantity,
+        a_cool: Quantity,
+        t_min: Quantity,
+        t_zero: Quantity,
+        r_tran: Quantity,
+        c_power: Quantity,
+    ) -> Quantity:
         """
         The model function for the simplified Vikhlinin temperature profile.
 
@@ -113,15 +167,15 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
         :rtype: Quantity
         """
         try:
-            cool_expr = ((t_min / t_zero) + (x / r_cool)**a_cool) / (1 + (x / r_cool)**a_cool)
-            out_expr = 1 / ((1 + (x / r_tran)**2)**(c_power / 2))
+            cool_expr = ((t_min / t_zero) + (x / r_cool) ** a_cool) / (1 + (x / r_cool) ** a_cool)
+            out_expr = 1 / ((1 + (x / r_tran) ** 2) ** (c_power / 2))
             result = t_zero * cool_expr * out_expr
         except ZeroDivisionError:
             result = np.nan
 
         return result
 
-    def derivative(self, x: Quantity, dx: Quantity = Quantity(0, ''), use_par_dist: bool = False) -> Quantity:
+    def derivative(self, x: Quantity, dx: Quantity = Quantity(0, ""), use_par_dist: bool = False) -> Quantity:
         """
         Calculates the gradient of the simple Vikhlinin temperature profile at a given point, overriding the
         numerical method implemented in the BaseModel1D class.
@@ -148,11 +202,13 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
         else:
             r_c, a, t_m, t_0, r_t, c = self.par_dists
 
-        p1 = (((x/r_t)**2)+1)**(-c/2)*((a*-(t_m-t_0))*((x**2)+(r_t**2))*((x/r_c)**a)
-                                       - c*x**2*(((x/r_c)**a)+1)*(t_m+(t_0*((x/r_c)**a))))
-        p2 = x*(x**2+r_t**2)*(((x/r_c)**a) + 1)**2
+        p1 = (((x / r_t) ** 2) + 1) ** (-c / 2) * (
+            (a * -(t_m - t_0)) * ((x**2) + (r_t**2)) * ((x / r_c) ** a)
+            - c * x**2 * (((x / r_c) ** a) + 1) * (t_m + (t_0 * ((x / r_c) ** a)))
+        )
+        p2 = x * (x**2 + r_t**2) * (((x / r_c) ** a) + 1) ** 2
 
-        return p1/p2
+        return p1 / p2
 
 
 class VikhlininTemperature1D(BaseModel1D):
@@ -167,8 +223,13 @@ class VikhlininTemperature1D(BaseModel1D):
     :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
         used start values. The units are checked against default start values.
     """
-    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('keV'),
-                 cust_start_pars: List[Quantity] = None):
+
+    def __init__(
+        self,
+        x_unit: str | Unit = "kpc",
+        y_unit: str | Unit = Unit("keV"),
+        cust_start_pars: list[Quantity] | None = None,
+    ) -> None:
         """
         The init of a subclass of the XGA BaseModel1D class, describing the full version of the galaxy cluster
         temperature profile model created by Vikhlinin et al.
@@ -179,12 +240,11 @@ class VikhlininTemperature1D(BaseModel1D):
         if isinstance(y_unit, str):
             y_unit = Unit(y_unit)
 
-        poss_y_units = [Unit('keV'), Unit('K')]
+        poss_y_units = [Unit("keV"), Unit("K")]
         y_convertible = [u.is_equivalent(y_unit) for u in poss_y_units]
         if not any(y_convertible):
             allowed = ", ".join([u.to_string() for u in poss_y_units])
-            raise UnitConversionError("{p} is not convertible to any of the allowed units; "
-                                      "{a}".format(p=y_unit.to_string(), a=allowed))
+            raise UnitConversionError(f"{y_unit.to_string()} is not convertible to any of the allowed units; {allowed}")
         else:
             yu_ind = y_convertible.index(True)
 
@@ -192,44 +252,76 @@ class VikhlininTemperature1D(BaseModel1D):
         x_convertible = [u.is_equivalent(x_unit) for u in poss_x_units]
         if not any(x_convertible):
             allowed = ", ".join([u.to_string() for u in poss_x_units])
-            raise UnitConversionError("{p} is not convertible to any of the allowed units; "
-                                      "{a}".format(p=x_unit.to_string(), a=allowed))
+            raise UnitConversionError(f"{x_unit.to_string()} is not convertible to any of the allowed units; {allowed}")
         else:
             xu_ind = x_convertible.index(True)
 
-        r_cool_starts = [Quantity(50, 'kpc'), Quantity(0.01, 'deg'), Quantity(0.05, r200), Quantity(0.1, r500),
-                         Quantity(0.5, r2500)]
-        r_tran_starts = [Quantity(200, 'kpc'), Quantity(0.015, 'deg'), Quantity(0.2, r200), Quantity(0.4, r500),
-                         Quantity(0.7, r2500)]
-        t_min_starts = [Quantity(3, 'keV'), (Quantity(3, 'keV') / k_B).to('K')]
-        t_zero_starts = [Quantity(6, 'keV'), (Quantity(6, 'keV') / k_B).to('K')]
+        r_cool_starts = [
+            Quantity(50, "kpc"),
+            Quantity(0.01, "deg"),
+            Quantity(0.05, r200),
+            Quantity(0.1, r500),
+            Quantity(0.5, r2500),
+        ]
+        r_tran_starts = [
+            Quantity(200, "kpc"),
+            Quantity(0.015, "deg"),
+            Quantity(0.2, r200),
+            Quantity(0.4, r500),
+            Quantity(0.7, r2500),
+        ]
+        t_min_starts = [Quantity(3, "keV"), (Quantity(3, "keV") / k_B).to("K")]
+        t_zero_starts = [Quantity(6, "keV"), (Quantity(6, "keV") / k_B).to("K")]
 
-        start_pars = [r_cool_starts[xu_ind], Quantity(1, ''), t_min_starts[yu_ind], t_zero_starts[yu_ind],
-                      r_tran_starts[xu_ind], Quantity(1, ''), Quantity(1, ''), Quantity(1, '')]
+        start_pars = [
+            r_cool_starts[xu_ind],
+            Quantity(1, ""),
+            t_min_starts[yu_ind],
+            t_zero_starts[yu_ind],
+            r_tran_starts[xu_ind],
+            Quantity(1, ""),
+            Quantity(1, ""),
+            Quantity(1, ""),
+        ]
 
         if cust_start_pars is not None:
             # If the custom start parameters can run this gauntlet without tripping an error then we're all good
             # This method also returns the custom start pars converted to exactly the same units as the default
             start_pars = self.compare_units(cust_start_pars, start_pars)
 
-        rc_priors = [{'prior': Quantity([10, 500], 'kpc'), 'type': 'uniform'},
-                     {'prior': Quantity([0.0, 0.032951243], 'deg'), 'type': 'uniform'},
-                     {'prior': Quantity([0, 0.5], r200), 'type': 'uniform'},
-                     {'prior': Quantity([0, 0.3], r500), 'type': 'uniform'},
-                     {'prior': Quantity([0, 1], r2500), 'type': 'uniform'}]
-        rt_priors = [{'prior': Quantity([100, 500], 'kpc'), 'type': 'uniform'},
-                     {'prior': Quantity([0.001, 0.032951243], 'deg'), 'type': 'uniform'},
-                     {'prior': Quantity([0.1, 0.5], r200), 'type': 'uniform'},
-                     {'prior': Quantity([0.07, 0.3], r500), 'type': 'uniform'},
-                     {'prior': Quantity([0.2, 1], r2500), 'type': 'uniform'}]
-        t0_priors = [{'prior': Quantity([0.5, 15], 'keV'), 'type': 'uniform'},
-                     {'prior': (Quantity([0.5, 15], 'keV') / k_B).to('K'), 'type': 'uniform'}]
-        tm_priors = [{'prior': Quantity([0.1, 6], 'keV'), 'type': 'uniform'},
-                     {'prior': (Quantity([0.1, 6], 'keV') / k_B).to('K'), 'type': 'uniform'}]
+        rc_priors = [
+            {"prior": Quantity([10, 500], "kpc"), "type": "uniform"},
+            {"prior": Quantity([0.0, 0.032951243], "deg"), "type": "uniform"},
+            {"prior": Quantity([0, 0.5], r200), "type": "uniform"},
+            {"prior": Quantity([0, 0.3], r500), "type": "uniform"},
+            {"prior": Quantity([0, 1], r2500), "type": "uniform"},
+        ]
+        rt_priors = [
+            {"prior": Quantity([100, 500], "kpc"), "type": "uniform"},
+            {"prior": Quantity([0.001, 0.032951243], "deg"), "type": "uniform"},
+            {"prior": Quantity([0.1, 0.5], r200), "type": "uniform"},
+            {"prior": Quantity([0.07, 0.3], r500), "type": "uniform"},
+            {"prior": Quantity([0.2, 1], r2500), "type": "uniform"},
+        ]
+        t0_priors = [
+            {"prior": Quantity([0.5, 15], "keV"), "type": "uniform"},
+            {"prior": (Quantity([0.5, 15], "keV") / k_B).to("K"), "type": "uniform"},
+        ]
+        tm_priors = [
+            {"prior": Quantity([0.1, 6], "keV"), "type": "uniform"},
+            {"prior": (Quantity([0.1, 6], "keV") / k_B).to("K"), "type": "uniform"},
+        ]
 
-        priors = [rc_priors[xu_ind], {'prior': Quantity([0, 5]), 'type': 'uniform'}, tm_priors[yu_ind],
-                  t0_priors[yu_ind], rt_priors[xu_ind], {'prior': Quantity([0, 5]), 'type': 'uniform'},
-                  {'prior': Quantity([0, 5]), 'type': 'uniform'}, {'prior': Quantity([0, 5]), 'type': 'uniform'}]
+        priors = [
+            rc_priors[xu_ind],
+            {"prior": Quantity([0, 5]), "type": "uniform"},
+            tm_priors[yu_ind],
+            t0_priors[yu_ind],
+            rt_priors[xu_ind],
+            {"prior": Quantity([0, 5]), "type": "uniform"},
+            {"prior": Quantity([0, 5]), "type": "uniform"},
+            {"prior": Quantity([0, 5]), "type": "uniform"},
+        ]
 
         nice_pars = [
             r"$R_{\rm{cool}}$",
@@ -241,16 +333,37 @@ class VikhlininTemperature1D(BaseModel1D):
             r"$b$",
             r"$c$",
         ]
-        info_dict = {'author': 'Vikhlinin et al.', 'year': 2005,
-                     'reference': 'https://doi.org/10.1086/500288',
-                     'general': "The full form of Vikhlinin's temperature model, describes a\n"
-                                "cluster temperature profile from the core to the outskirts."}
-        super().__init__(x_unit, y_unit, start_pars, priors, 'vikhlinin_temp',
-                         'Vikhlinin Profile', nice_pars, 'Gas Temperature', info_dict)
+        info_dict = {
+            "author": "Vikhlinin et al.",
+            "year": 2005,
+            "reference": "https://doi.org/10.1086/500288",
+            "general": "The full form of Vikhlinin's temperature model, describes a\n"
+            "cluster temperature profile from the core to the outskirts.",
+        }
+        super().__init__(
+            x_unit,
+            y_unit,
+            start_pars,
+            priors,
+            "vikhlinin_temp",
+            "Vikhlinin Profile",
+            nice_pars,
+            "Gas Temperature",
+            info_dict,
+        )
 
     @staticmethod
-    def model(x: Quantity, r_cool: Quantity, a_cool: Quantity, t_min: Quantity, t_zero: Quantity, r_tran: Quantity,
-              a_power: Quantity, b_power: Quantity, c_power: Quantity) -> Quantity:
+    def model(  # type: ignore[override]
+        x: Quantity,
+        r_cool: Quantity,
+        a_cool: Quantity,
+        t_min: Quantity,
+        t_zero: Quantity,
+        r_tran: Quantity,
+        a_power: Quantity,
+        b_power: Quantity,
+        c_power: Quantity,
+    ) -> Quantity:
         """
         The model function for the full Vikhlinin temperature profile.
 
@@ -267,13 +380,13 @@ class VikhlininTemperature1D(BaseModel1D):
         :rtype: Quantity
         """
         try:
-            power_rad_ratio = (x / r_cool)**a_cool
+            power_rad_ratio = (x / r_cool) ** a_cool
             # The rest of the model expression
             t_cool = (power_rad_ratio + (t_min / t_zero)) / (power_rad_ratio + 1)
 
             # The ratio of the input radius (or radii) to the transition radius
             rad_ratio = x / r_tran
-            t_outer = rad_ratio**(-a_power) / (1 + rad_ratio**b_power)**(c_power / b_power)
+            t_outer = rad_ratio ** (-a_power) / (1 + rad_ratio**b_power) ** (c_power / b_power)
             result = t_zero * t_cool * t_outer
 
         except ZeroDivisionError:
@@ -286,7 +399,3 @@ class VikhlininTemperature1D(BaseModel1D):
 TEMP_MODELS = {"vikhlinin_temp": VikhlininTemperature1D, "simple_vikhlinin_temp": SimpleVikhlininTemperature1D}
 TEMP_MODELS_PUB_NAMES = {n: m().publication_name for n, m in TEMP_MODELS.items()}
 TEMP_MODELS_PAR_NAMES = {n: m().par_publication_names for n, m in TEMP_MODELS.items()}
-
-
-
-

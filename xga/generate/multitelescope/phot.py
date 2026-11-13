@@ -1,22 +1,30 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 13:22. Copyright (c) The Contributors
+"""
+The xga.generate.multitelescope.phot module provides convenience functions that call mission-specific photometric
+product generation wrappers across all telescopes associated with a source or sample.
+"""
 
-from typing import Union, List
 from warnings import warn
 
 from astropy.units import Quantity
 
 from xga import NUM_CORES
+from xga.generate.ciao import chandra_image_expmap
 from xga.generate.esass import combine_phot_prod, evtool_image, expmap
 from xga.generate.multitelescope._common import check_tel_associated
-from xga.generate.sas import emosaic, evselect_image, eexpmap
-from xga.generate.ciao import chandra_image_expmap
+from xga.generate.sas import eexpmap, emosaic, evselect_image
 from xga.samples import BaseSample
 from xga.sources import BaseSource
 
 
-def all_telescope_combined_images(sources: Union[BaseSource, BaseSample], lo_en: Quantity, hi_en: Quantity,
-                                  telescope: Union[str, List[str]] = None, num_cores: int = NUM_CORES):
+def all_telescope_combined_images(
+    sources: BaseSource | BaseSample,
+    lo_en: Quantity,
+    hi_en: Quantity,
+    telescope: str | list[str] | None = None,
+    num_cores: int = NUM_CORES,
+) -> None:
     """
     A convenience function for generating individual-telescope combined images (this function does not combine
     data from multiple telescopes). It acts as a simple wrapper for the different generate functions that make
@@ -32,19 +40,24 @@ def all_telescope_combined_images(sources: Union[BaseSource, BaseSample], lo_en:
     """
     rel_tels = check_tel_associated(sources, telescope)
 
-    if 'xmm' in rel_tels:
-        emosaic(sources, 'image', lo_en, hi_en, num_cores=num_cores)
+    if "xmm" in rel_tels:
+        emosaic(sources, "image", lo_en, hi_en, num_cores=num_cores)
 
-    if 'erosita' in rel_tels or 'erass' in rel_tels:
-        combine_phot_prod(sources, 'image', lo_en, hi_en, num_cores=num_cores)
+    if "erosita" in rel_tels or "erass" in rel_tels:
+        combine_phot_prod(sources, "image", lo_en, hi_en, num_cores=num_cores)
 
-    if 'chandra' in rel_tels:
+    if "chandra" in rel_tels:
         warn("Combined images cannot yet be generated from Chandra observations.", stacklevel=2)
         pass
 
 
-def all_telescope_combined_expmaps(sources: Union[BaseSource, BaseSample], lo_en: Quantity, hi_en: Quantity,
-                                   telescope: Union[str, List[str]] = None, num_cores: int = NUM_CORES):
+def all_telescope_combined_expmaps(
+    sources: BaseSource | BaseSample,
+    lo_en: Quantity,
+    hi_en: Quantity,
+    telescope: str | list[str] | None = None,
+    num_cores: int = NUM_CORES,
+) -> None:
     """
     A convenience function for generating individual-telescope combined exposure maps (this function does
     not combine data from multiple telescopes). It acts as a simple wrapper for the different generate
@@ -58,23 +71,26 @@ def all_telescope_combined_expmaps(sources: Union[BaseSource, BaseSample], lo_en
         exposure maps. Default is None, in which case all associated telescopes will be used.
     :param int num_cores: Number of CPU cores to use. Default is set to 90% of available.
     """
-
     rel_tels = check_tel_associated(sources, telescope)
 
-    if 'xmm' in rel_tels:
-        emosaic(sources, 'expmap', lo_en, hi_en, num_cores=num_cores)
+    if "xmm" in rel_tels:
+        emosaic(sources, "expmap", lo_en, hi_en, num_cores=num_cores)
 
-    if 'erosita' in rel_tels or 'erass' in rel_tels:
-        combine_phot_prod(sources, 'expmap', lo_en, hi_en, num_cores=num_cores)
+    if "erosita" in rel_tels or "erass" in rel_tels:
+        combine_phot_prod(sources, "expmap", lo_en, hi_en, num_cores=num_cores)
 
-    if 'chandra' in rel_tels:
+    if "chandra" in rel_tels:
         warn("Combined exposure maps cannot yet be generated from Chandra observations.", stacklevel=2)
         pass
 
 
-def all_telescope_images(sources: Union[BaseSource, BaseSample], lo_en: Quantity = Quantity(0.5, "keV"),
-                         hi_en: Quantity = Quantity(2.0, "keV"), telescope: Union[str, List[str]] = None,
-                         num_cores: int = NUM_CORES):
+def all_telescope_images(
+    sources: BaseSource | BaseSample,
+    lo_en: Quantity = Quantity(0.5, "keV"),
+    hi_en: Quantity = Quantity(2.0, "keV"),
+    telescope: str | list[str] | None = None,
+    num_cores: int = NUM_CORES,
+) -> None:
     """
     A convenience function for generating individual images for all telescopes associated with the
     passed source(s).
@@ -88,19 +104,23 @@ def all_telescope_images(sources: Union[BaseSource, BaseSample], lo_en: Quantity
     """
     rel_tels = check_tel_associated(sources, telescope)
 
-    if 'xmm' in rel_tels:
+    if "xmm" in rel_tels:
         evselect_image(sources, lo_en, hi_en, num_cores=num_cores)
 
-    if 'erosita' in rel_tels or 'erass' in rel_tels:
+    if "erosita" in rel_tels or "erass" in rel_tels:
         evtool_image(sources, lo_en, hi_en, num_cores=num_cores)
 
-    if 'chandra' in rel_tels:
+    if "chandra" in rel_tels:
         chandra_image_expmap(sources, lo_en, hi_en, num_cores=num_cores)
 
 
-def all_telescope_expmaps(sources: Union[BaseSource, BaseSample], lo_en: Quantity = Quantity(0.5, "keV"),
-                          hi_en: Quantity = Quantity(2.0, "keV"), telescope: Union[str, List[str]] = None,
-                          num_cores: int = NUM_CORES):
+def all_telescope_expmaps(
+    sources: BaseSource | BaseSample,
+    lo_en: Quantity = Quantity(0.5, "keV"),
+    hi_en: Quantity = Quantity(2.0, "keV"),
+    telescope: str | list[str] | None = None,
+    num_cores: int = NUM_CORES,
+) -> None:
     """
     A convenience function for generating individual exposure maps for all telescopes associated with the
     passed source(s).
@@ -114,11 +134,11 @@ def all_telescope_expmaps(sources: Union[BaseSource, BaseSample], lo_en: Quantit
     """
     rel_tels = check_tel_associated(sources, telescope)
 
-    if 'xmm' in rel_tels:
+    if "xmm" in rel_tels:
         eexpmap(sources, lo_en, hi_en, num_cores=num_cores)
 
-    if 'erosita' in rel_tels or 'erass' in rel_tels:
+    if "erosita" in rel_tels or "erass" in rel_tels:
         expmap(sources, lo_en, hi_en, num_cores=num_cores)
 
-    if 'chandra' in rel_tels:
+    if "chandra" in rel_tels:
         chandra_image_expmap(sources, lo_en, hi_en, num_cores=num_cores)

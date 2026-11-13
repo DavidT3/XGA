@@ -1,5 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+"""The xga.imagetools.bin module implements spatial binning algorithms (such as contour binning) for X-ray images."""
 
 from warnings import warn
 
@@ -8,11 +9,11 @@ import numpy as np
 from astropy.units import Quantity, UnitConversionError
 from tqdm import tqdm
 
-from ..imagetools.misc import edge_finder, data_limits
+from ..imagetools.misc import data_limits, edge_finder
 from ..products import RateMap
 
-CONT_BIN_METRICS = ['counts', 'snr']
-MAX_VAL_UNITS = ['ct', '']
+CONT_BIN_METRICS = ["counts", "snr"]
+MAX_VAL_UNITS = ["ct", ""]
 
 
 def _fill_reg_mask(outline_mask: np.ndarray) -> np.ndarray:
@@ -23,20 +24,19 @@ def _fill_reg_mask(outline_mask: np.ndarray) -> np.ndarray:
     :return:
     :rtype: np.ndarray
     """
-
     raise NotImplementedError("This idea is still under development")
 
     all_x = np.arange(0, outline_mask.shape[1])
     x_lims, y_lims = data_limits(outline_mask)
 
     plt.figure(figsize=(10, 10))
-    plt.imshow(outline_mask, origin='lower', cmap='gray')
+    plt.imshow(outline_mask, origin="lower", cmap="gray")
     plt.xlim(x_lims)
     plt.ylim(y_lims)
     plt.show()
 
     filled_mask = np.zeros(outline_mask.shape)
-    for y in range(y_lims[0], y_lims[1]+1):
+    for y in range(y_lims[0], y_lims[1] + 1):
         x_bnds = np.where(outline_mask[y, :] == 1)[0]
 
         if len(x_bnds) == 0:
@@ -49,17 +49,24 @@ def _fill_reg_mask(outline_mask: np.ndarray) -> np.ndarray:
         filled_mask[y, filled_line] = 1
 
     plt.figure(figsize=(10, 10))
-    plt.imshow(filled_mask, origin='lower', cmap='gray')
+    plt.imshow(filled_mask, origin="lower", cmap="gray")
     plt.xlim(x_lims)
     plt.ylim(y_lims)
     plt.show()
     import sys
+
     sys.exit()
 
 
-def contour_bin_masks(prod: RateMap, src_mask: np.ndarray = None, bck_mask: np.ndarray = None,
-                      start_pos: Quantity = None, max_masks: int = 20, metric: str = 'counts',
-                      max_val: Quantity = Quantity(1000, 'ct')) -> np.ndarray:
+def contour_bin_masks(
+    prod: RateMap,
+    src_mask: np.ndarray | None = None,
+    bck_mask: np.ndarray | None = None,
+    start_pos: Quantity | None = None,
+    max_masks: int = 20,
+    metric: str = "counts",
+    max_val: Quantity = Quantity(1000, "ct"),
+) -> np.ndarray:
     """
     This method implements different spins on Jeremy Sanders' contour binning
     method (https://doi.org/10.1111/j.1365-2966.2006.10716.x) to split the 2D ratemap into bins that
@@ -97,21 +104,26 @@ def contour_bin_masks(prod: RateMap, src_mask: np.ndarray = None, bck_mask: np.n
     #  right units for the chosen metric.
     if metric not in CONT_BIN_METRICS:
         cont_av = ", ".join(CONT_BIN_METRICS)
-        raise ValueError("{m} is not a recognised contour binning metric, please use one of the "
-                         "following; {a}".format(m=metric, a=cont_av))
+        raise ValueError(
+            f"{metric} is not a recognised contour binning metric, please use one of the following; {cont_av}"
+        )
     elif max_val.unit.to_string() != MAX_VAL_UNITS[CONT_BIN_METRICS.index(metric)]:
-        raise UnitConversionError("The {m} metric requires a max value in units of "
-                                  "{u}".format(m=metric, u=MAX_VAL_UNITS[CONT_BIN_METRICS.index(metric)]))
+        raise UnitConversionError(
+            f"The {metric} metric requires a max value in units of {MAX_VAL_UNITS[CONT_BIN_METRICS.index(metric)]}"
+        )
 
     # We use type here rather than isinstance because ExpMaps are also a subclass of Image, so would get through
     #  that check
-    if type(prod) != RateMap:
+    if type(prod) is not RateMap:
         raise TypeError("Only XGA RateMap products can be binned with this function.")
 
     # I do warn the user in this case, because it seems like a strange choice
     if src_mask is None and bck_mask is None:
-        warn("You have not passed a src or bck mask, the whole image will be binned and no background subtraction "
-             "will be applied")
+        warn(
+            "You have not passed a src or bck mask, the whole image will be binned and no background subtraction "
+            "will be applied",
+            stacklevel=2,
+        )
 
     # If the src mask parameter is None, we assemble an array of ones, to allow all pixels to be considered
     if src_mask is None:
@@ -136,17 +148,17 @@ def contour_bin_masks(prod: RateMap, src_mask: np.ndarray = None, bck_mask: np.n
         # Not sure about this at all, but it'll do for now
         bck_rt_per_pix = im_bck_dat.sum() / ex_bck_dat.sum()
         # A map of the background COUNTS at each pixel
-        bck_cnt_map = Quantity(prod.expmap.data.copy() * bck_rt_per_pix, 'ct')
+        bck_cnt_map = Quantity(prod.expmap.data.copy() * bck_rt_per_pix, "ct")
     else:
-        bck_cnt_map = Quantity(np.zeros(prod.shape), 'ct')
+        bck_cnt_map = Quantity(np.zeros(prod.shape), "ct")
 
     # If the user hasn't supplied us with somewhere to start, we just select the brightest pixel
     #  remaining after masking, just using the Image or RateMap simple peak method
     if start_pos is None:
-        start_pos = prod.simple_peak(src_mask, 'pix')[0].value
+        start_pos = prod.simple_peak(src_mask, "pix")[0].value
     else:
         # If the user has supplied a start position then we want it to be in pixels
-        start_pos = prod.coord_conv(start_pos, 'pix').value
+        start_pos = prod.coord_conv(start_pos, "pix").value
 
     # While start_pos is the very first start position and is immutable, each region will need its own
     #  start coordinate that is stored in this variable
@@ -167,8 +179,7 @@ def contour_bin_masks(prod: RateMap, src_mask: np.ndarray = None, bck_mask: np.n
     # The various product type and metric combinations
     # There are many while loops in this process and they make me sad, but we don't know a priori how
     #  many bins there will be when we're done
-    if metric == 'counts':
-
+    if metric == "counts":
         # Here we create a total mask where all previously claimed parts of the image are marked
         #  off. As bins are laid down this will be slowly blocked off, but it starts as all ones
         no_go = np.ones(prod_dat.shape)
@@ -181,14 +192,14 @@ def contour_bin_masks(prod: RateMap, src_mask: np.ndarray = None, bck_mask: np.n
                 cur_mask[cur_bin_sp[0], cur_bin_sp[1]] = 1
 
                 # Fetch the counts in the start pixel
-                start_cnt = prod.get_count(Quantity([cur_bin_sp[1], cur_bin_sp[0]], 'pix'))
+                start_cnt = prod.get_count(Quantity([cur_bin_sp[1], cur_bin_sp[0]], "pix"))
                 # Fetch the background counts in the start pixel
                 start_bck_cnt = bck_cnt_map[cur_bin_sp[0], cur_bin_sp[1]]
-                start_bck_cnt = Quantity(20, 'ct')
+                start_bck_cnt = Quantity(20, "ct")
 
                 # For this count based metric, this is were the total counts is totted up. We make sure that it can't
                 #  go below zero
-                tot_cnts = Quantity([start_cnt-start_bck_cnt, Quantity(0, 'ct')]).max()
+                tot_cnts = Quantity([start_cnt - start_bck_cnt, Quantity(0, "ct")]).max()
 
                 # Did this go all the way through the loop to the max val?
                 max_val_reached = True
@@ -202,7 +213,7 @@ def contour_bin_masks(prod: RateMap, src_mask: np.ndarray = None, bck_mask: np.n
                     #  the regions that have already been claimed by previous contour bins, (in no_go), and finally
                     #  the places around the edge of the current contour bin that the algorithm is allowed
                     #  to go next (in cand_mask)
-                    allowed_data = prod_dat*cand_mask*no_go
+                    allowed_data = prod_dat * cand_mask * no_go
 
                     # Obviously if all of this array is zero, then we can't continue with this contour bin, as
                     #  there is nowhere else to go
@@ -220,10 +231,10 @@ def contour_bin_masks(prod: RateMap, src_mask: np.ndarray = None, bck_mask: np.n
                     #  of this contour bin now
                     cur_mask[cur_bin_sp[0], cur_bin_sp[1]] = 1
 
-                    cur_cnt = prod.get_count(Quantity([cur_bin_sp[1], cur_bin_sp[0]], 'pix'))
+                    cur_cnt = prod.get_count(Quantity([cur_bin_sp[1], cur_bin_sp[0]], "pix"))
                     cur_bck_cnt = bck_cnt_map[cur_bin_sp[0], cur_bin_sp[1]]
                     # We make sure that it can't go below zero
-                    cnts = Quantity([cur_cnt-cur_bck_cnt, Quantity(0, 'ct')]).max()
+                    cnts = Quantity([cur_cnt - cur_bck_cnt, Quantity(0, "ct")]).max()
 
                     # Then we update the total number of counts
                     tot_cnts += cnts
@@ -243,8 +254,13 @@ def contour_bin_masks(prod: RateMap, src_mask: np.ndarray = None, bck_mask: np.n
                     # Then make array representations of the y and x coordinates of the mask array
                     row_inds, col_inds = np.indices(cur_mask.shape)
                     # Find points in the mask that are within the approximate x and y lims, and have a value of zero.
-                    yp, xp = np.where((row_inds < y_lims[1]) & (row_inds > y_lims[0]) & (col_inds < x_lims[1]) &
-                                      (col_inds > x_lims[0]) & (cur_mask == 0))
+                    yp, xp = np.where(
+                        (row_inds < y_lims[1])
+                        & (row_inds > y_lims[0])
+                        & (col_inds < x_lims[1])
+                        & (col_inds > x_lims[0])
+                        & (cur_mask == 0)
+                    )
 
                     # Convert the results of np.where back into the coordinate system of the mask, we now have a list
                     #  of coordinates to check further (split into separate x (cp) and y (rp) arrays
@@ -252,8 +268,12 @@ def contour_bin_masks(prod: RateMap, src_mask: np.ndarray = None, bck_mask: np.n
 
                     # Then we go looking for which of those zero valued points is surrounded by values of one, in
                     #  the mask. Should be relatively easy to see whats happening here
-                    dots = np.where((cur_mask[rp+1, cp] == 1) & (cur_mask[rp-1, cp] == 1) & (cur_mask[rp, cp+1] == 1)
-                                    & (cur_mask[rp, cp-1] == 1))
+                    dots = np.where(
+                        (cur_mask[rp + 1, cp] == 1)
+                        & (cur_mask[rp - 1, cp] == 1)
+                        & (cur_mask[rp, cp + 1] == 1)
+                        & (cur_mask[rp, cp - 1] == 1)
+                    )
 
                     # Then those points in the mask we've identified are set to one
                     cur_mask[rp[dots], cp[dots]] = 1
@@ -280,14 +300,13 @@ def contour_bin_masks(prod: RateMap, src_mask: np.ndarray = None, bck_mask: np.n
                 no_go *= flipped
 
                 # Now this particular bin is finished, we find the pixel at which we shall start the next one
-                new_peak = prod.simple_peak(no_go*src_mask, 'pix')[0].value
+                new_peak = prod.simple_peak(no_go * src_mask, "pix")[0].value
                 cur_bin_sp = new_peak[[1, 0]]
 
-    elif metric == 'snr':
+    elif metric == "snr":
         raise NotImplementedError("The signal to noise approach has not been implemented yet")
 
     # This makes the list of arrays into a 3D array to be returned
     all_masks = np.dstack(all_masks)
 
     return all_masks
-

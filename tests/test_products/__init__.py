@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 9/25/26, 5:46 PM. Copyright (c) The Contributors.
+"""The __init__ for the data products unit tests, defining shared remote test event list paths."""
 
 # These are a selection of event lists, with expected telescope/instrument, to test with
 TEST_EVTS = {

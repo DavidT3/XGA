@@ -1,15 +1,17 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 3:27 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+"""Tests for XGA's image and rate map smoothing functions in xga.imagetools.smooth."""
 
 import os
 import unittest
 
 import numpy as np
-from astropy.convolution import Gaussian2DKernel, Gaussian1DKernel
+from astropy.convolution import Gaussian1DKernel, Gaussian2DKernel
 from astropy.units import Quantity
 
 from xga.imagetools import general_smooth
-from xga.products.phot import Image, ExpMap, RateMap
+from xga.products.phot import ExpMap, Image, RateMap
+
 from .. import MISC_OUTPUT_TESTS
 
 
@@ -17,42 +19,61 @@ class TestGeneralSmoothFunction(unittest.TestCase):
     """A set of tests of XGA's `general_smooth` imagetools function."""
 
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         """Exists to prepare the XGA Image instance we'll use to test `general_smooth(...)`."""
         # Store the URL in a class attribute just in case
         # Might want to reconsider how much I'm using remote data for tests of product
         #  classes. If files move or the tests are running on a machine with no
         #  internet connection, then there will be artificial failures.
-        cls.demo_im_url = ("https://heasarc.gsfc.nasa.gov/FTP/xmm/data/rev0/0843441101/"
-                           "PPS/P0843441101M1S001IMAGE_8000.FTZ")
-        cls.demo_ex_url = ("https://heasarc.gsfc.nasa.gov/FTP/xmm/data/rev0/0843441101/"
-                           "PPS/P0843441101M1S001EXPMAP8000.FTZ")
+        cls.demo_im_url = (
+            "https://heasarc.gsfc.nasa.gov/FTP/xmm/data/rev0/0843441101/PPS/P0843441101M1S001IMAGE_8000.FTZ"
+        )
+        cls.demo_ex_url = (
+            "https://heasarc.gsfc.nasa.gov/FTP/xmm/data/rev0/0843441101/PPS/P0843441101M1S001EXPMAP8000.FTZ"
+        )
 
         # Set up the XGA Image we'll be testing on
-        cls.demo_im = Image(cls.demo_im_url, "0843441101", "mos1", "", "",
-                            "", Quantity(0.2, 'keV'), Quantity(12., 'keV'),
-                            telescope='xmm')
+        cls.demo_im = Image(
+            cls.demo_im_url,
+            "0843441101",
+            "mos1",
+            "",
+            "",
+            "",
+            Quantity(0.2, "keV"),
+            Quantity(12.0, "keV"),
+            telescope="xmm",
+        )
 
         # Set up the XGA ExpMap we'll use to make a RateMap
-        cls.demo_ex = ExpMap(cls.demo_ex_url, "0843441101", "mos1", "", "",
-                            "", Quantity(0.2, 'keV'), Quantity(12., 'keV'),
-                            telescope='xmm')
+        cls.demo_ex = ExpMap(
+            cls.demo_ex_url,
+            "0843441101",
+            "mos1",
+            "",
+            "",
+            "",
+            Quantity(0.2, "keV"),
+            Quantity(12.0, "keV"),
+            telescope="xmm",
+        )
 
         # And then the RateMap itself
         cls.demo_rt = RateMap(cls.demo_im, cls.demo_ex)
 
-    def test_1D_kernel_fail(self):
+    def test_1D_kernel_fail(self) -> None:  # noqa: N802
         """Tests that a 1D Gaussian kernel triggers an exception."""
         # Define a 1D kernel
         cur_kern = Gaussian1DKernel(2)
 
         # Now we call the smoothing function, which should reject this kernel, as 1D
         #  kernels cannot be applied to 2D imaging data.
-        with self.assertRaises(ValueError, msg="The 'general_smooth' function failed to "
-                                               "raise an exception when passed a 1D kernel."):
+        with self.assertRaises(
+            ValueError, msg="The 'general_smooth' function failed to raise an exception when passed a 1D kernel."
+        ):
             general_smooth(self.demo_im, cur_kern)
 
-    def test_smooth_image(self):
+    def test_smooth_image(self) -> None:
         """Checks the general_smooth function by running on the demo image with various configurations."""
         # Set up an output directory for this test - visualizations of the images will
         #  be written to disk there as PNGs.
@@ -86,16 +107,13 @@ class TestGeneralSmoothFunction(unittest.TestCase):
 
         # Applying a mask and smoothing
         with self.subTest(check="Masked smoothing"):
-            mask = np.zeros(self.demo_im.data.shape, dtype=int)
+            mask = np.zeros(self.demo_im.shape, dtype=np.int64)
             mask[270:378, 270:378] = 1
             masked_smth_im = general_smooth(self.demo_im, cur_kern, mask=mask)
             masked_smth_im.save_view(os.path.join(test_out_path, "masked_smooth.png"))
 
-    def test_smooth_ratemap_image(self):
-        """
-        Checks the general_smooth function by running on the demo ratemap, using the
-        ratemap_smooth_im=True method.
-        """
+    def test_smooth_ratemap_image(self) -> None:
+        """Checks general_smooth by running on the demo ratemap using the ratemap_smooth_im=True method."""
         # Set up an output directory for this test - visualizations of the ratemaps will
         #  be written to disk there as PNGs.
         test_out_path = os.path.join(MISC_OUTPUT_TESTS, self.id())
@@ -123,16 +141,18 @@ class TestGeneralSmoothFunction(unittest.TestCase):
 
         # Switching off kernel renormalization
         with self.subTest(check="Unnormalized kernel FFT smoothing ratemap [im method]"):
-            nonorm_fft_smth_rt = general_smooth(self.demo_rt, cur_kern, fft=True, norm_kernel=False,
-                                                ratemap_smooth_im=True)
+            nonorm_fft_smth_rt = general_smooth(
+                self.demo_rt, cur_kern, fft=True, norm_kernel=False, ratemap_smooth_im=True
+            )
             nonorm_fft_smth_rt.save_view(os.path.join(test_out_path, "nonorm_fft_smooth_rt_im_method.png"))
 
         # Applying a mask and smoothing
         with self.subTest(check="Masked smoothing ratemap [im method]"):
-            mask = np.zeros(self.demo_rt.data.shape, dtype=int)
+            mask = np.zeros(self.demo_rt.shape, dtype=np.int64)
             mask[270:378, 270:378] = 1
             masked_smth_rt = general_smooth(self.demo_rt, cur_kern, mask=mask, ratemap_smooth_im=True)
             masked_smth_rt.save_view(os.path.join(test_out_path, "masked_smooth_rt_im_method.png"))
+
 
 if __name__ == "__main__":
     unittest.main()

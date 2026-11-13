@@ -14,9 +14,10 @@ parsing data from line 79 onwards, as specified.
 import json
 import os
 import sys
+from typing import Any
 
 
-def _convert_to_proper_type(value):
+def _convert_to_proper_type(value: str | int | float | bool | None) -> str | int | float | bool | None:
     """
     Attempts to convert a string value to its correct type (int, float, bool, None).
     If conversion fails, the original string is returned.
@@ -25,13 +26,13 @@ def _convert_to_proper_type(value):
         return value
 
     # Try converting to boolean
-    if value.lower() == 'true':
+    if value.lower() == "true":
         return True
-    if value.lower() == 'false':
+    if value.lower() == "false":
         return False
 
     # Try converting "NONE" to Python's None
-    if value.lower() == 'none':
+    if value.lower() == "none":
         return None
 
     # Try converting to integer
@@ -50,7 +51,7 @@ def _convert_to_proper_type(value):
     return value
 
 
-def parse_xselect_file(filepath):
+def parse_xselect_file(filepath: str) -> tuple[dict[str, Any], set[str], list[str]]:
     """
     Parses a file with colon-separated key-value pairs into a nested dictionary.
 
@@ -63,30 +64,30 @@ def parse_xselect_file(filepath):
             - A set of all unique telescope names found.
             - A list of error messages for any lines that could not be parsed.
     """
-    telescope_data = {}
-    telescope_names = set()
-    errors = []
+    telescope_data: dict[str, Any] = {}
+    telescope_names: set[str] = set()
+    errors: list[str] = []
     data_start_line = 79
 
     try:
-        with open(filepath, 'r') as f:
+        with open(filepath) as f:
             for line_number, line in enumerate(f, 1):
                 line = line.strip()
 
                 # Skip comment lines and empty lines, as well as lines before the data section
-                if line_number < data_start_line or not line or line.startswith('!'):
+                if line_number < data_start_line or not line or line.startswith("!"):
                     continue
 
                 try:
                     # Check for lines that contain a colon, which indicates a hierarchical structure.
-                    if ':' in line:
+                    if ":" in line:
                         # Split the line by the first space to separate the hierarchical key path from the values.
                         # This handles cases where the key path itself has spaces (though unlikely)
-                        parts = line.split(' ', 1)
+                        parts = line.split(" ", 1)
                         key_path_str = parts[0].strip()
 
                         # Split the key path by colon to get the hierarchy
-                        key_path_parts = [part.strip() for part in key_path_str.split(':')]
+                        key_path_parts = [part.strip() for part in key_path_str.split(":")]
 
                         # Add the top-level telescope name to our set
                         if key_path_parts:
@@ -136,19 +137,19 @@ def parse_xselect_file(filepath):
     return telescope_data, telescope_names, errors
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     if len(sys.argv) > 1:
         file_to_parse = sys.argv[1]
     else:
-        headas = os.environ['HEADAS']
-        file_to_parse = os.path.join("/".join(headas.split('/')[:-1]), "ftools/xselect/xselect.mdb")
+        headas = os.environ["HEADAS"]
+        file_to_parse = os.path.join("/".join(headas.split("/")[:-1]), "ftools/xselect/xselect.mdb")
 
     parsed_dict, telescopes, parsing_errors = parse_xselect_file(file_to_parse)
 
     if parsed_dict:
         print("Successfully parsed data into a dictionary:")
         print(json.dumps(parsed_dict, indent=2))
-        with open("xselect_mission_database.json", 'w') as f:
+        with open("xselect_mission_database.json", "w") as f:
             json.dump(parsed_dict, f, indent=2)
 
     if telescopes:

@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 1:46 PM. Copyright (c) The Contributors.
+"""Functions for scaling and stacking 2D images and radial profiles across samples of extended sources."""
 
 from multiprocessing.dummy import Pool
 from warnings import warn
@@ -36,7 +37,7 @@ def _stack_setup_checks(
     psf_bins: int = 4,
     psf_algo: str = "rl",
     psf_iter: int = 15,
-    telescope: str = None,
+    telescope: str | None = None,
 ) -> None:
     """
     Internal function that was originally split off from radial data stack. This performs checks to make sure passed
@@ -88,10 +89,10 @@ def _create_stack(
     scale_radius: str,
     lo_en: Quantity,
     hi_en: Quantity,
-    custom_temps: Quantity,
+    custom_temps: Quantity | None,
     sim_met: float | list = 0.3,
     abund_table: str = "angr",
-    telescope: str = None,
+    telescope: str | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
     """
     Internal function that was originally split off from radial data stack. Takes the surface brightness profiles
@@ -177,8 +178,8 @@ def _create_stack(
     for src_ind, src in enumerate(sources):
         if src_ind not in no_nan:
             warn(
-                f"A NaN value was detected in {src.name}'s brightness profile, and as such it has been excluded from the "
-                "stack.",
+                f"A NaN value was detected in {src.name}'s brightness profile, and as such it has been excluded "
+                "from the stack.",
                 stacklevel=2,
             )
         else:
@@ -260,7 +261,7 @@ def stacked_radial_brightness(
     num_bins: int = 100,
     max_scale: float = 1.5,
     num_cores: int = NUM_CORES,
-    telescope: str = None,
+    telescope: str | None = None,
 ) -> dict:
     """
     This function will scale the radial brightness profiles of a sample of clusters by a given over-density radius,
@@ -346,11 +347,11 @@ def radial_data_stack(
     scale_radius: str = "r200",
     use_peak: bool = True,
     pix_step: int = 1,
-    radii: np.ndarray = np.linspace(0.01, 1, 20),
+    radii: np.ndarray | None = None,
     min_snr: int | float = 0.0,
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
-    custom_temps: Quantity = None,
+    custom_temps: Quantity | None = None,
     sim_met: float | list = 0.3,
     abund_table: str = "angr",
     psf_corr: bool = False,
@@ -359,7 +360,7 @@ def radial_data_stack(
     psf_algo: str = "rl",
     psf_iter: int = 15,
     num_cores: int = NUM_CORES,
-    telescope: str = None,
+    telescope: str | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
     """
     Creates and scales radial brightness profiles for a set of galaxy clusters so that they can be combined
@@ -374,6 +375,7 @@ def radial_data_stack(
         for each GalaxyCluster object.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
+        Default is None, in which case np.linspace(0.01, 1, 20) is used.
     :param int/float min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
         0, which disables automatic rebinning.
     :param Quantity lo_en: The lower energy bound of the ratemaps to use.
@@ -399,6 +401,8 @@ def radial_data_stack(
         covariance matrix. I also return a list of source names that WERE included in the stack.
     :rtype: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray, list]
     """
+    if radii is None:
+        radii = np.linspace(0.01, 1, 20)
     raise NotImplementedError("This has not been implemented yet.")
 
     def construct_profile(
@@ -516,14 +520,14 @@ def radial_data_stack(
     # Sets up a multiprocessing pool
     with tqdm(total=len(sources), desc="Generating Brightness Profiles") as onwards, Pool(num_cores) as pool:
 
-        def callback(results):
+        def callback(results: tuple[np.ndarray | Quantity, int]) -> None:
             nonlocal sb
             nonlocal onwards
             b, s_id = results
             sb[s_id, :] = b
             onwards.update(1)
 
-        def err_callback(err):
+        def err_callback(err: BaseException) -> None:
             onwards.update()
             raise err
 
@@ -547,11 +551,11 @@ def view_radial_data_stack(
     scale_radius: str = "r200",
     use_peak: bool = True,
     pix_step: int = 1,
-    radii: np.ndarray = np.linspace(0.01, 1, 20),
+    radii: np.ndarray | None = None,
     min_snr: int | float = 0.0,
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
-    custom_temps: Quantity = None,
+    custom_temps: Quantity | None = None,
     sim_met: float | list = 0.3,
     abund_table: str = "angr",
     psf_corr: bool = False,
@@ -562,7 +566,7 @@ def view_radial_data_stack(
     num_cores: int = NUM_CORES,
     show_images: bool = False,
     figsize: tuple = (14, 14),
-    telescope: str = None,
+    telescope: str | None = None,
 ) -> None:
     """
     A convenience function that calls radial_data_stack and makes plots of the average profile, individual profiles,
@@ -575,6 +579,7 @@ def view_radial_data_stack(
         for each GalaxyCluster object.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
+        Default is None, in which case np.linspace(0.01, 1, 20) is used.
     :param int/float min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
         0, which disables automatic rebinning.
     :param Quantity lo_en: The lower energy limit of the data that goes into the stacked profiles.
@@ -598,6 +603,9 @@ def view_radial_data_stack(
     :param str telescope: The telescope to retrieve ratemaps, images, and masks for, e.g. 'xmm' or 'erosita'.
         Default is None, in which case the default telescope associated with the source/sample will be used.
     """
+    if radii is None:
+        radii = np.linspace(0.01, 1, 20)
+
     # Calls the stacking function
     results = radial_data_stack(
         sources,
@@ -666,7 +674,7 @@ def view_radial_data_stack(
                 pr.centre[1].value + pr.pixel_bins[-1] * multiplier,
             )
             # This populates ones of the axes with a view of the image
-            im_ax = rt.get_view(
+            rt.get_view(
                 ax_arr[0],
                 pr.centre,
                 inter_mask,
@@ -697,11 +705,11 @@ def radial_model_stack(
     fit_method: str = "mcmc",
     use_peak: bool = True,
     pix_step: int = 1,
-    radii: np.ndarray = np.linspace(0.01, 1, 20),
+    radii: np.ndarray | None = None,
     min_snr: int | float = 0.0,
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
-    custom_temps: Quantity = None,
+    custom_temps: Quantity | None = None,
     sim_met: float | list = 0.3,
     abund_table: str = "angr",
     psf_corr: bool = False,
@@ -712,7 +720,7 @@ def radial_model_stack(
     num_cores: int = NUM_CORES,
     num_walkers: int = 20,
     num_steps: int = 20000,
-    telescope: str = None,
+    telescope: str | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
     """
     Creates, fits, and scales radial brightness profiles for a set of galaxy clusters so that they can be combined
@@ -730,6 +738,7 @@ def radial_model_stack(
         for each GalaxyCluster object.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
+        Default is None, in which case np.linspace(0.01, 1, 20) is used.
     :param int/float min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
         0, which disables automatic rebinning.
     :param Quantity lo_en: The lower energy limit of the data that goes into the stacked profiles.
@@ -757,6 +766,8 @@ def radial_model_stack(
         covariance matrix. I also return a list of source names that WERE included in the stack.
     :rtype: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray, list]
     """
+    if radii is None:
+        radii = np.linspace(0.01, 1, 20)
     raise NotImplementedError("This has not been implemented yet.")
 
     def construct_profile(
@@ -872,7 +883,7 @@ def radial_model_stack(
     # Sets up a multiprocessing pool
     with tqdm(total=len(sources), desc="Generating Brightness Profiles") as onwards, Pool(num_cores) as pool:
 
-        def callback(results):
+        def callback(results: tuple[np.ndarray | Quantity, int]) -> None:
             nonlocal sb
             nonlocal onwards
             b, s_id = results
@@ -881,7 +892,7 @@ def radial_model_stack(
             )
             onwards.update(1)
 
-        def err_callback(err):
+        def err_callback(err: BaseException) -> None:
             onwards.update()
             raise err
 
@@ -907,11 +918,11 @@ def view_radial_model_stack(
     fit_method: str = "mcmc",
     use_peak: bool = True,
     pix_step: int = 1,
-    radii: np.ndarray = np.linspace(0.01, 1, 20),
+    radii: np.ndarray | None = None,
     min_snr: int | float = 0.0,
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
-    custom_temps: Quantity = None,
+    custom_temps: Quantity | None = None,
     sim_met: float | list = 0.3,
     abund_table: str = "angr",
     psf_corr: bool = False,
@@ -924,7 +935,7 @@ def view_radial_model_stack(
     num_steps: int = 20000,
     show_images: bool = False,
     figsize: tuple = (14, 14),
-    telescope: str = None,
+    telescope: str | None = None,
 ) -> None:
     """
     A convenience function that calls radial_model_stack and makes plots of the average profile, individual profiles,
@@ -939,6 +950,7 @@ def view_radial_model_stack(
         for each GalaxyCluster object.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
+        Default is None, in which case np.linspace(0.01, 1, 20) is used.
     :param int/float min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
         0, which disables automatic rebinning.
     :param Quantity lo_en: The lower energy limit of the data that goes into the stacked profiles.
@@ -964,6 +976,9 @@ def view_radial_model_stack(
     :param str telescope: The telescope to retrieve ratemaps, images, and masks for, e.g. 'xmm' or 'erosita'.
         Default is None, in which case the default telescope associated with the source/sample will be used.
     """
+    if radii is None:
+        radii = np.linspace(0.01, 1, 20)
+
     # Calls the stacking function
     results = radial_model_stack(
         sources,
@@ -1033,7 +1048,7 @@ def view_radial_model_stack(
                 pr.centre[1].value + pr.pixel_bins[-1] * multiplier,
             )
             # This populates ones of the axes with a view of the image
-            im_ax = rt.get_view(
+            rt.get_view(
                 ax_arr[0],
                 pr.centre,
                 inter_mask,

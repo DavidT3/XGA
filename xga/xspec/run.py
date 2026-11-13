@@ -1,14 +1,15 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 9:28 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+"""Core execution machinery and decorators for running XSPEC scripts in parallel and parsing output files."""
 
 import os
+from collections.abc import Callable
 from functools import wraps
-
-# from multiprocessing.dummy import Pool
 from multiprocessing import Pool
 from random import randint
 from shutil import rmtree
 from subprocess import PIPE, Popen, TimeoutExpired
+from typing import Any
 from warnings import warn
 
 import fitsio
@@ -19,7 +20,6 @@ from tqdm import tqdm
 
 from .. import OUTPUT, XSPEC_VERSION
 from ..exceptions import XGADeveloperError, XSPECNotFoundError
-from ..products import AnnularSpectra
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 
@@ -160,7 +160,7 @@ def execute_cmd(
     return res_tables, src, usable, cur_error, cur_warn, timed_out
 
 
-def xspec_call(xspec_func):
+def xspec_call(xspec_func: Callable[..., Any]) -> Callable[..., Any]:
     """
     This is used as a decorator for functions that produce XSPEC scripts. Depending on the
     system that XGA is running on (and whether the user requests parallel execution), the method of
@@ -172,7 +172,7 @@ def xspec_call(xspec_func):
     """
 
     @wraps(xspec_func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: object, **kwargs: object) -> BaseSource | BaseSample | list[BaseSource]:
         # We'll stop this process in its tracks if XGA cannot find an XSPEC installation
         if XSPEC_VERSION is None:
             raise XSPECNotFoundError("There is no XSPEC installation detectable on this machine.")
@@ -208,7 +208,7 @@ def xspec_call(xspec_func):
 
         # This is what the returned information from the execute command gets stored in before being parceled out
         #  to source and spectrum objects
-        results = {s: [] for s in src_lookup}
+        results: dict[str, list[list[Any]]] = {s: [] for s in src_lookup}
         if run_type == "fit":
             desc = "Running XSPEC Fits"
         elif run_type == "conv_factors":
@@ -225,7 +225,7 @@ def xspec_call(xspec_func):
             # This mode runs the XSPEC locally in a multiprocessing pool.
             with tqdm(total=len(script_list), desc=desc) as fit, Pool(cores) as pool:
 
-                def callback(results_in):
+                def callback(results_in: tuple[str | None, str, bool, list[str], list[str], bool]) -> None:
                     """
                     Callback function for the apply_async pool method which gets
                     called when a task finishes and something is returned.
@@ -250,7 +250,7 @@ def xspec_call(xspec_func):
             warn("All XSPEC operations had already been run.", stacklevel=2)
 
         # Now we assign the fit results to source objects
-        err_list = []
+        # err_list: list[Any] = []
         for src_repr in results:
             # Made this lookup list earlier, using string representations of source objects.
             # Finds the ind of the list of sources that we should add these results to
@@ -259,9 +259,9 @@ def xspec_call(xspec_func):
 
             # This flag tells this method if the current set of fits are part of an annular spectra or not
             ann_fit = False
-            ann_results = {}
-            ann_lums = {}
-            ann_obs_order = {}
+            ann_results: dict[Any, Any] = {}
+            ann_lums: dict[Any, Any] = {}
+            ann_obs_order: dict[Any, Any] = {}
             set_ident = {}
             # And this tells this method if an annular spectrum used the cross-arf option (the results are stored
             #  quite differently).
@@ -300,7 +300,7 @@ def xspec_call(xspec_func):
                             with_cross_arf = True
 
                         inst_lums = {}
-                        obs_order = []
+                        obs_order: list[Any] = []
                         for line_ind, line in enumerate(res_table["SPEC_INFO"]):
                             # We need to check if this spectrum is a combined_spectrum or not
                             # this can be done by seeing which directory it is stored in
@@ -366,9 +366,9 @@ def xspec_call(xspec_func):
                                 ann_lums[spec.annulus_ident][spec.instrument] = processed_lums
 
                         if tel == "xmm":
-                            # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
-                            #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
-                            #  consistent
+                            # Ideally the luminosity reported in the source object will be a PN lum, but its not
+                            #  impossible that a PN value won't be available. - it shouldn't matter much, lums across
+                            #  the cameras are consistent
                             if not with_cross_arf and "pn" in inst_lums:
                                 chosen_lums = inst_lums["pn"]
                             # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
@@ -396,9 +396,9 @@ def xspec_call(xspec_func):
                         #  object - we have already added the plotting information to the individual spectra
                         if not ann_fit:
                             # Push global fit results, luminosities etc. into the corresponding source object.
-                            #  There isn't a 'telescope' argument here because as far as XGA is designed currently, the
-                            #  'Spectrum' class holds a single spectrum, and we haven't made any frankenstein multi-telescope
-                            #  stacks yet (if ever)
+                            #  There isn't a 'telescope' argument here because as far as XGA is designed currently,
+                            #  the 'Spectrum' class holds a single spectrum, and we haven't made any frankenstein
+                            #  multi-telescope stacks yet (if ever)
                             cur_src.add_fit_data(
                                 model, global_results, chosen_lums, sp_key, tel, fit_conf_lookup[o_file_lu]
                             )
@@ -426,7 +426,6 @@ def xspec_call(xspec_func):
                                     f"telescope ({tel}) that does not yet have cross-arf support."
                                 )
 
-                            ann_spec: AnnularSpectra
                             # Here our main problem is untangling the parameters in the results table for this fit, as
                             #  we need to be able to assign them to our N annuli. This starts by reading out all
                             #  the column names, and figuring out where the fit parameters (which will be relevant

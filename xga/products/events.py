@@ -1,33 +1,28 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 4:13 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+"""This module defines the XGA EventList product class for interfacing with X-ray event list data files."""
 
 import os.path
-from typing import List, Tuple, Optional, Union
 from warnings import warn
 
 import numpy as np
 import pandas as pd
 from astropy import wcs
 from astropy.io import fits
-from astropy.io.fits import PrimaryHDU, HDUList
+from astropy.io.fits import HDUList, PrimaryHDU
 from astropy.table import Table
 from astropy.units import Quantity, UnitConversionError
 from astropy.wcs import WCS
 from astropy.wcs import utils as wcs_utils
 
-from xga import MISSION_COL_DB, DEFAULT_IMAGE_BINNING, ALT_INST_NAMES
-from xga.exceptions import ProductGenerationError, XGADeveloperError, ProductNotUsableError
+from xga import ALT_INST_NAMES, DEFAULT_IMAGE_BINNING, MISSION_COL_DB
+from xga.exceptions import ProductGenerationError, ProductNotUsableError, XGADeveloperError
 from xga.products.base import BaseProduct
 from xga.products.phot import Image
 
-LIM_KEY_MAP = {'sky': ('xsiz', 'ysiz'),
-               'det': ('detxsiz', 'detysiz'),
-               'raw': ('rawxsiz', 'rawysiz')}
+LIM_KEY_MAP = {"sky": ("xsiz", "ysiz"), "det": ("detxsiz", "detysiz"), "raw": ("rawxsiz", "rawysiz")}
 
-WCS_PREFIX_ALTS = {'TCDLT': 'CDELT',
-                   'TCRPX': 'CRPIX',
-                   'TCRVL': 'CRVAL',
-                   'TCTYP': 'CTYPE'}
+WCS_PREFIX_ALTS = {"TCDLT": "CDELT", "TCRPX": "CRPIX", "TCRVL": "CRVAL", "TCTYP": "CTYPE"}
 
 
 class EventList(BaseProduct):
@@ -78,15 +73,30 @@ class EventList(BaseProduct):
         or scandir and confirm files exist externally, than one by one in each product declaration.
     """
 
-    def __init__(self, path: str, obs_id: Optional[str] = None, instrument: Optional[str] = None,
-                 stdout_str: Optional[str] = None, stderr_str: Optional[str] = None, gen_cmd: Optional[str] = None,
-                 telescope: Optional[str] = None, obs_ids: Optional[List[str]] = None, force_remote: bool = False,
-                 fsspec_kwargs: Optional[dict] = None, energy_per_channel: Optional[Quantity] = None,
-                 sky_x_col: Optional[str] = None, sky_y_col: Optional[str] = None,
-                 det_x_col: Optional[str] = None, det_y_col: Optional[str] = None,
-                 raw_x_col: Optional[str] = None, raw_y_col: Optional[str] = None,
-                 en_col: Optional[str] = None, evt_tab_name: Optional[str] = None,
-                 imaging_evts: Optional[bool] = None, check_exists: bool = True):
+    def __init__(
+        self,
+        path: str,
+        obs_id: str | None = None,
+        instrument: str | None = None,
+        stdout_str: str | None = None,
+        stderr_str: str | None = None,
+        gen_cmd: str | None = None,
+        telescope: str | None = None,
+        obs_ids: list[str] | None = None,
+        force_remote: bool = False,
+        fsspec_kwargs: dict | None = None,
+        energy_per_channel: Quantity | None = None,
+        sky_x_col: str | None = None,
+        sky_y_col: str | None = None,
+        det_x_col: str | None = None,
+        det_y_col: str | None = None,
+        raw_x_col: str | None = None,
+        raw_y_col: str | None = None,
+        en_col: str | None = None,
+        evt_tab_name: str | None = None,
+        imaging_evts: bool | None = None,
+        check_exists: bool = True,
+    ) -> None:
         """
         The init method of the EventList class, a product class for event lists, it stores information about
         the event list.
@@ -135,15 +145,25 @@ class EventList(BaseProduct):
             or scandir and confirm files exist externally, than one by one in each product declaration.
         """
         # Call the BaseProduct init, sets up some attributes
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope,
-                         force_remote=force_remote, fsspec_kwargs=fsspec_kwargs, check_exists=check_exists)
+        super().__init__(
+            path,
+            obs_id,
+            instrument,
+            stdout_str,
+            stderr_str,
+            gen_cmd,
+            telescope=telescope,
+            force_remote=force_remote,
+            fsspec_kwargs=fsspec_kwargs,
+            check_exists=check_exists,
+        )
         self._prod_type = "events"
         # These store the header of the event list fits file (if read in), as well as the main table of event
         #  information (again if read in).
-        self._header = None
-        self._data = None
+        self._header: fits.Header | None = None
+        self._data: pd.DataFrame | None = None
         # Also include another header attribute, specifically for the event table header
-        self._event_header = None
+        self._event_header: fits.Header | None = None
 
         # These store the user-provided column and table names, as well as WCS key overrides
         self._sky_x_col = sky_x_col
@@ -176,9 +196,9 @@ class EventList(BaseProduct):
         #  memory usage.
         # This will be a boolean flag, if True then only a subset of columns from the event list table has
         #  been loaded, if False then they all have.
-        self._data_col_subset = None
+        self._data_col_subset: bool | None = None
         # Contains the names of ALL the columns in the events table that could be loaded
-        self._all_col_names = None
+        self._all_col_names: list[str] | None = None
 
         # We attempt to automatically derive the telescope, ObsID, and instrument (if they haven't been
         #  passed by the user) from the event list header
@@ -187,7 +207,7 @@ class EventList(BaseProduct):
             #  of the event table, rather than the primary header. We try-except our attempt to read that
             #  information from the primary header, and failover to trying to read it from the event table header.
             try:
-                self._tele = self.header['TELESCOP']
+                self._tele = self.header["TELESCOP"]
 
             # This contains a bodge, because we've come across a circular problem - we don't yet know the
             #  event table name, because we don't know the telescope name and can't look it up. That then means
@@ -196,9 +216,9 @@ class EventList(BaseProduct):
             except KeyError:
                 # This doesn't use the property setter because we are still in the init, and we want to
                 #  temporarily set it to 'EVENTS' to try and find the telescope name
-                self._evt_tab_name = 'EVENTS'
+                self._evt_tab_name = "EVENTS"
 
-                self._tele = self.event_header['TELESCOP']
+                self._tele = self.event_header["TELESCOP"]
 
                 # We now reset the event table name, and the event header attribute, so that the following code
                 #  will continue as normal
@@ -207,7 +227,9 @@ class EventList(BaseProduct):
 
         # Now that we know the name of the telescope, we can store the relevant mission DB entry in an attribute
         #  for easy access throughout this class. If there IS no entry for this telescope, then we set it to None.
-        self._rel_miss_db = None if self.telescope.upper() not in MISSION_COL_DB else MISSION_COL_DB[self.telescope.upper()]
+        self._rel_miss_db = (
+            None if self.telescope.upper() not in MISSION_COL_DB else MISSION_COL_DB[self.telescope.upper()]
+        )
 
         # We have to do the same for the instrument
         if instrument is None:
@@ -215,18 +237,18 @@ class EventList(BaseProduct):
             #  setup for this.
             # TODO This is another good argument for sub-classed event lists (see issue #1534)
             if self.telescope.upper() == "IXPE":
-                inst_key_name = 'DETNAM'
+                inst_key_name = "DETNAM"
             else:
-                inst_key_name = 'INSTRUME'
+                inst_key_name = "INSTRUME"
 
             # Try to pull out instrument name information
             try:
                 self._inst = self.header[inst_key_name]
             except KeyError:
                 # Same bodge as above
-                self._evt_tab_name = 'EVENTS'
+                self._evt_tab_name = "EVENTS"
 
-                self._inst = self.event_header['INSTRUME']
+                self._inst = self.event_header["INSTRUME"]
 
                 # We now reset the event table name, and the event header attribute, so that the following code
                 #  will continue as normal
@@ -241,13 +263,12 @@ class EventList(BaseProduct):
             self._evt_tab_name = "EVENTS"
 
         # In cases where individual instruments have entries for this, we'll use them
-        elif (self._inst.upper() in self._rel_miss_db and
-              'events' in self._rel_miss_db[self._inst.upper()]):
-            self._evt_tab_name = self._rel_miss_db[self._inst.upper()]['events']
+        elif self._inst.upper() in self._rel_miss_db and "events" in self._rel_miss_db[self._inst.upper()]:
+            self._evt_tab_name = self._rel_miss_db[self._inst.upper()]["events"]
 
         # Otherwise we'll look for the top-level events entry for the mission
-        elif 'events' in self._rel_miss_db:
-            self._evt_tab_name = self._rel_miss_db['events']
+        elif "events" in self._rel_miss_db:
+            self._evt_tab_name = self._rel_miss_db["events"]
 
         # And now we know we have the right event table name, we'll automatically determine the ObsID and instrument
         #  from the header, if they haven't been passed by the user.
@@ -256,7 +277,7 @@ class EventList(BaseProduct):
             # XS-OBSID may be unique to Einstein
             # SEQNUM may be unique to ASCA
             # OBS_ID is very much the most widely used.
-            poss_oi_key_names = ['OBS_ID', 'XS-OBSID', 'SEQNUM']
+            poss_oi_key_names = ["OBS_ID", "XS-OBSID", "SEQNUM"]
 
             # Iterating through the possible ObsID key names to try
             for cur_oi_key_name in poss_oi_key_names:
@@ -275,33 +296,34 @@ class EventList(BaseProduct):
                     break
 
         # Checking the formatting of the obs_ids argument
-        if obs_ids is not None and (not isinstance(obs_ids, List)
-                                    or (isinstance(obs_ids, List)
-                                        and not all(isinstance(obs, str)
-                                                    for obs in obs_ids))):
+        if obs_ids is not None and (
+            not isinstance(obs_ids, list)
+            or (isinstance(obs_ids, list) and not all(isinstance(obs, str) for obs in obs_ids))
+        ):
             raise ValueError("The 'obs_ids' argument must be a list of strings.")
         self._obs_ids = obs_ids
 
         # The user may want to use WCSes to convert between different coordinate systems (sky to RA-Dec for
         #  instance), so when they are constructed they will be assigned to these attributes
-        self._radec_sky_wcs = None
+        self._radec_sky_wcs: WCS | None = None
 
         # We allow the user to specify an energy per channel, which is used to convert between event channel and
         #  event energy, when performing operations such as generating images. If the user doesn't specify it
         #  then we'll try and infer the quantity using information from the mission database, but that operation
         #  will take place in the ev_per_channel property, as we don't want to raise an error because we can't find
         #  the necessary information unless the user actually needs that information.
-        if energy_per_channel is not None and not energy_per_channel.unit.is_equivalent('eV/chan'):
-            raise UnitConversionError("The 'energy_per_channel' argument must be an astropy Quantity with "
-                                      "units convertible to eV/chan.")
+        if energy_per_channel is not None and not energy_per_channel.unit.is_equivalent("eV/chan"):
+            raise UnitConversionError(
+                "The 'energy_per_channel' argument must be an astropy Quantity with units convertible to eV/chan."
+            )
         elif energy_per_channel is not None:
-            self._ev_per_channel = energy_per_channel.to('eV/chan')
+            self._ev_per_channel = energy_per_channel.to("eV/chan")
         else:
             self._ev_per_channel = None
 
     # ------------- Define properties -------------
     @property
-    def obs_ids(self) -> list:
+    def obs_ids(self) -> list | None:
         """
         Property getter for the ObsIDs that are involved in this Eventlist, if combined. Otherwise
         will return a list with one element, the single relevant ObsID.
@@ -309,7 +331,6 @@ class EventList(BaseProduct):
         :return: List of ObsIDs involved in this EventList.
         :rtype: list
         """
-
         return self._obs_ids
 
     # This absolutely doesn't get a setter considering it's the header object
@@ -326,7 +347,7 @@ class EventList(BaseProduct):
         return self._header
 
     @header.deleter
-    def header(self):
+    def header(self) -> None:
         """
         Property deleter for the header of this EventList instance. The self._header attribute is removed from
         memory, and then self._header is explicitly set to None so that self._read_header_on_demand() will be
@@ -345,11 +366,11 @@ class EventList(BaseProduct):
         :rtype: fits.Header
         """
         # This will read the header in if it does not already exist
-        self._read_header_on_demand('event')
+        self._read_header_on_demand("event")
         return self._event_header
 
     @event_header.deleter
-    def event_header(self):
+    def event_header(self) -> None:
         """
         Property deleter for the event table header of this EventList instance. The self._event_header attribute is
         removed from memory, and then self._event_header is explicitly set to None so that
@@ -369,10 +390,12 @@ class EventList(BaseProduct):
         # If the header attribute is None then we know we have to read the header in
         if self._data is None:
             self._read_data_on_demand()
+        if self._data is None:
+            raise XGADeveloperError("EventList data failed to load on demand.")
         return self._data
 
     @data.deleter
-    def data(self):
+    def data(self) -> None:
         """
         Property deleter for the data of this EventList instance. The self._data attribute is removed from
         memory, and then self._data is explicitly set to None so that self._read_data_on_demand() will be
@@ -392,7 +415,7 @@ class EventList(BaseProduct):
         """
         # If we haven't already, we need to construct the WCS now
         if self._radec_sky_wcs is None:
-            self._radec_sky_wcs = self._build_wcs('sky')
+            self._radec_sky_wcs = self._build_wcs("sky")
         return self._radec_sky_wcs
 
     @property
@@ -408,11 +431,10 @@ class EventList(BaseProduct):
             scale and the second being the y-direction sky pixel scale.
         :rtype: Quantity
         """
-
-        return np.abs(Quantity(self.radec_sky_wcs.wcs.cdelt, 'deg/pix'))
+        return np.abs(Quantity(self.radec_sky_wcs.wcs.cdelt, "deg/pix"))
 
     @property
-    def sky_pix_lims(self) -> Tuple[Quantity, Quantity]:
+    def sky_pix_lims(self) -> tuple[Quantity, Quantity]:
         """
         The X and Y pixel limits of the sky coordinate system. As this information
         is extracted from the 'radec_sky_wcs' of this EventList instance, and not all
@@ -424,12 +446,16 @@ class EventList(BaseProduct):
         :rtype: Tuple[Quantity, Quantity]
         """
         if self.radec_sky_wcs.pixel_bounds is None:
-            raise ValueError("The Sky coordinate system pixel limits could not be automatically determined from the "
-                             "FITS header of this EventList - instead, we suggest finding the minimum and maximum "
-                             "values of the relevant X and Y columns.")
+            raise ValueError(
+                "The Sky coordinate system pixel limits could not be automatically determined from the "
+                "FITS header of this EventList - instead, we suggest finding the minimum and maximum "
+                "values of the relevant X and Y columns."
+            )
 
-        return (Quantity(self.radec_sky_wcs.pixel_bounds[0], 'pix'),
-                    Quantity(self.radec_sky_wcs.pixel_bounds[1], 'pix'))
+        return (
+            Quantity(self.radec_sky_wcs.pixel_bounds[0], "pix"),
+            Quantity(self.radec_sky_wcs.pixel_bounds[1], "pix"),
+        )
 
     @property
     def ev_per_channel(self) -> Quantity:
@@ -455,42 +481,50 @@ class EventList(BaseProduct):
             #  the relevant WCS information.
             if self.mission_db_entry is not None:
                 # Try to identify the TTYPE ind associated with the channel 'coordinate system'
-                ecol_ttype_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
-                                  if hdr_val == self.mission_db_entry['ecol'] and 'TTYPE' in hdr_key]
+                ecol_ttype_ind = [
+                    hdr_key.split("TTYPE")[-1]
+                    for hdr_key, hdr_val in self.event_header.items()
+                    if hdr_val == self.mission_db_entry["ecol"] and "TTYPE" in hdr_key
+                ]
                 # Check for multiple entries - if there are, then something has gone awry.
                 if len(ecol_ttype_ind) > 1:
-                    raise KeyError("Multiple TTYPE entries found for the energy column 'coordinate system' "
-                                   "in the event table header.")
+                    raise KeyError(
+                        "Multiple TTYPE entries found for the energy column 'coordinate system' "
+                        "in the event table header."
+                    )
                 elif len(ecol_ttype_ind) == 0:
-                    raise KeyError("No TTYPE entry found for the energy column 'coordinate system' in the event "
-                                   "table header.")
+                    raise KeyError(
+                        "No TTYPE entry found for the energy column 'coordinate system' in the event table header."
+                    )
                 else:
                     ecol_ttype_ind = ecol_ttype_ind[0]
 
-                if ('phamax' in self.mission_db_entry and self.mission_db_entry['phamax'] != 'TLMAX' and
-                        self.mission_db_entry['phamax'] in self.event_header):
-                    max_ecol = self.event_header[self.mission_db_entry['phamax']]
-                    # We have to assume that the minimum value is 0 in this case, as we don't know what
-                    #  header name to look out for
-                    min_ecol = 0
-                elif 'phamax' in self.mission_db_entry and (self.mission_db_entry['phamax'] == 'TLMAX' or
-                                                            self.mission_db_entry['phamax'] not in self.event_header):
-                    max_ecol = self.event_header['TLMAX' + ecol_ttype_ind]
+                if (
+                    "phamax" in self.mission_db_entry
+                    and self.mission_db_entry["phamax"] != "TLMAX"
+                    and self.mission_db_entry["phamax"] in self.event_header
+                ):
+                    _ = self.event_header[self.mission_db_entry["phamax"]]
+                elif "phamax" in self.mission_db_entry and (
+                    self.mission_db_entry["phamax"] == "TLMAX"
+                    or self.mission_db_entry["phamax"] not in self.event_header
+                ):
+                    _ = self.event_header["TLMAX" + ecol_ttype_ind]
                     # If there is a matching TLMIN entry, we'll use that information to describe the minimum
                     #  value of the energy column
-                    if 'TLMIN' + ecol_ttype_ind in self.mission_db_entry:
-                        min_ecol = self.event_header['TLMIN' + ecol_ttype_ind]
-                    else:
-                        min_ecol = 0
+                    if "TLMIN" + ecol_ttype_ind in self.mission_db_entry:
+                        _ = self.event_header["TLMIN" + ecol_ttype_ind]
 
                 # TODO Will need to implement said default values.
-                raise NotImplementedError("Default values for 'ev_per_channel' are not yet implemented, please pass "
-                                          "a value to the 'ev_per_channel' argument when instantiating the EventList.")
+                raise NotImplementedError(
+                    "Default values for 'ev_per_channel' are not yet implemented, please pass "
+                    "a value to the 'ev_per_channel' argument when instantiating the EventList."
+                )
 
         return self._ev_per_channel
 
     @ev_per_channel.setter
-    def ev_per_channel(self, new_val: Union[Quantity, None]):
+    def ev_per_channel(self, new_val: Quantity | None) -> None:
         """
         The mapping between channel values in the energy column of the event list and an absolute energy
         value in eV. This is used in the construction of images and lightcurves from event lists.
@@ -501,12 +535,12 @@ class EventList(BaseProduct):
         # Validity checks on the input
         if new_val is not None and not isinstance(new_val, Quantity):
             raise ValueError("The 'new_val' argument must be an Astropy quantity.")
-        elif new_val is not None and not new_val.unit.is_equivalent('eV/chan'):
+        elif new_val is not None and not new_val.unit.is_equivalent("eV/chan"):
             raise UnitConversionError("The 'new_val' argument must be convertible to units of 'eV/chan'.")
         # If the input is a quantity, it gets converted to ev/chan and written to the attribute.
         elif new_val is not None:
             # Converting to the expected units
-            self._ev_per_channel = new_val.to('eV/chan')
+            self._ev_per_channel = new_val.to("eV/chan")
         else:
             self._ev_per_channel = None
 
@@ -520,15 +554,17 @@ class EventList(BaseProduct):
         """
         if self._sky_x_col is None:
             if self.mission_db_entry is not None:
-                self._sky_x_col = self.mission_db_entry['x']
+                self._sky_x_col = self.mission_db_entry["x"]
             else:
-                raise ValueError(f"The sky X column name cannot be determined for {self.telescope}, please provide "
-                                 f"it manually using the 'sky_x_col' argument when instantiating the EventList, or by "
-                                 f"setting this object's '.sky_x_col' property.")
+                raise ValueError(
+                    f"The sky X column name cannot be determined for {self.telescope}, please provide "
+                    f"it manually using the 'sky_x_col' argument when instantiating the EventList, or by "
+                    f"setting this object's '.sky_x_col' property."
+                )
         return self._sky_x_col
 
     @sky_x_col.setter
-    def sky_x_col(self, value: str):
+    def sky_x_col(self, value: str) -> None:
         self._sky_x_col = value
         # Clear the cached radec WCS as the columns have changed
         self._radec_sky_wcs = None
@@ -543,15 +579,17 @@ class EventList(BaseProduct):
         """
         if self._sky_y_col is None:
             if self.mission_db_entry is not None:
-                self._sky_y_col = self.mission_db_entry['y']
+                self._sky_y_col = self.mission_db_entry["y"]
             else:
-                raise ValueError(f"The sky Y column name cannot be determined for {self.telescope}, please provide "
-                                 f"it manually using the 'sky_y_col' argument when instantiating the EventList, or by "
-                                 f"setting this object's '.sky_y_col' property.")
+                raise ValueError(
+                    f"The sky Y column name cannot be determined for {self.telescope}, please provide "
+                    f"it manually using the 'sky_y_col' argument when instantiating the EventList, or by "
+                    f"setting this object's '.sky_y_col' property."
+                )
         return self._sky_y_col
 
     @sky_y_col.setter
-    def sky_y_col(self, value: str):
+    def sky_y_col(self, value: str) -> None:
         self._sky_y_col = value
         # Clear the cached radec WCS as the columns have changed
         self._radec_sky_wcs = None
@@ -565,16 +603,18 @@ class EventList(BaseProduct):
         :rtype: str
         """
         if self._det_x_col is None:
-            if self.mission_db_entry is not None and 'detx' in self.mission_db_entry:
-                self._det_x_col = self.mission_db_entry['detx']
+            if self.mission_db_entry is not None and "detx" in self.mission_db_entry:
+                self._det_x_col = self.mission_db_entry["detx"]
             else:
-                raise ValueError(f"The detector X column name cannot be determined for {self.telescope}, please provide "
-                                 f"it manually using the 'det_x_col' argument when instantiating the EventList, or by "
-                                 f"setting this object's '.det_x_col' property.")
+                raise ValueError(
+                    f"The detector X column name cannot be determined for {self.telescope}, please provide "
+                    f"it manually using the 'det_x_col' argument when instantiating the EventList, or by "
+                    f"setting this object's '.det_x_col' property."
+                )
         return self._det_x_col
 
     @det_x_col.setter
-    def det_x_col(self, value: str):
+    def det_x_col(self, value: str) -> None:
         self._det_x_col = value
 
     @property
@@ -586,16 +626,18 @@ class EventList(BaseProduct):
         :rtype: str
         """
         if self._det_y_col is None:
-            if self.mission_db_entry is not None and 'dety' in self.mission_db_entry:
-                self._det_y_col = self.mission_db_entry['dety']
+            if self.mission_db_entry is not None and "dety" in self.mission_db_entry:
+                self._det_y_col = self.mission_db_entry["dety"]
             else:
-                raise ValueError(f"The detector Y column name cannot be determined for {self.telescope}, please provide "
-                                 f"it manually using the 'det_y_col' argument when instantiating the EventList, or by "
-                                 f"setting this object's '.det_y_col' property.")
+                raise ValueError(
+                    f"The detector Y column name cannot be determined for {self.telescope}, please provide "
+                    f"it manually using the 'det_y_col' argument when instantiating the EventList, or by "
+                    f"setting this object's '.det_y_col' property."
+                )
         return self._det_y_col
 
     @det_y_col.setter
-    def det_y_col(self, value: str):
+    def det_y_col(self, value: str) -> None:
         self._det_y_col = value
 
     @property
@@ -607,16 +649,18 @@ class EventList(BaseProduct):
         :rtype: str
         """
         if self._raw_x_col is None:
-            if self.mission_db_entry is not None and 'rawx' in self.mission_db_entry:
-                self._raw_x_col = self.mission_db_entry['rawx']
+            if self.mission_db_entry is not None and "rawx" in self.mission_db_entry:
+                self._raw_x_col = self.mission_db_entry["rawx"]
             else:
-                raise ValueError(f"The raw X column name cannot be determined for {self.telescope}, please provide "
-                                 f"it manually using the 'raw_x_col' argument when instantiating the EventList, or by "
-                                 f"setting this object's '.raw_x_col' property.")
+                raise ValueError(
+                    f"The raw X column name cannot be determined for {self.telescope}, please provide "
+                    f"it manually using the 'raw_x_col' argument when instantiating the EventList, or by "
+                    f"setting this object's '.raw_x_col' property."
+                )
         return self._raw_x_col
 
     @raw_x_col.setter
-    def raw_x_col(self, value: str):
+    def raw_x_col(self, value: str) -> None:
         self._raw_x_col = value
 
     @property
@@ -628,16 +672,18 @@ class EventList(BaseProduct):
         :rtype: str
         """
         if self._raw_y_col is None:
-            if self.mission_db_entry is not None and 'rawy' in self.mission_db_entry:
-                self._raw_y_col = self.mission_db_entry['rawy']
+            if self.mission_db_entry is not None and "rawy" in self.mission_db_entry:
+                self._raw_y_col = self.mission_db_entry["rawy"]
             else:
-                raise ValueError(f"The raw Y column name cannot be determined for {self.telescope}, please provide "
-                                 f"it manually using the 'raw_y_col' argument when instantiating the EventList, or by "
-                                 f"setting this object's '.raw_y_col' property.")
+                raise ValueError(
+                    f"The raw Y column name cannot be determined for {self.telescope}, please provide "
+                    f"it manually using the 'raw_y_col' argument when instantiating the EventList, or by "
+                    f"setting this object's '.raw_y_col' property."
+                )
         return self._raw_y_col
 
     @raw_y_col.setter
-    def raw_y_col(self, value: str):
+    def raw_y_col(self, value: str) -> None:
         self._raw_y_col = value
 
     @property
@@ -650,19 +696,21 @@ class EventList(BaseProduct):
         """
         if self._en_col is None:
             if self.mission_db_entry is not None:
-                self._en_col = self.mission_db_entry['ecol']
+                self._en_col = self.mission_db_entry["ecol"]
             else:
-                raise ValueError(f"The energy column name cannot be determined for {self.telescope}, please provide "
-                                 f"it manually using the 'en_col' argument when instantiating the EventList, or by "
-                                 f"setting this object's '.en_col' property.")
+                raise ValueError(
+                    f"The energy column name cannot be determined for {self.telescope}, please provide "
+                    f"it manually using the 'en_col' argument when instantiating the EventList, or by "
+                    f"setting this object's '.en_col' property."
+                )
         return self._en_col
 
     @en_col.setter
-    def en_col(self, value: str):
+    def en_col(self, value: str) -> None:
         self._en_col = value
 
     @property
-    def evt_tab_name(self) -> str:
+    def evt_tab_name(self) -> str | None:
         """
         The name of the FITS table containing the event data.
 
@@ -672,7 +720,7 @@ class EventList(BaseProduct):
         return self._evt_tab_name
 
     @property
-    def imaging(self) -> Union[bool, None]:
+    def imaging(self) -> bool | None:
         """
         This property describes whether the instrument that recorded this event list
         can assign the detector coordinate of an event to a coordinate on the sky (e.g. XMM's EPIC-PN
@@ -714,12 +762,12 @@ class EventList(BaseProduct):
                 # First, if there IS an imagecoord entry in the telescope's mission DB entry, but
                 #  the value is None (corresponding to null in the json file), we set the
                 #  _imaging attribute to False.
-                if 'imagecoord' in self.mission_db_entry and self.mission_db_entry['imagecoord'] is None:
+                if "imagecoord" in self.mission_db_entry and self.mission_db_entry["imagecoord"] is None:
                     self._imaging = False
 
                 # Second scenario when there IS an imagecoord entry is that it ISN'T null, and
                 #  so we set the self._imaging attribute to True
-                elif 'imagecoord' in self.mission_db_entry:
+                elif "imagecoord" in self.mission_db_entry:
                     self._imaging = True
 
                 # Finally, the only scenario left is that there ISN'T an 'imagecoord' entry in the
@@ -740,7 +788,7 @@ class EventList(BaseProduct):
             return self._imaging
 
     @imaging.setter
-    def imaging(self, new_val: Union[bool, str]):
+    def imaging(self, new_val: bool | str | None) -> None:
         """
         Setter for the imaging property.
 
@@ -763,7 +811,7 @@ class EventList(BaseProduct):
         self._imaging = new_val
 
     @property
-    def mission_db_entry(self) -> Union[dict, None]:
+    def mission_db_entry(self) -> dict | None:
         """
         Easy access to this EventList's telescope's entry in the version of the XSELECT mission database
         that ships with XGA - returns the dictionary entry if there is one, else None is returned.
@@ -775,7 +823,7 @@ class EventList(BaseProduct):
         return self._rel_miss_db
 
     # --------- Define internal functions ---------
-    def _build_wcs(self, position_type: str = 'sky') -> wcs.WCS:
+    def _build_wcs(self, position_type: str = "sky") -> wcs.WCS:
         """
         Internal factory method to construct a WCS object for arbitrary columns and position types.
 
@@ -785,8 +833,10 @@ class EventList(BaseProduct):
         """
         # Determine which database keys to look for based on position type
         if position_type not in LIM_KEY_MAP:
-            raise KeyError(f"Value of 'position_type' ({position_type}) is not valid. It must "
-                           f"be one of {list(LIM_KEY_MAP.keys())}.")
+            raise KeyError(
+                f"Value of 'position_type' ({position_type}) is not valid. It must "
+                f"be one of {list(LIM_KEY_MAP.keys())}."
+            )
         else:
             db_lim_keys = LIM_KEY_MAP[position_type]
 
@@ -804,44 +854,54 @@ class EventList(BaseProduct):
 
             # Time to assemble the WCS!
             out_wcs = WCS(naxis=2)
-            out_wcs.wcs.cdelt = [self.event_header[cdelt_keys['x']], self.event_header[cdelt_keys['y']]]
-            out_wcs.wcs.crpix = [self.event_header[crpix_keys['x']], self.event_header[crpix_keys['y']]]
-            out_wcs.wcs.crval = [self.event_header[crval_keys['x']], self.event_header[crval_keys['y']]]
-            out_wcs.wcs.ctype = [self.event_header[ctype_keys['x']], self.event_header[ctype_keys['y']]]
+            out_wcs.wcs.cdelt = [self.event_header[cdelt_keys["x"]], self.event_header[cdelt_keys["y"]]]
+            out_wcs.wcs.crpix = [self.event_header[crpix_keys["x"]], self.event_header[crpix_keys["y"]]]
+            out_wcs.wcs.crval = [self.event_header[crval_keys["x"]], self.event_header[crval_keys["y"]]]
+            out_wcs.wcs.ctype = [self.event_header[ctype_keys["x"]], self.event_header[ctype_keys["y"]]]
 
             # We also ensure that the equinox and coordinate system information is captured, so that
             #  transformations (e.g. for donor image projection) are frame-aware.
-            if 'EQUINOX' in self.event_header:
-                out_wcs.wcs.equinox = self.event_header['EQUINOX']
-            elif 'EPOCH' in self.event_header:
-                out_wcs.wcs.equinox = self.event_header['EPOCH']
+            if "EQUINOX" in self.event_header:
+                out_wcs.wcs.equinox = self.event_header["EQUINOX"]
+            elif "EPOCH" in self.event_header:
+                out_wcs.wcs.equinox = self.event_header["EPOCH"]
 
-            if 'RADECSYS' in self.event_header:
-                out_wcs.wcs.radesys = self.event_header['RADECSYS']
-            elif 'RADESYS' in self.event_header:
-                out_wcs.wcs.radesys = self.event_header['RADESYS']
+            if "RADECSYS" in self.event_header:
+                out_wcs.wcs.radesys = self.event_header["RADECSYS"]
+            elif "RADESYS" in self.event_header:
+                out_wcs.wcs.radesys = self.event_header["RADESYS"]
 
             max_sky_x, max_sky_y = None, None
             if self.mission_db_entry is not None:
-                if db_lim_keys[0] in self.mission_db_entry and self.mission_db_entry[db_lim_keys[0]] in self.event_header:
+                if (
+                    db_lim_keys[0] in self.mission_db_entry
+                    and self.mission_db_entry[db_lim_keys[0]] in self.event_header
+                ):
                     max_sky_x = self.event_header[self.mission_db_entry[db_lim_keys[0]]]
-                if db_lim_keys[1] in self.mission_db_entry and self.mission_db_entry[db_lim_keys[1]] in self.event_header:
+                if (
+                    db_lim_keys[1] in self.mission_db_entry
+                    and self.mission_db_entry[db_lim_keys[1]] in self.event_header
+                ):
                     max_sky_y = self.event_header[self.mission_db_entry[db_lim_keys[1]]]
 
             # If we still don't have limits, we try TLMAX
             if max_sky_x is None:
-                x_ind = [hdr_key.split('TTYPE')[-1]
-                         for hdr_key, hdr_val in self.event_header.items()
-                         if hdr_val == x_col and 'TTYPE' in hdr_key]
+                x_ind = [
+                    hdr_key.split("TTYPE")[-1]
+                    for hdr_key, hdr_val in self.event_header.items()
+                    if hdr_val == x_col and "TTYPE" in hdr_key
+                ]
                 if len(x_ind) == 1:
-                    max_sky_x = self.event_header.get('TLMAX' + x_ind[0], None)
+                    max_sky_x = self.event_header.get("TLMAX" + x_ind[0], None)
 
             if max_sky_y is None:
-                y_ind = [hdr_key.split('TTYPE')[-1]
-                         for hdr_key, hdr_val in self.event_header.items()
-                         if hdr_val == y_col and 'TTYPE' in hdr_key]
+                y_ind = [
+                    hdr_key.split("TTYPE")[-1]
+                    for hdr_key, hdr_val in self.event_header.items()
+                    if hdr_val == y_col and "TTYPE" in hdr_key
+                ]
                 if len(y_ind) == 1:
-                    max_sky_y = self.event_header.get('TLMAX' + y_ind[0], None)
+                    max_sky_y = self.event_header.get("TLMAX" + y_ind[0], None)
 
             # We only add pixel limits to the WCS if they are available for both
             #  X and Y axes - otherwise any limits will be imposed at analysis time
@@ -851,69 +911,77 @@ class EventList(BaseProduct):
                 out_wcs.pixel_bounds = [(0, int(max_sky_x)), (0, int(max_sky_y))]
 
         except (KeyError, ValueError, TypeError) as err:
-            raise ProductGenerationError(f"The requested WCS ({position_type}) cannot "
-                                         f"be constructed for this event list. Error: {err}")
+            raise ProductGenerationError(
+                f"The requested WCS ({position_type}) cannot be constructed for this event list. Error: {err}"
+            ) from err
 
         return out_wcs
 
-    def _read_header_on_demand(self, table: Optional[str] = None):
+    def _read_header_on_demand(self, table: str | None = None) -> None:
         """
         This will read the primary event list header into memory, without loading the data from the event
         list main table. That way the user can get access to the summary information stored in the header
         without wasting a lot of memory.
 
-        :param Optional[str] table: Optionally defines which table's header to read; default is to read the primary header. Other
-            options that may be passed are 'event', which loads and stores the event table header in _event_header.
+        :param Optional[str] table: Optionally defines which table's header to read; default is to read the primary
+            header. Other options that may be passed are 'event', which loads and stores the event table header in
+            _event_header.
         """
-        if table is None or table == 'primary':
-            read_type = 'primary'
-            table = 0
-        elif table == 'event':
-            read_type = 'event'
-            table = self._evt_tab_name
+        if table is None or table == "primary":
+            read_type = "primary"
+            table_key: int | str | None = 0
+        elif table == "event":
+            read_type = "event"
+            table_key = self._evt_tab_name
         else:
             raise ValueError("The 'table' argument must be either 'primary' or 'event'.")
 
         if not self.usable:
-            raise ProductNotUsableError(f"This event list has been flagged as 'not usable' for the "
-                                        f"following reason: {self.not_usable_reasons}.")
+            raise ProductNotUsableError(
+                f"This event list has been flagged as 'not usable' for the following reason: {self.not_usable_reasons}."
+            )
 
         # We could likely treat the remote and local file access identically, but we're doing it this way for
         #  now out of an abundance of caution - I don't know how local files would behave using fsspec
-        if (read_type == 'primary' and self._header is None) or (read_type == 'event' and self._event_header is None):
+        if (read_type == "primary" and self._header is None) or (read_type == "event" and self._event_header is None):
             # We alter the loading behaviours of astropy fits.open depending on whether this event list
             #  is pointed at a local file or not
             pass_use_fsspec = False if self._local_file else True
             pass_fsspec_kw = None if self._local_file else self.fsspec_kwargs
             try:
                 # Reads only the header information
-                with fits.open(self.path, lazy_load_hdus=True, use_fsspec=pass_use_fsspec,
-                               fsspec_kwargs=pass_fsspec_kw) as fitso:
-
-                    out_hdr = fitso[table].header
-                    if read_type == 'primary':
+                with fits.open(
+                    self.path, lazy_load_hdus=True, use_fsspec=pass_use_fsspec, fsspec_kwargs=pass_fsspec_kw
+                ) as fitso:
+                    out_hdr = fitso[table_key].header
+                    if read_type == "primary":
                         self._header = out_hdr
-                    elif read_type == 'event':
+                    elif read_type == "event":
                         self._event_header = out_hdr
 
-            except OSError:
+            except OSError as err:
                 if self._local_file:
-                    raise FileNotFoundError("{f} primary header cannot be opened. This product (of type {t}) is "
-                                            "associated with {s}.".format(f=self.path, s=self.src_name, t=self.type))
+                    raise FileNotFoundError(
+                        f"{self.path} primary header cannot be opened. This product (of type {self.type}) is "
+                        f"associated with {self.src_name}."
+                    ) from err
                 else:
-                    raise FileNotFoundError("The remote file's ({f}) primary header cannot be opened. This "
-                                            "product (of type {t}) is associated "
-                                            "with {s}.".format(f=self.path, s=self.src_name, t=self.type))
+                    raise FileNotFoundError(
+                        f"The remote file's ({self.path}) primary header cannot be opened. This "
+                        f"product (of type {self.type}) is associated "
+                        f"with {self.src_name}."
+                    ) from err
 
-    def _read_data_on_demand(self, columns: Optional[List[str]] = None):
+    def _read_data_on_demand(self, columns: list[str] | None = None) -> None:
         """
         This will read the event list table into memory, allowing for the loading of a specific subset of columns, as
         well as streaming data from remote files.
         """
         # Have to check whether we can use this event list
         if not self.usable:
-            raise ProductNotUsableError(f"This event list has been flagged as 'not usable' for the "
-                                        f"following reason: {self.not_usable_reasons}.")
+            raise ProductNotUsableError(
+                f"This event list has been flagged as 'not usable' for the following reason: {self.not_usable_reasons}."
+            )
 
         # This is rather inelegant, but if we already have the whole set of column names saved in an attribute (which
         #  happens down below the first time the events table is accessed in any way); we'll check here if the
@@ -925,14 +993,19 @@ class EventList(BaseProduct):
             #  from).
             bad_cols = [cc for cc in columns if cc not in self._all_col_names]
             if len(bad_cols) > 0:
-                raise ValueError("The following column(s) are not available in this event "
-                                 "list; {c}. Please choose from; {a}.".format(c=",".join(bad_cols),
-                                                                              a=",".join(self._all_col_names)))
+                raise ValueError(
+                    "The following column(s) are not available in this event "
+                    "list; {c}. Please choose from; {a}.".format(c=",".join(bad_cols), a=",".join(self._all_col_names))
+                )
 
         # In this case some data have already been loaded, but only a subset of columns, and a different subset
         #  to what is being requested via the 'columns' argument now
-        if (self._data_col_subset is not None and self._data_col_subset and
-                columns is not None and set(list(self._data.colnames)) != set(columns)):
+        if (
+            self._data_col_subset is not None
+            and self._data_col_subset
+            and columns is not None
+            and set(list(self._data.colnames)) != set(columns)
+        ):
             if all([cc in self._data.colnames for cc in columns]):
                 run_load = False
             else:
@@ -968,8 +1041,9 @@ class EventList(BaseProduct):
                 pass_fsspec_kw = None if self._local_file else self.fsspec_kwargs
 
                 # Opening the event list fits file - we'll only grab the events data though
-                with fits.open(self.path, lazy_load_hdus=True, use_fsspec=pass_use_fsspec,
-                               fsspec_kwargs=pass_fsspec_kw) as fitso:
+                with fits.open(
+                    self.path, lazy_load_hdus=True, use_fsspec=pass_use_fsspec, fsspec_kwargs=pass_fsspec_kw
+                ) as fitso:
                     rel_tab = fitso[self._evt_tab_name]
                     # For posterity, and convenience, we'll store the whole set of available column names
                     if self._all_col_names is None:
@@ -982,9 +1056,12 @@ class EventList(BaseProduct):
                         #  they have to choose from).
                         bad_cols = [cc for cc in columns if cc not in self._all_col_names]
                         if len(bad_cols) > 0:
-                            raise ValueError("The following column(s) are not available in this event list; "
-                                             "{c}. Please choose from; {a}.".format(c=",".join(bad_cols),
-                                                                                    a=",".join(self._all_col_names)))
+                            raise ValueError(
+                                "The following column(s) are not available in this event list; "
+                                "{c}. Please choose from; {a}.".format(
+                                    c=",".join(bad_cols), a=",".join(self._all_col_names)
+                                )
+                            )
 
                     # And finally, we read the event list data into this EventList instance - and if the user specified
                     #  a set of columns we load only those
@@ -996,17 +1073,20 @@ class EventList(BaseProduct):
                     # And update the EventList's knowledge of it having a subset loaded
                     self._data_col_subset = data_col_subset
 
-            except OSError:
+            except OSError as err:
                 if self._local_file:
-                    raise FileNotFoundError("{f} events data cannot be opened. This product (of type {t}) is "
-                                            "associated with {s}.".format(f=self.path, s=self.src_name, t=self.type))
+                    raise FileNotFoundError(
+                        f"{self.path} events data cannot be opened. This product (of type {self.type}) is "
+                        f"associated with {self.src_name}."
+                    ) from err
                 else:
-                    raise FileNotFoundError("The remote file's ({f}) events data cannot be opened. This product (of "
-                                            " type {t}) is associated with {s}.".format(f=self.path, s=self.src_name,
-                                                                                        t=self.type))
+                    raise FileNotFoundError(
+                        f"The remote file's ({self.path}) events data cannot be opened. This product (of "
+                        f" type {self.type}) is associated with {self.src_name}."
+                    ) from err
 
     # --------- Define external functions ---------
-    def get_position_type_col_names(self, position_type: str) -> Tuple[str, str]:
+    def get_position_type_col_names(self, position_type: str) -> tuple[str, str]:
         """
         Get method to retrieve the event list data table column names (both X and Y) which
         are currently assigned to the input position type. The input position type
@@ -1019,24 +1099,28 @@ class EventList(BaseProduct):
         """
         position_type = position_type.lower()
         if position_type not in LIM_KEY_MAP:
-            raise KeyError(f"Value of 'position_type' ({position_type}) is not valid. It must "
-                           f"be one of {list(LIM_KEY_MAP.keys())}.")
+            raise KeyError(
+                f"Value of 'position_type' ({position_type}) is not valid. It must "
+                f"be one of {list(LIM_KEY_MAP.keys())}."
+            )
 
         # Attempting to determine the columns to use for image generation
-        if position_type == 'sky':
+        if position_type == "sky":
             x_col, y_col = self.sky_x_col, self.sky_y_col
-        elif position_type == 'det':
+        elif position_type == "det":
             x_col, y_col = self.det_x_col, self.det_y_col
-        elif position_type == 'raw':
+        elif position_type == "raw":
             x_col, y_col = self.raw_x_col, self.raw_y_col
         else:
-            raise XGADeveloperError(f"The {position_type} position type has been added "
-                                    f"to the LIM_KEY_MAP constant, but not this function. "
-                                    f"Contact the developers.")
+            raise XGADeveloperError(
+                f"The {position_type} position type has been added "
+                f"to the LIM_KEY_MAP constant, but not this function. "
+                f"Contact the developers."
+            )
 
         return x_col, y_col
 
-    def get_wcs_keys(self, position_type: str, prefix: Optional[Union[str, List[str]]] = None) -> dict:
+    def get_wcs_keys(self, position_type: str, prefix: str | list[str] | None = None) -> dict:
         """
         Get method to fetch the names of the FITS header keys required to construct a WCS, for the
         input position type. This method tries several different formats for the necessary key
@@ -1054,7 +1138,6 @@ class EventList(BaseProduct):
             type provided.
         :rtype: dict
         """
-
         # Checking the prefix input and using it to decide which keys we are looking for.
         if prefix is not None and isinstance(prefix, str):
             rel_prefixes = [prefix]
@@ -1070,15 +1153,19 @@ class EventList(BaseProduct):
 
         # We attempt to find the keys using TTYPE indices
         # For the x-col
-        x_ind = [hdr_key.split('TTYPE')[-1]
-                 for hdr_key, hdr_val in self.event_header.items()
-                 if hdr_val == x_col and 'TTYPE' in hdr_key]
+        x_ind = [
+            hdr_key.split("TTYPE")[-1]
+            for hdr_key, hdr_val in self.event_header.items()
+            if hdr_val == x_col and "TTYPE" in hdr_key
+        ]
         # Then the y-col
-        y_ind = [hdr_key.split('TTYPE')[-1]
-                 for hdr_key, hdr_val in self.event_header.items()
-                 if hdr_val == y_col and 'TTYPE' in hdr_key]
+        y_ind = [
+            hdr_key.split("TTYPE")[-1]
+            for hdr_key, hdr_val in self.event_header.items()
+            if hdr_val == y_col and "TTYPE" in hdr_key
+        ]
 
-        ret_keys = {cur_prefix: {} for cur_prefix in rel_prefixes}
+        ret_keys: dict[str, dict[str, str]] = {cur_prefix: {} for cur_prefix in rel_prefixes}
         if len(x_ind) == 1 and len(y_ind) == 1:
             for cur_prefix in rel_prefixes:
                 cur_all_x_key_attempts = []
@@ -1124,21 +1211,24 @@ class EventList(BaseProduct):
 
                 # Now if the keys aren't there, we raise an error
                 if cur_x_key not in self.event_header:
-                    raise KeyError(f"The {cur_prefix}-type key for {x_col} cannot be found in the events "
-                                   f"header. The following were tested; {cur_all_x_key_attempts}")
+                    raise KeyError(
+                        f"The {cur_prefix}-type key for {x_col} cannot be found in the events "
+                        f"header. The following were tested; {cur_all_x_key_attempts}"
+                    )
                 else:
                     ret_keys[cur_prefix]["x"] = cur_x_key
 
                 if cur_y_key not in self.event_header:
-                    raise KeyError(f"The {cur_prefix}-type key for {y_col} cannot be found in the events "
-                                   f"header. The following were tested; {cur_all_y_key_attempts}")
+                    raise KeyError(
+                        f"The {cur_prefix}-type key for {y_col} cannot be found in the events "
+                        f"header. The following were tested; {cur_all_y_key_attempts}"
+                    )
                 else:
                     ret_keys[cur_prefix]["y"] = cur_y_key
 
-
         return ret_keys
 
-    def get_columns_from_data(self, col_names: List[str]) -> pd.DataFrame:
+    def get_columns_from_data(self, col_names: list[str]) -> pd.DataFrame:
         """
         This method allows you to retrieve specific columns from the event list table, without loading the whole table
         into memory.
@@ -1153,7 +1243,7 @@ class EventList(BaseProduct):
 
         return self.data[col_names].to_pandas()
 
-    def get_filtered_data(self, col_names: List[str], filt_operations: dict) -> pd.DataFrame:
+    def get_filtered_data(self, col_names: list[str], filt_operations: dict) -> pd.DataFrame:
         """
         A method to retrieve a filtered subset of the events table data - this is useful for the production of
         various X-ray products (images, lightcurves, etc.), as we rarely wish to use every single event.
@@ -1173,14 +1263,19 @@ class EventList(BaseProduct):
         filt_col_not_in_data = np.array([cur_col not in col_names for cur_col in filt_op_cols])
         if any(filt_col_not_in_data):
             miss_cols = ", ".join(filt_op_cols[filt_col_not_in_data])
-            warn("Filtering operations are specified on columns not in 'col_names' ({mc}), the missing "
-                 "columns will be added to the 'col_names' list.".format(mc=miss_cols), stacklevel=2)
+            warn(
+                f"Filtering operations are specified on columns not in 'col_names' ({miss_cols}), the missing "
+                "columns will be added to the 'col_names' list.",
+                stacklevel=2,
+            )
             col_names += (filt_op_cols[filt_col_not_in_data]).tolist()
 
         # Make sure that all the filtering operations are specified in lists
         if any([not isinstance(filt_cmds, list) for filt_cmds in filt_operations.values()]):
-            filt_operations = {filt_col: [filt_cmds] if not isinstance(filt_cmds, list) else filt_cmds
-                               for filt_col, filt_cmds in filt_operations.items()}
+            filt_operations = {
+                filt_col: [filt_cmds] if not isinstance(filt_cmds, list) else filt_cmds
+                for filt_col, filt_cmds in filt_operations.items()
+            }
 
         # Acquiring the specified columns
         rel_data = self.get_columns_from_data(col_names)
@@ -1204,7 +1299,7 @@ class EventList(BaseProduct):
 
         return rel_data[evt_mask]
 
-    def unload(self, unload_data: bool = True, unload_header: bool = True):
+    def unload(self, unload_data: bool = True, unload_header: bool = True) -> None:
         """
         This method allows you to safely remove the header and/or data information stored in memory.
 
@@ -1226,11 +1321,18 @@ class EventList(BaseProduct):
         if unload_header:
             del self.header
 
-    def generate_image(self, bin_size: Optional[Union[Quantity, int]] = None, x_lims: Optional[Quantity] = None,
-                       y_lims: Optional[Quantity] = None, lo_en: Optional[Quantity] = None,
-                       hi_en: Optional[Quantity] = None, filt_operations: Optional[dict] = None,
-                       save_path: Optional[str] = None, donor_image: Optional[Image] = None,
-                       position_type: Optional[str] = None) -> Image:
+    def generate_image(
+        self,
+        bin_size: Quantity | int | None = None,
+        x_lims: Quantity | None = None,
+        y_lims: Quantity | None = None,
+        lo_en: Quantity | None = None,
+        hi_en: Quantity | None = None,
+        filt_operations: dict | None = None,
+        save_path: str | None = None,
+        donor_image: Image | None = None,
+        position_type: str | None = None,
+    ) -> Image:
         """
         Generate a 2D image from the event list data by binning events into pixels. The method allows control over
         binning size, spatial boundaries, energy filtering, and output file saving.
@@ -1262,21 +1364,26 @@ class EventList(BaseProduct):
         # --------------------- Validating input configuration ---------------------
         # ------------ Checking imaging/position type ------------
         # See if this event list thinks the instrument has imaging capabilities
-        if self.imaging is not None and  not self.imaging:
-            raise ProductGenerationError(f"This {self.telescope}-{self.instrument} event list has been determined to "
-                                         f"be non-imaging, either by user input to the `imaging_evts` argument during "
-                                         f"instantiation/setting the `imaging` property, or by the XSELECT mission "
-                                         f"database.")
+        if self.imaging is not None and not self.imaging:
+            raise ProductGenerationError(
+                f"This {self.telescope}-{self.instrument} event list has been determined to "
+                f"be non-imaging, either by user input to the `imaging_evts` argument during "
+                f"instantiation/setting the `imaging` property, or by the XSELECT mission "
+                f"database."
+            )
         elif self.imaging is None:
-            warn(f"This event list ({self.telescope}-{self.instrument}) cannot automatically "
-                 f"determine whether the source instrument has imaging capabilities - this method"
-                 f"may fail.", stacklevel=2)
+            warn(
+                f"This event list ({self.telescope}-{self.instrument}) cannot automatically "
+                f"determine whether the source instrument has imaging capabilities - this method"
+                f"may fail.",
+                stacklevel=2,
+            )
 
         # Determine the position type to use
-        if position_type is None and self.mission_db_entry is not None and 'imagecoord' in self.mission_db_entry:
-            position_type = self.mission_db_entry['imagecoord']
+        if position_type is None and self.mission_db_entry is not None and "imagecoord" in self.mission_db_entry:
+            position_type = self.mission_db_entry["imagecoord"]
         elif position_type is None:
-            position_type = 'sky'
+            position_type = "sky"
 
         position_type = position_type.lower()
         # --------------------------------------------------------
@@ -1289,10 +1396,12 @@ class EventList(BaseProduct):
         # ---------------- Checking the save path ----------------
         # Checking that the directory in which the image should be saved (if the user has specified that
         #  it should be written to a file, and a directory is part of the save_path) actually exists
-        if (save_path is not None and
-                (os.path.dirname(save_path) != '' and not os.path.exists(os.path.dirname(save_path)))):
-            raise FileNotFoundError("The directory in which the image is to be saved "
-                                    "({d}) does not exist.".format(d=os.path.dirname(save_path)))
+        if save_path is not None and (
+            os.path.dirname(save_path) != "" and not os.path.exists(os.path.dirname(save_path))
+        ):
+            raise FileNotFoundError(
+                f"The directory in which the image is to be saved ({os.path.dirname(save_path)}) does not exist."
+            )
 
         # If None has been passed for the filtering operations, we'll turn it into an empty dictionary
         if filt_operations is None:
@@ -1300,34 +1409,39 @@ class EventList(BaseProduct):
         # Otherwise we'll check that the user isn't trying to specify x_col, y_col, or en_col limits in
         #  the filtering operations dictionary
         elif x_col in filt_operations or y_col in filt_operations or en_col in filt_operations:
-            raise ValueError("The filtering operations dictionary cannot contain keys spatial columns ({x}, {y}), or "
-                             "the energy column ({e}), as these are controlled separately by this "
-                             "method.".format(x=x_col, y=y_col, e=en_col))
+            raise ValueError(
+                f"The filtering operations dictionary cannot contain keys spatial columns ({x_col}, {y_col}), or "
+                f"the energy column ({en_col}), as these are controlled separately by this "
+                "method."
+            )
         # --------------------------------------------------------
 
         # ------- Converting ints to assumed pixel coords --------
         # Making some arguments into quantities with an assumed unit if they were passed as integers.
         # If a simple integer is passed, we assume that it is a bin size in pixels
         if isinstance(bin_size, int):
-            bin_size = Quantity(bin_size, 'pix')
+            bin_size = Quantity(bin_size, "pix")
 
         # Converting any non-quantity integer boundary limits to Quantity objects, assuming 'pix' units
-        if (not isinstance(x_lims, Quantity) and
-                (isinstance(x_lims, (list, np.ndarray)) and all([isinstance(xl, int) for xl in x_lims]))):
-            x_lims = Quantity(x_lims, 'pix')
-        if (not isinstance(y_lims, Quantity) and
-                (isinstance(y_lims, (list, np.ndarray)) and all([isinstance(yl, int) for yl in y_lims]))):
-            y_lims = Quantity(y_lims, 'pix')
+        if not isinstance(x_lims, Quantity) and (
+            isinstance(x_lims, (list, np.ndarray)) and all([isinstance(xl, int) for xl in x_lims])
+        ):
+            x_lims = Quantity(x_lims, "pix")
+        if not isinstance(y_lims, Quantity) and (
+            isinstance(y_lims, (list, np.ndarray)) and all([isinstance(yl, int) for yl in y_lims])
+        ):
+            y_lims = Quantity(y_lims, "pix")
         # --------------------------------------------------------
 
         # --------- Setting up x and y coordinate limits ---------
         # Parsing the user-specified data limits. We only require that the second element
         #  be greater than the first for non-degree coordinates
-        if x_lims is not None and not x_lims.unit.is_equivalent('deg') and x_lims.diff() <= 0:
+        if x_lims is not None and not x_lims.unit.is_equivalent("deg") and x_lims.diff() <= 0:
             raise ValueError("The second element of 'x_lims' must be greater than the first.")
-        elif x_lims is not None and x_lims.unit.is_equivalent('deg'):
-            mid_pos = self.radec_sky_wcs.all_pix2world(*Quantity([self.sky_pix_lims[0].mean(),
-                                                        self.sky_pix_lims[1].mean()]).value, 1)
+        elif x_lims is not None and x_lims.unit.is_equivalent("deg"):
+            mid_pos = self.radec_sky_wcs.all_pix2world(
+                *Quantity([self.sky_pix_lims[0].mean(), self.sky_pix_lims[1].mean()]).value, 1
+            )
             low_x_lim = self.radec_sky_wcs.all_world2pix(x_lims[0].value, mid_pos[1], 1)[0]
             upp_x_lim = self.radec_sky_wcs.all_world2pix(x_lims[1].value, mid_pos[1], 1)[0]
             x_lims = np.sort(Quantity([low_x_lim, upp_x_lim]))
@@ -1340,15 +1454,16 @@ class EventList(BaseProduct):
                 # The final fallback - finding upper and lower limits using the data.
                 #  We deliberately use the unfiltered data here, as we would rather
                 #  err on the side of caution and have wider limits
-                x_lims = Quantity([self.data[x_col].min(), self.data[x_col].max()], 'pix')
+                x_lims = Quantity([self.data[x_col].min(), self.data[x_col].max()], "pix")
         #
         x_lims = x_lims.astype(int)
 
-        if y_lims is not None and not y_lims.unit.is_equivalent('deg') and y_lims.diff() <= 0:
+        if y_lims is not None and not y_lims.unit.is_equivalent("deg") and y_lims.diff() <= 0:
             raise ValueError("The second element of 'y_lims' must be greater than the first.")
-        elif y_lims is not None and (y_lims.unit.is_equivalent('deg')):
-            mid_pos = self.radec_sky_wcs.all_pix2world(*Quantity([self.sky_pix_lims[0].mean(),
-                                                        self.sky_pix_lims[1].mean()]).value, 1)
+        elif y_lims is not None and (y_lims.unit.is_equivalent("deg")):
+            mid_pos = self.radec_sky_wcs.all_pix2world(
+                *Quantity([self.sky_pix_lims[0].mean(), self.sky_pix_lims[1].mean()]).value, 1
+            )
             low_y_lim = self.radec_sky_wcs.all_world2pix(mid_pos[0], y_lims[0].value, 1)[1]
             upp_y_lim = self.radec_sky_wcs.all_world2pix(mid_pos[0], y_lims[1].value, 1)[1]
             y_lims = np.sort(Quantity([low_y_lim, upp_y_lim]))
@@ -1361,7 +1476,7 @@ class EventList(BaseProduct):
                 # The final fallback - finding upper and lower limits using the data.
                 #  We deliberately use the unfiltered data here, as we would rather
                 #  err on the side of caution and have wider limits
-                y_lims = Quantity([self.data[y_col].min(), self.data[y_col].max()], 'pix')
+                y_lims = Quantity([self.data[y_col].min(), self.data[y_col].max()], "pix")
         #
         x_lims = x_lims.astype(int)
         y_lims = y_lims.astype(int)
@@ -1377,20 +1492,22 @@ class EventList(BaseProduct):
             # Read out the default bin size for this mission if this event list's instrument is a key in the image
             #  binning constant dictionary
             if self.instrument.lower() in DEFAULT_IMAGE_BINNING[self.telescope.lower()]:
-                bin_size = Quantity(DEFAULT_IMAGE_BINNING[self.telescope.lower()][self.instrument.lower()], 'pix')
+                bin_size = Quantity(DEFAULT_IMAGE_BINNING[self.telescope.lower()][self.instrument.lower()], "pix")
 
             # If the instrument isn't a key, it is possible that the instrument name in the event list is different
             #  to that used by XGA, so we check an 'alternative name' constant set up for this purpose
-            elif [self.instrument.lower() in inst_alts for inst_alts in
-                  ALT_INST_NAMES[self.telescope.lower()].values()]:
-
+            elif [
+                self.instrument.lower() in inst_alts for inst_alts in ALT_INST_NAMES[self.telescope.lower()].values()
+            ]:
                 # Inefficient considering we've already performed the check, but nicer code structure
-                rel_xga_inst_name = [xga_inst for xga_inst, inst_alts in
-                                     ALT_INST_NAMES[self.telescope.lower()].items()
-                                     if self.instrument.lower() in inst_alts][0]
+                rel_xga_inst_name = [
+                    xga_inst
+                    for xga_inst, inst_alts in ALT_INST_NAMES[self.telescope.lower()].items()
+                    if self.instrument.lower() in inst_alts
+                ][0]
 
                 if rel_xga_inst_name in DEFAULT_IMAGE_BINNING[self.telescope.lower()]:
-                    bin_size = Quantity(DEFAULT_IMAGE_BINNING[self.telescope.lower()][rel_xga_inst_name], 'pix')
+                    bin_size = Quantity(DEFAULT_IMAGE_BINNING[self.telescope.lower()][rel_xga_inst_name], "pix")
                 else:
                     # This will trigger the separate bin_size is None check below, and a default of one
                     #  will be assigned - just means we don't need the same warning in two different
@@ -1402,16 +1519,19 @@ class EventList(BaseProduct):
         #  setting the bin_size to None in order to trigger this check. Means we don't need
         #  to have the same behaviour and warning in two different places.
         if bin_size is None:
-            warn(f"No XGA default binning size has been set for the instrument '{self.instrument}' - "
-                 f"defaulting to a bin size of 1. Pass to this function's `bin_size` argument to control "
-                 f"binning directly.", stacklevel=2)
-            bin_size = Quantity(1, 'pix')
+            warn(
+                f"No XGA default binning size has been set for the instrument '{self.instrument}' - "
+                f"defaulting to a bin size of 1. Pass to this function's `bin_size` argument to control "
+                f"binning directly.",
+                stacklevel=2,
+            )
+            bin_size = Quantity(1, "pix")
 
         # We allow the bin_size argument to be in angular units, but make sure to translate it to pixels
-        if bin_size.unit.is_equivalent('deg'):
+        if bin_size.unit.is_equivalent("deg"):
             # We enforce square pixels by using the first element of this calculation - though
             #  in most cases the calculated bin size for x and y axes will be the same
-            bin_size = np.ceil((bin_size / self.deg_per_sky).to('pix'))[0]
+            bin_size = np.ceil((bin_size / self.deg_per_sky).to("pix"))[0]
         # --------------------------------------------------------
 
         # ------------- Setting up the energy limits -------------
@@ -1420,7 +1540,7 @@ class EventList(BaseProduct):
         if any(check_en) and not all(check_en):
             raise ValueError("If either 'lo_en' or 'hi_en' are specified, both must be.")
         # Check that they are both in the correct units
-        elif lo_en is not None and any([not lo_en.unit.is_equivalent('eV'), not hi_en.unit.is_equivalent('eV')]):
+        elif lo_en is not None and any([not lo_en.unit.is_equivalent("eV"), not hi_en.unit.is_equivalent("eV")]):
             raise UnitConversionError("Quantities passed to 'lo_en' and 'hi_en' must be convertible to eV.")
         # Check validity of lower and upper energy limits
         elif lo_en is not None and (lo_en >= hi_en):
@@ -1438,7 +1558,7 @@ class EventList(BaseProduct):
         # ------------------ Generating an image from user input -------------------
         # After all of this converting and dealing with different potential inputs for bin_size, we store
         #  the final angular width/height of each pixel
-        ang_bin_size = (bin_size*self.deg_per_sky).to('deg')[0].value
+        ang_bin_size = (bin_size * self.deg_per_sky).to("deg")[0].value
         # Make sure that the bin size is an integer
         bin_size = bin_size.astype(int)
 
@@ -1460,8 +1580,10 @@ class EventList(BaseProduct):
             # Setting up the new WCS - we use the internal build method for the relevant columns
             base_wcs = self._build_wcs(position_type)
             im_wcs = WCS(naxis=2)
-            im_wcs.wcs.cdelt = [np.sign(base_wcs.wcs.cdelt[0])*ang_bin_size,
-                                    np.sign(base_wcs.wcs.cdelt[1])*ang_bin_size]
+            im_wcs.wcs.cdelt = [
+                np.sign(base_wcs.wcs.cdelt[0]) * ang_bin_size,
+                np.sign(base_wcs.wcs.cdelt[1]) * ang_bin_size,
+            ]
 
             # Calculate RA/Dec at the center of the first bin (origin=1) to set crval
             #  We use the average of the first and second bin edges to get the center
@@ -1485,7 +1607,9 @@ class EventList(BaseProduct):
             # If a donor image is provided, we project the events onto its coordinate grid
             # First we transform the filtered event coordinates to SkyCoords (origin=1) using the source WCS
             #  this allows for frame-aware transformations (e.g. FK4 -> ICRS)
-            evt_skycoord = wcs_utils.pixel_to_skycoord(rel_evt_data[x_col], rel_evt_data[y_col], self.radec_sky_wcs, origin=1)
+            evt_skycoord = wcs_utils.pixel_to_skycoord(
+                rel_evt_data[x_col], rel_evt_data[y_col], self.radec_sky_wcs, origin=1
+            )
 
             # Then we transform those world coordinates to the pixel grid of the donor image (origin=1)
             #  using the donor's WCS. skycoord_to_pixel handles the frame conversion internally
@@ -1505,14 +1629,16 @@ class EventList(BaseProduct):
         # -------------- Setting up XGA Image and saving if requested --------------
         # Setting up the header that we'll feed into the HDU that will become the image file - the WCS
         #  is the most important part of that
-        new_hdr_init = [('SIMPLE', 'T'),
-                        ('BITPIX', binned_data.dtype.itemsize * 8),
-                        ('NAXIS', 2),
-                        ('NAXIS1', binned_data.shape[1]),
-                        ('NAXIS2', binned_data.shape[0]),
-                        ('TELESCOP', self.telescope),
-                        ('INSTRUME', self.instrument),
-                        ('OBS_ID', self.obs_id)]
+        new_hdr_init = [
+            ("SIMPLE", "T"),
+            ("BITPIX", binned_data.dtype.itemsize * 8),
+            ("NAXIS", 2),
+            ("NAXIS1", binned_data.shape[1]),
+            ("NAXIS2", binned_data.shape[0]),
+            ("TELESCOP", self.telescope),
+            ("INSTRUME", self.instrument),
+            ("OBS_ID", self.obs_id),
+        ]
         new_hdr = fits.Header(new_hdr_init)
 
         # Convert the new WCS to a header
@@ -1521,18 +1647,26 @@ class EventList(BaseProduct):
         new_hdr.extend(wcs_hdr)
 
         if lo_en is not None:
-            new_hdr.append(('LO_EN', lo_en.to('keV').value, 'Lower energy bound in keV'))
-            new_hdr.append(('HI_EN', hi_en.to('keV').value, 'Upper energy bound in keV'))
+            new_hdr.append(("LO_EN", lo_en.to("keV").value, "Lower energy bound in keV"))
+            new_hdr.append(("HI_EN", hi_en.to("keV").value, "Upper energy bound in keV"))
 
         # TODO THIS MIGHT BE WRONG IF FILTERING HAS BEEN APPLIED
         # We also try to grab the exposure time from the original headers
-        evt_exp = self.event_header.get('EXPOSURE', self.header.get('EXPOSURE', None))
+        evt_exp = self.event_header.get("EXPOSURE", self.header.get("EXPOSURE", None))
         if evt_exp is not None:
-            new_hdr.append(('EXPOSURE', float(evt_exp)))
+            new_hdr.append(("EXPOSURE", float(evt_exp)))
 
-        new_im = Image({'data': binned_data, 'wcs': im_wcs, 'header': new_hdr}, self.obs_id,
-                       self.instrument, "", "", "",
-                       lo_en=lo_en, hi_en=hi_en, telescope=self.telescope)
+        new_im = Image(
+            {"data": binned_data, "wcs": im_wcs, "header": new_hdr},
+            self.obs_id,
+            self.instrument,
+            "",
+            "",
+            "",
+            lo_en=lo_en,
+            hi_en=hi_en,
+            telescope=self.telescope,
+        )
 
         # We validated the 'save_path' argument earlier, so we'll just get on and save the file
         if save_path is not None:
