@@ -689,7 +689,7 @@ def min_snr_proj_temp_prof(
                 stacked_inst = True if tel in ["erosita", "erass"] else False
                 lowest_ranked = src.snr_ranking(
                     out_rad_vals[src_ind], lo_en, hi_en, allow_negative, tel, stacked_inst=stacked_inst
-                )[tel][0]
+                )[tel][0]  # type: ignore[call-overload, index]  # See issue #1653
 
                 rads, snrs, ma = _snr_bins(
                     src,
@@ -892,15 +892,15 @@ def min_cnt_proj_temp_prof(
                 #  individual ObsID-inst combos there
                 stacked_inst = True if tel in ["erosita", "erass"] else False
                 cnt_rnk, cnts = src.count_ranking(out_rad_vals[src_ind], lo_en, hi_en, tel, stacked_inst=stacked_inst)[
-                    tel
+                    tel  # type: ignore[call-overload]  # See issue #1653
                 ]
                 # Obviously the median counts will not necessarily line up with any particular ObsID-instrument, but we
                 #  can use the interpolation feature of numpy percentile to find the nearest existing counts to the
                 #  median counts.
-                med_obs_ind = np.argwhere(cnts == np.nanpercentile(cnts, 50, interpolation="nearest"))[0]
+                med_obs_ind = np.argwhere(cnts == np.nanpercentile(cnts, 50, interpolation="nearest"))[0]  # type: ignore[call-overload]  # See issue #1653
                 # This pulls out the ObsID and instrument that we have chosen to base the annular bins on.
-                med_obs_id = cnt_rnk[med_obs_ind, 0][0]
-                med_obs_inst = cnt_rnk[med_obs_ind, 1][0]
+                med_obs_id = cnt_rnk[med_obs_ind, 0][0]  # type: ignore[index]  # See issue #1653
+                med_obs_inst = cnt_rnk[med_obs_ind, 1][0]  # type: ignore[index]  # See issue #1653
 
                 # In this instance though, we use the median (in terms of background subtracted counts)
                 #  individual (as in individual instrument too) observation to construct the annuli.

@@ -616,8 +616,8 @@ def psfgen(
 
                 # These are the x and y bin centre coordinates - when converted to RA and DEC this is where the
                 #  PSF is generated at.
-                x_cen_coords = np.arange(*x_lims, x_step) + (x_step / 2)
-                y_cen_coords = np.arange(*y_lims, y_step) + (y_step / 2)
+                x_cen_coords = np.arange(float(x_lims[0]), float(x_lims[1]), x_step) + (x_step / 2)
+                y_cen_coords = np.arange(float(y_lims[0]), float(y_lims[1]), y_step) + (y_step / 2)
 
                 # Get all combinations of the central coordinates using meshgrid, then turn them into
                 #  an N row, 2 column numpy array of pixel coordinates for easy conversion to RA-DEC.
@@ -626,8 +626,8 @@ def psfgen(
 
                 # But I also want to know the boundaries of the bins so I can easily select which parts of
                 #  the image belong with each PSF in the grid
-                x_boundaries = np.linspace(*x_lims, bins + 1)
-                y_boundaries = np.linspace(*y_lims, bins + 1)
+                x_boundaries = np.linspace(float(x_lims[0]), float(x_lims[1]), bins + 1)
+                y_boundaries = np.linspace(float(y_lims[0]), float(y_lims[1]), bins + 1)
 
                 # These two arrays give the x and y boundaries of the bins in the same order as the pix_coords array
                 x_bound_coords = np.tile(np.stack([x_boundaries[0:-1].ravel(), x_boundaries[1:].ravel()]).T, (bins, 1))

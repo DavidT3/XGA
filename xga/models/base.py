@@ -881,7 +881,7 @@ class BaseModel1D(metaclass=ABCMeta):
         :param str colour: The colour that the line in the plot should be.
         """
         if radii is None and self._x_lims is not None:
-            radii = Quantity(np.linspace(*self._x_lims.value, 100), self._x_unit)
+            radii = Quantity(np.linspace(float(self._x_lims.value[0]), float(self._x_lims.value[1]), 100), self._x_unit)
         elif radii is None:
             raise ValueError(
                 "You did not set x-limits for this model, so you must pass radii values to the view method."

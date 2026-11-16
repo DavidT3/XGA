@@ -161,7 +161,7 @@ class EventList(BaseProduct):
         # These store the header of the event list fits file (if read in), as well as the main table of event
         #  information (again if read in).
         self._header: fits.Header | None = None
-        self._data: pd.DataFrame | None = None
+        self._data: Table | None = None
         # Also include another header attribute, specifically for the event table header
         self._event_header: fits.Header | None = None
 
@@ -393,12 +393,12 @@ class EventList(BaseProduct):
         self._event_header = None
 
     @property
-    def data(self) -> pd.DataFrame:
+    def data(self) -> Table:
         """
         Returns the primary events table included in this event list.
 
         :return: The contents of the primary data table of the event list.
-        :rtype: pd.DataFrame
+        :rtype: Table
         """
         # If the header attribute is None then we know we have to read the header in
         if self._data is None:

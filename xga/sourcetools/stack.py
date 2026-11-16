@@ -137,7 +137,7 @@ def _create_stack(
         for src in sources:
             try:
                 # A temporary temperature variable
-                temp_temp = src.get_temperature(scale_radius, "constant*tbabs*apec", telescope=telescope)[0]
+                temp_temp = src.get_temperature(scale_radius, model="constant*tbabs*apec", telescope=telescope)[0]
             except (ModelNotAssociatedError, ParameterNotAssociatedError):
                 warn(f"{src.name}'s temperature fit is not valid, defaulting to a temperature of 3 keV", stacklevel=2)
                 temp_temp = Quantity(3, "keV")
@@ -151,7 +151,9 @@ def _create_stack(
     combined_factors = []
     # Now to generate a combined conversion factor from count rate to luminosity
     for source in sources:
-        combined_factors.append(source.combined_lum_conv_factor(scale_radius, lo_en, hi_en, telescope=telescope).value)
+        combined_factors.append(
+            source.combined_lum_conv_factor(scale_radius, lo_en=lo_en, hi_en=hi_en, telescope=telescope).value
+        )
 
     # Check for NaN values in the brightness profiles we've retrieved - very bad if they exist
     no_nan = np.where(~np.isnan(sb.sum(axis=1)))[0]

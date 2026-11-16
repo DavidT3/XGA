@@ -485,6 +485,18 @@ class GalaxyCluster(ExtendedSource):
         self._r2500 = new_value_kpc
         self._radii["r2500"] = new_value_deg
 
+    @property
+    def redshift(self) -> float:
+        """
+        Simple getter for the redshift of the galaxy cluster.
+
+        :return: Redshift as a float.
+        :rtype: float
+        """
+        if self._redshift is None:
+            raise XGADeveloperError("GalaxyCluster redshift should never be None.")
+        return self._redshift
+
     # Property getters for other observables I've allowed to be passed in.
     @property
     def weak_lensing_mass(self) -> Quantity:

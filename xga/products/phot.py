@@ -250,9 +250,9 @@ class Image(BaseProduct):
             if any([len(e) != 2 for e in obs_inst_combs]):
                 raise ValueError("Entries in the obs_inst_combs list must be lists structured as [ObsID, Inst]")
             # And if it passes that we check that the instrument values are one of the allowed list
-            elif any([e[1] not in ALLOWED_INST[telescope].values() for e in obs_inst_combs]):  # type: ignore[attr-defined]  # See issue #1653
+            elif any([e[1] not in ALLOWED_INST[telescope].values() for e in obs_inst_combs]):  # type: ignore[attr-defined, index]  # See issue #1653
                 raise ValueError(
-                    f"The allowed instruments for {telescope} are: {', '.join(ALLOWED_INST[telescope].values())}"  # type: ignore[attr-defined]  # See issue #1653
+                    f"The allowed instruments for {telescope} are: {', '.join(ALLOWED_INST[telescope].values())}"  # type: ignore[attr-defined, index]  # See issue #1653
                 )
 
         # This attribute stores the combinations of ObsID and instrument that make up combined images, if the
@@ -717,7 +717,7 @@ class Image(BaseProduct):
         key = f"bound_{float(self._energy_bounds[0].value)}-{float(self._energy_bounds[1].value)}"
 
         # Then add PSF correction information
-        if self._psf_corrected:
+        if self._psf_corrected and self.psf_model is not None and self.psf_algorithm is not None:
             key += "_" + self.psf_model + "_" + str(self.psf_bins) + "_" + self.psf_algorithm + str(self.psf_iterations)
 
         # And now smoothing information
@@ -3700,7 +3700,7 @@ class RateMap(Image):
 
         def cartesian(arrays: list[np.ndarray]) -> np.ndarray:
             arrays = [np.asarray(a) for a in arrays]
-            shape = (len(x) for x in arrays)
+            shape = tuple(len(x) for x in arrays)
             ix = np.indices(shape, dtype=int)
             ix = ix.reshape(len(arrays), -1).T
             for n, _arr in enumerate(arrays):
@@ -3825,7 +3825,7 @@ class RateMap(Image):
         #  as well
         if sum([x_slice_lims is None, y_slice_lims is None]) == 1:
             raise ValueError("If either 'x_slice_lims' and 'y_slice_lims' is provided, the other must be as well.")
-        elif x_slice_lims is None:
+        elif x_slice_lims is None or y_slice_lims is None:
             x_slice = slice(0, None)
             y_slice = slice(0, None)
         else:
@@ -3917,7 +3917,7 @@ class RateMap(Image):
         #  as well
         if sum([x_slice_lims is None, y_slice_lims is None]) == 1:
             raise ValueError("If either 'x_slice_lims' and 'y_slice_lims' is provided, the other must be as well.")
-        elif x_slice_lims is None:
+        elif x_slice_lims is None or y_slice_lims is None:
             x_slice = slice(0, None)
             y_slice = slice(0, None)
         else:
@@ -4396,7 +4396,7 @@ class PSFGrid(BaseAggregateProduct):
         """
         if self._grid_loc is None:
             for pos in self._component_products:
-                self._grid_loc[pos[0], pos[1], :] = self._component_products.ra_dec  # type: ignore[attr-defined]  # See issue #1653
+                self._grid_loc[pos[0], pos[1], :] = self._component_products.ra_dec  # type: ignore[attr-defined, index]  # See issue #1653
         return self._grid_loc
 
     def unload_data(self) -> None:

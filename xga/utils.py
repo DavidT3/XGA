@@ -610,7 +610,7 @@ def _initialise_xga() -> None:
     else:
         # Going to allow multi-core processing to use 90% of available cores by default, but
         # this can be over-ridden in individual SAS calls.
-        NUM_CORES = max(int(np.floor(os.cpu_count() * 0.9)), 1)  # Makes sure that at least one core is used
+        NUM_CORES = max(int(np.floor((os.cpu_count() or 1) * 0.9)), 1)  # Makes sure that at least one core is used
     # ------------------------------------------------------------------------------------------
 
     # Firstly, we check if the entries in the general XGA configuration section are valid - the output path is the
@@ -1298,19 +1298,19 @@ def check_telescope_choices(telescope: str | list[str] | None) -> list[str]:
 #  reading the information in on demand would be overkill for this
 
 # Here we read in files that list the errors and warnings in SAS
-errors = pd.read_csv(importlib.resources.files(__package__) / "files/sas_errors.csv", header="infer")
-warnings = pd.read_csv(importlib.resources.files(__package__) / "files/sas_warnings.csv", header="infer")
+errors = pd.read_csv(str(importlib.resources.files(__package__) / "files/sas_errors.csv"), header="infer")
+warnings = pd.read_csv(str(importlib.resources.files(__package__) / "files/sas_warnings.csv"), header="infer")
 # Just the names of the errors in two handy constants
 SASERROR_LIST = errors["ErrName"].values
 SASWARNING_LIST = warnings["WarnName"].values
 
 # XSPEC file extraction (and base fit) scripts
-XGA_EXTRACT = importlib.resources.files(__package__) / "xspec_scripts/xga_extract.tcl"
-BASE_XSPEC_SCRIPT = importlib.resources.files(__package__) / "xspec_scripts/general_xspec_fit.xcm"
-COUNTRATE_CONV_SCRIPT = importlib.resources.files(__package__) / "xspec_scripts/cr_conv_calc.xcm"
-CROSS_ARF_XSPEC_SCRIPT = importlib.resources.files(__package__) / "xspec_scripts/crossarf_xspec_fit.xcm"
+XGA_EXTRACT = str(importlib.resources.files(__package__) / "xspec_scripts/xga_extract.tcl")
+BASE_XSPEC_SCRIPT = str(importlib.resources.files(__package__) / "xspec_scripts/general_xspec_fit.xcm")
+COUNTRATE_CONV_SCRIPT = str(importlib.resources.files(__package__) / "xspec_scripts/cr_conv_calc.xcm")
+CROSS_ARF_XSPEC_SCRIPT = str(importlib.resources.files(__package__) / "xspec_scripts/crossarf_xspec_fit.xcm")
 
-with open(importlib.resources.files(__package__) / "files/xselect_mission_database.json") as filey:
+with open(str(importlib.resources.files(__package__) / "files/xselect_mission_database.json")) as filey:
     MISSION_COL_DB = json.load(filey)
 # --------------------------------------------------------------------------
 

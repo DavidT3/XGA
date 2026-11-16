@@ -316,6 +316,8 @@ class BaseSource:
             # If we are declaring a NullSource, then the RA and Dec are going to be NaN - and we want to use the
             #  entire census of the telescopes specified by the user
             matches, excluded = census_match(telescope, sel_null_obs)
+        if not isinstance(matches, dict) or not isinstance(excluded, dict):
+            raise XGADeveloperError("Single-coordinate match must return dictionaries.")
 
         from ..utils import BLACKLIST
 
@@ -3210,6 +3212,8 @@ class BaseSource:
         # This is the array that the mask gets built in - initially all ones and as we move through the regions we
         #  start to set the bits that need to be excluded to zero
         mask = np.ones(mask_image.shape)
+        if mask_image.telescope is None:
+            raise XGADeveloperError("Mask image has no associated telescope.")
         inter_regs = self.interloper_regions[mask_image.telescope]
 
         # If a region inclusion distance has not been set, then we create a mask of all True so that all regions
@@ -3713,6 +3717,8 @@ class BaseSource:
             #  to full fit configuration keys
             new_matched_prods = []
             for p in filt_matched_prods:
+                if p.spec_model is None:
+                    continue
                 try:
                     cur_gen_fit_conf = fit_conf_from_function(PROF_FIT_FUNC_MODEL_NAMES[p.spec_model], spec_fit_conf)
                     if cur_gen_fit_conf == p.spec_fit_conf:
@@ -4967,19 +4973,35 @@ class BaseSource:
         return filt_init_matches[0] if len(filt_init_matches) == 1 else filt_init_matches
 
     # @overload signatures allow Mypy to infer that get_ratemaps returns a single RateMap (rather than
-    #  RateMap | list[RateMap]) when obs_id, inst, lo_en, and hi_en are all explicitly provided
+    #  RateMap | list[RateMap]) when lo_en and hi_en are both explicitly provided as Quantity objects
     @overload
     def get_ratemaps(
         self,
-        obs_id: str,
-        inst: str,
+        obs_id: str | None,
+        inst: str | None,
         lo_en: Quantity,
         hi_en: Quantity,
         psf_corr: bool = False,
         psf_model: str | None = "ELLBETA",
-        psf_bins: int = 4,
-        psf_algo: str = "rl",
-        psf_iter: int = 15,
+        psf_bins: int | None = 4,
+        psf_algo: str | None = "rl",
+        psf_iter: int | None = 15,
+        telescope: str | None = None,
+    ) -> RateMap: ...
+
+    @overload
+    def get_ratemaps(
+        self,
+        obs_id: str | None = None,
+        inst: str | None = None,
+        *,
+        lo_en: Quantity,
+        hi_en: Quantity,
+        psf_corr: bool = False,
+        psf_model: str | None = "ELLBETA",
+        psf_bins: int | None = 4,
+        psf_algo: str | None = "rl",
+        psf_iter: int | None = 15,
         telescope: str | None = None,
     ) -> RateMap: ...
 
@@ -4992,9 +5014,9 @@ class BaseSource:
         hi_en: Quantity | None = None,
         psf_corr: bool = False,
         psf_model: str | None = "ELLBETA",
-        psf_bins: int = 4,
-        psf_algo: str = "rl",
-        psf_iter: int = 15,
+        psf_bins: int | None = 4,
+        psf_algo: str | None = "rl",
+        psf_iter: int | None = 15,
         telescope: str | None = None,
     ) -> RateMap | list[RateMap]: ...
 
@@ -5006,9 +5028,9 @@ class BaseSource:
         hi_en: Quantity | None = None,
         psf_corr: bool = False,
         psf_model: str | None = "ELLBETA",
-        psf_bins: int = 4,
-        psf_algo: str = "rl",
-        psf_iter: int = 15,
+        psf_bins: int | None = 4,
+        psf_algo: str | None = "rl",
+        psf_iter: int | None = 15,
         telescope: str | None = None,
     ) -> RateMap | list[RateMap]:
         """
@@ -5182,9 +5204,9 @@ class BaseSource:
         hi_en: Quantity,
         psf_corr: bool = False,
         psf_model: str | None = "ELLBETA",
-        psf_bins: int = 4,
-        psf_algo: str = "rl",
-        psf_iter: int = 15,
+        psf_bins: int | None = 4,
+        psf_algo: str | None = "rl",
+        psf_iter: int | None = 15,
         telescope: str | None = None,
         obs_id: str = "combined",
         inst: str = "combined",
@@ -5197,9 +5219,9 @@ class BaseSource:
         hi_en: Quantity | None = None,
         psf_corr: bool = False,
         psf_model: str | None = "ELLBETA",
-        psf_bins: int = 4,
-        psf_algo: str = "rl",
-        psf_iter: int = 15,
+        psf_bins: int | None = 4,
+        psf_algo: str | None = "rl",
+        psf_iter: int | None = 15,
         telescope: str | None = None,
         obs_id: str = "combined",
         inst: str = "combined",
@@ -5211,9 +5233,9 @@ class BaseSource:
         hi_en: Quantity | None = None,
         psf_corr: bool = False,
         psf_model: str | None = "ELLBETA",
-        psf_bins: int = 4,
-        psf_algo: str = "rl",
-        psf_iter: int = 15,
+        psf_bins: int | None = 4,
+        psf_algo: str | None = "rl",
+        psf_iter: int | None = 15,
         telescope: str | None = None,
         obs_id: str = "combined",
         inst: str = "combined",

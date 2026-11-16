@@ -782,11 +782,11 @@ class VikhlininDensity1D(BaseModel1D):
         return (p1 + p2 + p3 + p4) / p5
 
 
-DENS_MODELS: dict[str, type[BaseModel1D]] = {
+DENS_MODELS: dict[str, type[SimpleVikhlininDensity1D | KingProfile1D | DoubleKingProfile1D | VikhlininDensity1D]] = {
     "simple_vikhlinin_dens": SimpleVikhlininDensity1D,
     "king": KingProfile1D,
     "double_king": DoubleKingProfile1D,
     "vikhlinin_dens": VikhlininDensity1D,
 }
-DENS_MODELS_PAR_NAMES = {n: m().par_publication_names for n, m in DENS_MODELS.items()}  # type: ignore[abstract]
-DENS_MODELS_PUB_NAMES = {n: m().publication_name for n, m in DENS_MODELS.items()}  # type: ignore[abstract]
+DENS_MODELS_PAR_NAMES = {n: m().par_publication_names for n, m in DENS_MODELS.items()}
+DENS_MODELS_PUB_NAMES = {n: m().publication_name for n, m in DENS_MODELS.items()}

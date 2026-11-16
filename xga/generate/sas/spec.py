@@ -1051,15 +1051,18 @@ def cross_arf(
         raise TypeError("Please only pass source or sample objects for the 'sources' parameter of this function")
 
     # We want set_id to be iterable as well, so we wrap it in a list if it wasn't already a list or array
-    if set_id is not None and isinstance(set_id, (list, np.ndarray)):
-        set_id = [set_id]
+    parsed_set_id: list[Any] | np.ndarray
+    if isinstance(set_id, (int, str)):
+        parsed_set_id = [set_id]
     # We still want it to be iterable even if the user never specified it, so we make a list of Nones the same
     #  length as the sources variable
     elif set_id is None:
-        set_id = [None] * len(sources)
+        parsed_set_id = [None] * len(sources)
+    else:
+        parsed_set_id = set_id
 
     # This will trigger if the user passed too few or too many set ids for the number of sources there are
-    if len(set_id) != len(sources):
+    if len(parsed_set_id) != len(sources):
         raise ValueError(
             "If an XGA sample has been passed, and AnnularSpectra are being specified with the 'set_id' "
             "argument, then a list of set_ids with the same number of entries must be passed."
@@ -1105,7 +1108,7 @@ def cross_arf(
 
         try:
             ann_spec = src.get_annular_spectra(
-                radii, group_spec, min_counts, min_sn, over_sample, set_id[src_ind], telescope="xmm"
+                radii, group_spec, min_counts, min_sn, over_sample, parsed_set_id[src_ind], telescope="xmm"
             )
         except NoProductAvailableError as err:
             # We make our own version of this error

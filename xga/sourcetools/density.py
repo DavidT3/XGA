@@ -21,7 +21,11 @@ from tqdm import tqdm
 
 from xga import ABUND_TABLES, MEAN_MOL_WEIGHT, NHC, NUM_CORES
 
-from ..exceptions import ModelNotAssociatedError, NoProductAvailableError, ParameterNotAssociatedError
+from ..exceptions import (
+    ModelNotAssociatedError,
+    NoProductAvailableError,
+    ParameterNotAssociatedError,
+)
 from ..generate.multitelescope.phot import all_telescope_combined_expmaps, all_telescope_combined_images
 from ..generate.sas._common import region_setup
 from ..imagetools.profile import radial_brightness
@@ -71,8 +75,8 @@ def _dens_setup(
 ) -> tuple[
     ClusterSample | list[GalaxyCluster],
     dict[str, list[Quantity]],
-    dict[str, str | list] | None,
-    dict[str, str | list] | None,
+    dict[str, list[str | None]],
+    dict[str, list[str | None]],
     list[str],
 ]:
     """
@@ -156,6 +160,8 @@ def _dens_setup(
     # correct format if they have been set. We don't need to check that the ObsIDs are associated
     # with the sources here, because that will happen when the ratemaps are retrieved from the
     # source objects.
+    parsed_obs_id: dict[str, list[str | None]] = {}
+    parsed_inst: dict[str, list[str | None]] = {}
     if all([obs_id is not None, inst is not None]):
         if isinstance(obs_id, dict):
             # checking that there is a key for every telescope associated with the sample/source
@@ -173,8 +179,9 @@ def _dens_setup(
                         "argument must be input as a dictionary of lists, with one "
                         "entry per source."
                     )
-                for key in obs_id:
-                    obs_id[key] = [obs_id[key]]
+                for key, val in obs_id.items():
+                    if isinstance(val, str):
+                        parsed_obs_id[key] = [val]
 
             elif all(isinstance(obs_id[key], list) for key in obs_id):
                 if any(len(obs_id[key]) != len(src_list) for key in obs_id):
@@ -183,6 +190,9 @@ def _dens_setup(
                         "there must be one entry per source being analysed in each "
                         "list."
                     )
+                for key, val in obs_id.items():
+                    if isinstance(val, list):
+                        parsed_obs_id[key] = val
             else:
                 raise ValueError(
                     "If the 'obs_id' argument is set, it must be a dictionary with "
@@ -202,8 +212,9 @@ def _dens_setup(
 
             # if the dict has str values, making them into a list for use later
             if all(isinstance(inst[key], str) for key in inst):
-                for key in inst:
-                    inst[key] = [inst[key]]
+                for key, val in inst.items():
+                    if isinstance(val, str):
+                        parsed_inst[key] = [val]
 
             elif all(isinstance(inst[key], list) for key in inst):
                 if any(len(inst[key]) != len(src_list) for key in inst):
@@ -211,6 +222,9 @@ def _dens_setup(
                         "If you set the 'inst' argument as a dictionary of lists, there"
                         " must be one entry per source being analysed in each list."
                     )
+                for key, val in inst.items():
+                    if isinstance(val, list):
+                        parsed_inst[key] = val
 
             else:
                 raise ValueError(
@@ -221,8 +235,8 @@ def _dens_setup(
                 )
 
     elif all([obs_id is None, inst is None]):
-        obs_id = {tel: [None] * len(src_list) for tel in src_telescopes}
-        inst = {tel: [None] * len(src_list) for tel in src_telescopes}
+        parsed_obs_id = {tel: [None] * len(src_list) for tel in src_telescopes}
+        parsed_inst = {tel: [None] * len(src_list) for tel in src_telescopes}
     else:
         raise ValueError(
             "If a value is supplied for 'obs_id', then a value must be supplied for 'inst' as well, and vice versa."
@@ -369,11 +383,13 @@ def _dens_setup(
             # If we use inst = None in this function, then when we look for spectra to retrieve
             # a conversion factor for, it can retrieve spectra of individual instruments too
             # but if inst = None, we only want to retreive combined instrument spectra
+            lookup_inst: str | None
+            lookup_obs: str | None
             if tel in ["erosita", "erass"]:
-                if inst[tel][src_ind] is None:
+                if parsed_inst[tel][src_ind] is None:
                     lookup_inst = "combined"
                 else:
-                    lookup_inst = inst[tel][src_ind]
+                    lookup_inst = parsed_inst[tel][src_ind]
 
                 if len(src.obs_ids[tel]) > 1:
                     lookup_obs = "combined"
@@ -381,8 +397,8 @@ def _dens_setup(
                     lookup_obs = src.obs_ids[tel][0]
 
             else:
-                lookup_obs = obs_id[tel][src_ind]
-                lookup_inst = inst[tel][src_ind]
+                lookup_obs = parsed_obs_id[tel][src_ind]
+                lookup_inst = parsed_inst[tel][src_ind]
 
             total_factor = factor * src.norm_conv_factor(
                 conv_outer_radius,
@@ -399,7 +415,7 @@ def _dens_setup(
             )
             to_dens_convs[tel].append(total_factor)
 
-    return src_list, to_dens_convs, obs_id, inst, src_telescopes
+    return src_list, to_dens_convs, parsed_obs_id, parsed_inst, src_telescopes
 
 
 def _run_sb(
@@ -471,8 +487,6 @@ def _run_sb(
             int_mask = src.get_interloper_mask(telescope=telescope)
             # comb = True
         else:
-            if obs_id is None or inst is None:
-                raise ValueError("If an ObsID is supplied, an instrument must be supplied as well, and vice versa.")
             rt = src.get_ratemaps(
                 obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, telescope=telescope
             )
@@ -676,7 +690,7 @@ def inv_abel_fitted_model(
     # Also checks parameters and runs any spectra/fits that need running
     # Using a new variable name for the returned iterable of sources to make Mypy happy, as it doesn't like
     #  variables of one type to be reassigned with another
-    src_list, conv_factors, obs_id, inst, telescope = _dens_setup(
+    src_list, conv_factors, parsed_obs_id, parsed_inst, telescope = _dens_setup(
         sources,
         abund_table,
         lo_en,
@@ -748,8 +762,8 @@ def inv_abel_fitted_model(
                     psf_iter,
                     pix_step,
                     min_snr,
-                    obs_id[tel][src_ind],
-                    inst[tel][src_ind],
+                    parsed_obs_id[tel][src_ind],
+                    parsed_inst[tel][src_ind],
                 )
 
                 if sb_prof is None:
@@ -817,12 +831,14 @@ def inv_abel_fitted_model(
 
                     # Setting up the instrument and ObsID to pass into the density profile
                     # definition
-                    if obs_id[tel][src_ind] is None:
+                    cur_obs_val = parsed_obs_id[tel][src_ind]
+                    cur_inst_val = parsed_inst[tel][src_ind]
+                    if cur_obs_val is None or cur_inst_val is None:
                         cur_inst = "combined"
                         cur_obs = "combined"
                     else:
-                        cur_inst = inst[tel][src_ind]
-                        cur_obs = obs_id[tel][src_ind]
+                        cur_inst = cur_inst_val
+                        cur_obs = cur_obs_val
 
                     try:
                         # I now allow the user to decide if they want to generate number or mass
@@ -1034,7 +1050,7 @@ def inv_abel_data(
 
     # Run the setup function, calculates the factors that translate 3D count-rate to density
     #  Also checks parameters and runs any spectra/fits that need running
-    src_list, conv_factors, obs_id, inst, telescope = _dens_setup(
+    src_list, conv_factors, parsed_obs_id, parsed_inst, telescope = _dens_setup(
         src_list,
         abund_table,
         lo_en,
@@ -1107,8 +1123,8 @@ def inv_abel_data(
                     psf_iter,
                     pix_step,
                     min_snr,
-                    obs_id[tel][src_ind],
-                    inst[tel][src_ind],
+                    parsed_obs_id[tel][src_ind],
+                    parsed_inst[tel][src_ind],
                 )
 
                 # The above function can fail to produce an SB profile, in which case the return is None. We check
@@ -1211,12 +1227,14 @@ def inv_abel_data(
                 num_dens_err = np.nanstd(num_dens_dist, axis=1)
 
                 # Setting up the instrument and ObsID to pass into the density profile definition
-                if obs_id[tel][src_ind] is None:
+                cur_obs_val = parsed_obs_id[tel][src_ind]
+                cur_inst_val = parsed_inst[tel][src_ind]
+                if cur_obs_val is None or cur_inst_val is None:
                     cur_inst = "combined"
                     cur_obs = "combined"
                 else:
-                    cur_inst = inst[tel][src_ind]
-                    cur_obs = obs_id[tel][src_ind]
+                    cur_inst = cur_inst_val
+                    cur_obs = cur_obs_val
 
                 try:
                     # I now allow the user to decide if they want to generate number or mass density profiles using

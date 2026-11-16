@@ -2069,6 +2069,8 @@ class AggregateLightCurve(BaseAggregateProduct):
             rel_lcs = rel_lcs if isinstance(rel_lcs, list) else [rel_lcs]
 
             for rel_lc in rel_lcs:
+                if rel_lc.telescope is None or rel_lc.obs_id is None:
+                    raise ValueError("Constituent LightCurve objects must have both a telescope and an ObsID set.")
                 rel_obsids.setdefault(rel_lc.telescope, [])
                 rel_obsids[rel_lc.telescope].append(rel_lc.obs_id)
 

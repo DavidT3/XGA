@@ -294,10 +294,9 @@ def _in_region(
         indices of the sources passed in), and the values are lists of region objects.
     :rtype: Tuple[str, dict]
     """
-    if isinstance(ra, float):
-        ra = [ra]
-        dec = [dec]
-        s_indices = [s_indices]
+    ra_arr = [ra] if isinstance(ra, (float, int)) else ra
+    dec_arr = [dec] if isinstance(dec, (float, int)) else dec
+    s_idx_arr = [s_indices] if isinstance(s_indices, int) else s_indices
 
     # From that ObsID construct a path to the relevant region file using the XGA config
     reg_path = xga_conf[f"{telescope.upper()}_FILES"]["region_file"].format(obs_id=obs_id)
@@ -322,9 +321,9 @@ def _in_region(
                 og_ds9_regs = np.array([reg.to_sky(im.radec_wcs) for reg in og_ds9_regs])
 
             # This cycles through every ObsID in the possible matches for the current object
-            for r_ind, cur_ra in enumerate(ra):
-                cur_dec = dec[r_ind]
-                s_idx = s_indices[r_ind]
+            for r_ind, cur_ra in enumerate(ra_arr):
+                cur_dec = dec_arr[r_ind]
+                s_idx = s_idx_arr[r_ind]
 
                 # Make a local (to this iteration) copy as this array is modified during the checking process
                 ds9_regs = deepcopy(og_ds9_regs)
@@ -389,14 +388,15 @@ def _process_flat_init_match(src_ra: np.ndarray, src_dec: np.ndarray, res_df: Da
 
     # Group by telescope first to simplify processing
     for tel, tel_group in res_df.groupby("telescope"):
-        final_obs_ids[tel] = tel_group["ObsID"].unique().tolist()
+        tel_str = str(tel)
+        final_obs_ids[tel_str] = tel_group["ObsID"].unique().tolist()
 
         # We need RA, Dec, and global index for each match
         # We use a vectorized approach with sorting and splitting to avoid expensive groupby('ObsID')
         #  on potentially millions of rows
         tel_group = tel_group.sort_values("ObsID")
-        obs_ids = tel_group["ObsID"].values
-        src_indices = tel_group["src_idx"].values
+        obs_ids = tel_group["ObsID"].to_numpy()
+        src_indices = tel_group["src_idx"].to_numpy(dtype=int)
 
         # Identify where the ObsID changes to split the arrays
         unique_obs, split_indices = np.unique(obs_ids, return_index=True)
@@ -413,7 +413,7 @@ def _process_flat_init_match(src_ra: np.ndarray, src_dec: np.ndarray, res_df: Da
         split_data = np.split(combined_data, split_points)
 
         # Construct the mapping: {obs_id: [[ra, dec, global_idx], ...]}
-        final_obs_id_srcs[tel] = dict(zip(unique_obs, split_data, strict=False))
+        final_obs_id_srcs[tel_str] = dict(zip(unique_obs, split_data, strict=False))
 
     return final_obs_ids, all_indices, final_obs_id_srcs
 
@@ -537,6 +537,7 @@ def census_match(
 
     # Here we parse the ObsID information (that the user can give us to limit the ObsIDs that should be considered
     #  for this particular 'match'), to try to account for the different formats of information that can be passed
+    parsed_obs_ids: dict[str, list[str] | None]
     if obs_ids is not None and not isinstance(obs_ids, (dict, list)):
         raise TypeError(
             "The 'obs_ids' argument must either be None, a list of ObsIDs (for a single telescope), or a "
@@ -544,36 +545,38 @@ def census_match(
         )
     # In this case all observations are valid for all telescopes
     elif obs_ids is None:
-        obs_ids = {tel: None for tel in telescope}
+        parsed_obs_ids = {tel: None for tel in telescope}
     # If a list of ObsIDs is passed, but multiple telescopes are under consideration, then we can't really know what
     #  to do so we have to throw an error
-    elif obs_ids is not None and isinstance(obs_ids, list) and len(telescope) > 1:
+    elif isinstance(obs_ids, list) and len(telescope) > 1:
         raise TypeError(
             "It is not possible to pass a list of ObsIDs when multiple telescopes have been passed, please "
             "pass a dictionary of lists of ObsIDs."
         )
     # However, if dictionary is passed for ObsIDs and doesn't relate to the telescopes we're looking at, we will
     #  be forgiving and just use all observations
-    elif obs_ids is not None and isinstance(obs_ids, dict) and all([tel not in obs_ids for tel in telescope]):
+    elif isinstance(obs_ids, dict) and all([tel not in obs_ids for tel in telescope]):
         warn(
             "None of the telescopes specified were contained in the obs_ids dictionary; defaulting to using all "
             "viable observations.",
             stacklevel=2,
         )
-        obs_ids = {tel: None for tel in telescope}
+        parsed_obs_ids = {tel: None for tel in telescope}
     # Here ObsIDs for some telescopes are passed - so for the others we'll use all observations
-    elif obs_ids is not None and isinstance(obs_ids, dict) and any([tel not in obs_ids for tel in telescope]):
-        obs_ids = {tel: None if tel not in obs_ids else obs_ids[tel] for tel in telescope}
+    elif isinstance(obs_ids, dict) and any([tel not in obs_ids for tel in telescope]):
+        parsed_obs_ids = {tel: None if tel not in obs_ids else obs_ids[tel] for tel in telescope}
     # This just makes sure that obs_ids is a dictionary regardless
-    elif obs_ids is not None and isinstance(obs_ids, list) and len(telescope) == 1:
-        obs_ids = {telescope[0]: obs_ids}
+    elif isinstance(obs_ids, list):
+        parsed_obs_ids = {telescope[0]: obs_ids}
+    else:
+        parsed_obs_ids = obs_ids
 
     # This dictionary stores any ObsIDs that were COMPLETELY blacklisted (i.e. all instruments were excluded)
     bl_results = {}
     # This is what the census entries are stored in
     results = {}
     for tel in telescope:
-        rel_obs_ids = obs_ids[tel]
+        rel_obs_ids = parsed_obs_ids[tel]
         # We grab the observation census for the current telescope, and drop any rows that have a NaN coordinate (this
         #  can happen for calibration pointings, and pointings where X-ray telescopes weren't used, for telescopes that
         #  have non X-ray telescopes, like the OM on XMM).
@@ -715,7 +718,7 @@ def separation_match(
         src_dec = np.array([src_dec])
         num_cores = 1
     # Don't want one input being a single number and one being an array
-    elif type(src_ra) is not type(src_dec):
+    elif not (isinstance(src_ra, np.ndarray) and isinstance(src_dec, np.ndarray)):
         raise TypeError("src_ra and src_dec must be the same type, either both floats or both arrays.")
 
     # The prog_dis variable controls whether the tqdm progress bar is displayed or not, don't want it to be there
@@ -1007,10 +1010,12 @@ def on_detector_match(
     """
     # Checks whether there are multiple input coordinates or just one. If one then the floats are turned into
     #  an array of length one to make later code easier to write (i.e. everything is iterable regardless)
-    if isinstance(src_ra, float) and isinstance(src_dec, float):
+    if isinstance(src_ra, (float, int)) and isinstance(src_dec, (float, int)):
         src_ra = np.array([src_ra])
         src_dec = np.array([src_dec])
         num_cores = 1
+    elif not (isinstance(src_ra, np.ndarray) and isinstance(src_dec, np.ndarray)):
+        raise TypeError("'src_ra' and 'src_dec' must be the same type, either both floats or both arrays.")
 
     # Again if there's just one source I don't really care about a progress bar, so I turn it off
     if len(src_ra) != 1:
@@ -1307,7 +1312,8 @@ def region_match(
                     cur_idx_arr = obs_id_srcs[tel][cur_obs_id][:, 2].astype(int)
 
                     try:
-                        rel_im = obs_src.get_images(cur_obs_id, telescope=tel)[0]
+                        obs_ims = obs_src.get_images(cur_obs_id, telescope=tel)
+                        rel_im = obs_ims[0] if isinstance(obs_ims, list) else obs_ims
                     except NoProductAvailableError:
                         warn(
                             f"No pre-existing image can be found for {tel}-{cur_obs_id}; this is required for "
@@ -1381,7 +1387,8 @@ def region_match(
                     cur_idx_arr = obs_id_srcs[tel][cur_obs_id][:, 2].astype(int)
 
                     try:
-                        rel_im = obs_src.get_images(cur_obs_id, telescope=tel)[0]
+                        obs_ims = obs_src.get_images(cur_obs_id, telescope=tel)
+                        rel_im = obs_ims[0] if isinstance(obs_ims, list) else obs_ims
                     except NoProductAvailableError:
                         warn(
                             f"No pre-existing image can be found for {tel}-{cur_obs_id}; this is required for "

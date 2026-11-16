@@ -1950,6 +1950,7 @@ class Spectrum(BaseProduct):
         # Separate plot_models list variable to make Mypy happy, as it doesn't like str | None model being
         #  reassigned with a list of strings
         plot_models: list[str] = []
+        parsed_fit_conf: dict[str, list[str]] = {}
         if show_model_fits and model is None and fit_conf is not None:
             raise ValueError(
                 "Specifying a fit configuration ('fit_conf') is not supported without setting the "
@@ -1958,7 +1959,7 @@ class Spectrum(BaseProduct):
             )
         elif show_model_fits and model is None and fit_conf is None:
             plot_models = self.fitted_models
-            fit_conf = self.fitted_model_configurations
+            parsed_fit_conf = self.fitted_model_configurations
         elif show_model_fits and model is not None and fit_conf is None:
             # I indent this check because it is just a bit easier for me that way
             if model not in self.fitted_models:
@@ -1970,7 +1971,7 @@ class Spectrum(BaseProduct):
             # If we're here then the model is valid, and in this case no fit configuration has been specified, so
             #  we grab ALL OF THEM - making sure that the structure of the parameters is the same (model in a list,
             #  fit configs in a list in a dictionary with model name as key
-            fit_conf = {model: self.fitted_model_configurations[model]}
+            parsed_fit_conf = {model: self.fitted_model_configurations[model]}
             plot_models = [model]
         elif show_model_fits and model is not None and fit_conf is not None:
             if model not in self.fitted_models:
@@ -1992,7 +1993,7 @@ class Spectrum(BaseProduct):
                     f"{av_fconfs}"
                 )
 
-            fit_conf = {model: [fit_conf]}
+            parsed_fit_conf = {model: [fit_conf]}
             plot_models = [model]
 
         # Residuals can only be shown if model fits are being displayed
@@ -2140,7 +2141,7 @@ class Spectrum(BaseProduct):
             for mod in plot_models:
                 # We also iterate through the different fit configurations for the current model, and plot them
                 #  separately - currently with the only the model name in the legend
-                for fc in fit_conf[mod]:
+                for fc in parsed_fit_conf[mod]:
                     cur_fit_data = self.get_plot_data(mod, fc)
 
                     # Extract the x values which we gathered from XSPEC (they will be in keV)
@@ -4179,6 +4180,7 @@ class AnnularSpectra(BaseAggregateProduct):
             # Separate plot_models list variable to make Mypy happy, as it doesn't like str | None model being
             #  reassigned with a list of strings
             plot_models: list[str] = []
+            parsed_fit_conf: dict[str, list[str]] = {}
             if show_model_fits and model is None and fit_conf is not None:
                 raise ValueError(
                     "Specifying a fit configuration ('fit_conf') is not supported without setting the "
@@ -4187,7 +4189,7 @@ class AnnularSpectra(BaseAggregateProduct):
                 )
             elif show_model_fits and model is None and fit_conf is None:
                 plot_models = self.fitted_models
-                fit_conf = self.fitted_model_configurations
+                parsed_fit_conf = self.fitted_model_configurations
             elif show_model_fits and model is not None and fit_conf is None:
                 # I indent this check because it is just a bit easier for me that way
                 if model not in self.fitted_models:
@@ -4199,7 +4201,7 @@ class AnnularSpectra(BaseAggregateProduct):
                 # If we're here then the model is valid, and in this case no fit configuration has been specified, so
                 #  we grab ALL OF THEM - making sure that the structure of the parameters is the same (model in a list,
                 #  fit configs in a list in a dictionary with model name as key
-                fit_conf = {model: self.fitted_model_configurations[model]}
+                parsed_fit_conf = {model: self.fitted_model_configurations[model]}
                 plot_models = [model]
             elif show_model_fits and model is not None and fit_conf is not None:
                 if model not in self.fitted_models:
@@ -4221,7 +4223,7 @@ class AnnularSpectra(BaseAggregateProduct):
                         f"{av_fconfs}"
                     )
 
-                fit_conf = {model: [fit_conf]}
+                parsed_fit_conf = {model: [fit_conf]}
                 plot_models = [model]
 
             if not grouped:
@@ -4282,7 +4284,7 @@ class AnnularSpectra(BaseAggregateProduct):
 
             # Depending on what radius information is available to this AnnularSpectra, depends which we use
             # We will always prefer to use proper radii if they are available
-            if self.proper_radii is not None:
+            if self.proper_radii is not None and self.proper_annulus_centres is not None:
                 # Need to set up an array for the y axis (the radius axis) which is the same dimensions
                 #  as the x and z arrays
                 y_fill = self.proper_annulus_centres[ann_ident].value
@@ -4359,7 +4361,7 @@ class AnnularSpectra(BaseAggregateProduct):
                 for mod in plot_models:
                     # We also iterate through the different fit configurations for the current model, and plot them
                     #  separately - currently with the only the model name in the legend
-                    for fc in fit_conf[mod]:
+                    for fc in parsed_fit_conf[mod]:
                         cur_fit_data = spec.get_plot_data(mod, fc)
 
                         # Extract the x values which we gathered from XSPEC (they will be in keV)
@@ -4511,7 +4513,7 @@ class AnnularSpectra(BaseAggregateProduct):
 
                     # Depending on what radius information is available to this AnnularSpectra, depends which we use
                     # We will always prefer to use proper radii if they are available
-                    if self.proper_radii is not None:
+                    if self.proper_radii is not None and self.proper_annulus_centres is not None:
                         # Need to set up an array for the y axis (the radius axis) which is the same dimensions
                         #  as the x and z arrays
                         ys = np.full(shape=(len(plot_x),), fill_value=self.proper_annulus_centres[ann_ident].value)

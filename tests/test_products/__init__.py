@@ -2,8 +2,10 @@
 #  Last modified by David J Turner (djturner@umbc.edu) 9/25/26, 5:46 PM. Copyright (c) The Contributors.
 """The __init__ for the data products unit tests, defining shared remote test event list paths."""
 
+from typing import Any
+
 # These are a selection of event lists, with expected telescope/instrument, to test with
-TEST_EVTS = {
+TEST_EVTS: dict[str, dict[str, Any]] = {
     "ASCA_GIS": {
         "path": "asca/data/rev2/87036000/screened/ad87036000g300370m.evt.gz",
         "tele": "asca",

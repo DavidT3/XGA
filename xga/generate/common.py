@@ -53,7 +53,7 @@ def mission_software_call(
 
             # The first argument of all of these mission software functions will be the source object (or a list of),
             # so rather than return them from the function I'll just access them like this.
-            sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource]
+            sources: BaseSample | list[BaseSource | NullSource]
             if isinstance(args[0], (BaseSource, NullSource)):
                 sources = [args[0]]
             elif isinstance(args[0], (BaseSample, list)):
@@ -239,15 +239,16 @@ def mission_software_call(
                     # object that already exists in our source
                     elif prod_type_str == "cross arfs":
                         ei = product._extra_info
-                        ann_spec = sources[ind].get_annular_spectra(set_id=int(ei["ann_spec_set_id"]))
-                        ann_spec.add_cross_arf(
-                            product,
-                            ei["obs_id"],
-                            ei["inst"],
-                            ei["src_ann_id"],
-                            ei["cross_ann_id"],
-                            ei["ann_spec_set_id"],
-                        )
+                        if ei is not None:
+                            ann_spec = sources[ind].get_annular_spectra(set_id=int(ei["ann_spec_set_id"]))
+                            ann_spec.add_cross_arf(
+                                product,
+                                ei["obs_id"],
+                                ei["inst"],
+                                ei["src_ann_id"],
+                                ei["cross_ann_id"],
+                                ei["ann_spec_set_id"],
+                            )
 
                 if len(to_raise) != 0:
                     all_to_raise.append(to_raise)
@@ -282,7 +283,7 @@ def mission_software_call(
 
             # If only one source was passed, turn it back into a source object rather than a list.
             if len(sources) == 1:
-                sources = sources[0]
+                return sources[0]
             return sources
 
         return wrapper

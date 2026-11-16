@@ -267,19 +267,10 @@ class ClusterSample(BaseSample):
                         cr = None
 
                     # Here we check the options that are allowed to be None
-                    if richness is not None:
-                        lam = richness[ind]
-                        lam_err = richness_err[ind]
-                    else:
-                        lam = None
-                        lam_err = None
-
-                    if wl_mass is not None:
-                        wlm = wl_mass[ind]
-                        wlm_err = wl_mass_err[ind]
-                    else:
-                        wlm = None
-                        wlm_err = None
+                    lam = richness[ind] if richness is not None else None
+                    lam_err = richness_err[ind] if richness_err is not None else None
+                    wlm = wl_mass[ind] if wl_mass is not None else None
+                    wlm_err = wl_mass_err[ind] if wl_mass_err is not None else None
 
                     # Setup the include_core_pnt_srcs value to be passed to the current cluster - either single bools
                     #  or lists/arrays of bools can be passed, so we just need to disentangle that
@@ -995,14 +986,13 @@ class ClusterSample(BaseSample):
                 "If you wish to use density profiles generated from spectra you must supply a list of "
                 "set IDs with an entry for each cluster in this sample."
             )
-        elif set_ids is None:
-            set_ids = [None] * len(self)
+        parsed_set_ids: list[int] | list[None] = [None] * len(self) if set_ids is None else set_ids
 
         # Iterate through all of our Galaxy Clusters
         for gcs_ind, gcs in enumerate(self._sources.values()):
             gas_mass_rad = gcs.get_radius(rad_name, "kpc")
             try:
-                if prof_outer_rad is not None:
+                if out_rad_vals is not None:
                     dens_profs = gcs.get_density_profiles(
                         out_rad_vals[gcs_ind],
                         method,
@@ -1016,7 +1006,7 @@ class ClusterSample(BaseSample):
                         psf_bins=psf_bins,
                         psf_algo=psf_algo,
                         psf_iter=psf_iter,
-                        set_id=set_ids[gcs_ind],
+                        set_id=parsed_set_ids[gcs_ind],
                         telescope=telescope,
                     )
                 else:
@@ -1033,7 +1023,7 @@ class ClusterSample(BaseSample):
                         psf_bins=psf_bins,
                         psf_algo=psf_algo,
                         psf_iter=psf_iter,
-                        set_id=set_ids[gcs_ind],
+                        set_id=parsed_set_ids[gcs_ind],
                         telescope=telescope,
                     )
 

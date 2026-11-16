@@ -1157,9 +1157,9 @@ class ScalingRelation:
         #  if any were supplied at initialisation, if that isn't the case then we make our own from the data, and
         #  if there's no data then we get stroppy
         if x_lims is not None and x_lims.unit.is_equivalent(self.x_unit):
-            x_lims = x_lims.to(self.x_unit).value
+            plot_x_lims = x_lims.to(self.x_unit).value
         elif self.x_lims is not None:
-            x_lims = self.x_lims.value
+            plot_x_lims = self.x_lims.value
         elif x_lims is not None and not x_lims.unit.is_equivalent(self.x_unit):
             raise UnitConversionError(
                 f"Limits on the x-axis ({x_lims.unit.to_string()}) must be convertible to the x-axis units of this "
@@ -1168,11 +1168,13 @@ class ScalingRelation:
         elif x_lims is None and len(self._x_data) != 0:
             max_x_ind = np.nanargmax(self._x_data)
             min_x_ind = np.nanargmin(self._x_data)
-            x_lims = [
-                0.9 * (self._x_data[min_x_ind].value - self._x_err[min_x_ind].value),
-                1.1 * (self._x_data[max_x_ind].value + self._x_err[max_x_ind].value),
-            ]
-        elif x_lims is None and len(self._x_data) == 0:
+            plot_x_lims = np.array(
+                [
+                    0.9 * (self._x_data[min_x_ind].value - self._x_err[min_x_ind].value),
+                    1.1 * (self._x_data[max_x_ind].value + self._x_err[max_x_ind].value),
+                ]
+            )
+        else:
             raise ValueError("There are no data available to infer suitable axis limits from, please pass x limits.")
 
         # Just grabs the model colour from the property if the user doesn't set a value for model_colour
@@ -1180,7 +1182,7 @@ class ScalingRelation:
             model_colour = self.model_colour
 
         # Setting the axis limits
-        ax.set_xlim(x_lims)
+        ax.set_xlim(plot_x_lims)
 
         # Setup the aesthetics of the axis
         ax.minorticks_on()
@@ -1247,7 +1249,9 @@ class ScalingRelation:
                 if not np.isnan(cur_x) and not np.isnan(cur_y):
                     # This measures the x_size of the plot in display coordinates (TRANSFORMED from data, thus avoiding
                     #  any issues with the scaling of the axis)
-                    x_size = ax.transData.transform((x_lims[1], 0))[0] - ax.transData.transform((x_lims[0], 0))[0]
+                    x_size = (
+                        ax.transData.transform((plot_x_lims[1], 0))[0] - ax.transData.transform((plot_x_lims[0], 0))[0]
+                    )
                     # This does the same thing with the y-data
                     y_dat_lims = ax.get_ylim()
                     y_size = (
@@ -1281,7 +1285,7 @@ class ScalingRelation:
 
         model_par_dists = np.random.normal(model_pars, model_par_errs)
 
-        model_x = np.linspace(*(x_lims / self.x_norm.value), 100)
+        model_x = np.linspace(float(plot_x_lims[0] / self.x_norm.value), float(plot_x_lims[1] / self.x_norm.value), 100)
         model_xs = np.repeat(model_x[..., None], num_rand, axis=1)
 
         upper = 50 + (conf_level / 2)
@@ -1787,6 +1791,11 @@ class AggregateScalingRelation:
 
             par_names += [r"\sigma"]
             for rel in self._relations:
+                if rel.chains is None or rel.scatter_chain is None:
+                    raise ValueError(
+                        f"The scaling relation '{rel.name}' is missing parameter or scatter chains, cannot view "
+                        "aggregate corner plot."
+                    )
                 all_ch = np.hstack([rel.chains, rel.scatter_chain[..., None]])
                 samp_obj = MCSamples(samples=all_ch, label=rel.name, names=par_names, labels=par_names)
                 samples.append(samp_obj)
@@ -1879,12 +1888,13 @@ class AggregateScalingRelation:
         set_mod_cols = list(set([r.model_colour for r in self._relations]))
         # Set up the colour cycle, if the user hasn't passed a colour list we'll try to use colours set for the
         #  individual relations, but if they haven't all been set then we'll use the predefined colour cycle
-        if colour_list is None and len(set_mod_cols) == len(self._relations):
-            # Don't use the set_mod_cols variable as its unordered due to the use of set
-            colour_list = [r.model_colour for r in self._relations]
-        elif colour_list is None and len(set_mod_cols) != len(self._relations):
-            colour_list = [PRETTY_COLOUR_CYCLE[i % len(PRETTY_COLOUR_CYCLE)] for i in range(len(self._relations))]
-        elif colour_list is not None and len(colour_list) != len(self._relations):
+        if colour_list is None:
+            if len(set_mod_cols) == len(self._relations):
+                # Don't use the set_mod_cols variable as its unordered due to the use of set
+                colour_list = [r.model_colour for r in self._relations]
+            else:
+                colour_list = [PRETTY_COLOUR_CYCLE[i % len(PRETTY_COLOUR_CYCLE)] for i in range(len(self._relations))]
+        elif len(colour_list) != len(self._relations):
             raise ValueError(
                 "If a colour_list is passed, then it must have the same number of entries as there are relations."
             )
@@ -1894,14 +1904,14 @@ class AggregateScalingRelation:
         #  model colours.
         if data_colour_list is None:
             data_colour_list = deepcopy(colour_list)
-        elif data_colour_list is not None and len(data_colour_list) != len(self._relations):
+        elif len(data_colour_list) != len(self._relations):
             raise ValueError(
                 "If a data_colour_list is passed, then it must have the same number of entries as there are relations."
             )
 
         if data_shape_list is None:
             data_shape_list = ["x" for i in range(0, len(self._relations))]
-        elif data_shape_list is not None and len(data_shape_list) != len(self._relations):
+        elif len(data_shape_list) != len(self._relations):
             raise ValueError(
                 "If a data_shape_list is passed, then it must have the same number of entries as there are relations."
             )
@@ -1928,23 +1938,25 @@ class AggregateScalingRelation:
                 f"scaling relation ({self.x_unit.to_string()})."
             )
         elif x_lims is not None and x_lims.unit.is_equivalent(self.x_unit):
-            x_lims = x_lims.to(self.x_unit).value
+            plot_x_lims = x_lims.to(self.x_unit).value
         elif comb_x_lims is not None:
-            x_lims = np.array([comb_x_lims.value.min(), comb_x_lims.value.max()])
+            plot_x_lims = np.array([comb_x_lims.value.min(), comb_x_lims.value.max()])
         elif x_lims is None and len(comb_x_data) != 0:
             max_x_ind = np.nanargmax(comb_x_data[:, 0])
             min_x_ind = np.nanargmin(comb_x_data[:, 0])
-            x_lims = [
-                0.9 * (comb_x_data[min_x_ind, 0].value - comb_x_data[min_x_ind, 1].value),
-                1.1 * (comb_x_data[max_x_ind, 0].value + comb_x_data[max_x_ind, 1].value),
-            ]
-        elif x_lims is None and len(comb_x_data) == 0:
+            plot_x_lims = np.array(
+                [
+                    0.9 * (comb_x_data[min_x_ind, 0].value - comb_x_data[min_x_ind, 1].value),
+                    1.1 * (comb_x_data[max_x_ind, 0].value + comb_x_data[max_x_ind, 1].value),
+                ]
+            )
+        else:
             raise ValueError("There is no data available to infer suitable axis limits from, please pass x limits.")
 
         ax.set_prop_cycle(new_col_cycle)
 
         # Setting the axis limits
-        ax.set_xlim(x_lims)
+        ax.set_xlim(plot_x_lims)
 
         # Setup the aesthetics of the axis
         ax.minorticks_on()
@@ -1986,7 +1998,9 @@ class AggregateScalingRelation:
 
             model_par_dists = np.random.normal(model_pars, model_par_errs)
 
-            model_x = np.linspace(*(x_lims / rel.x_norm.value), 100)
+            model_x = np.linspace(
+                float(plot_x_lims[0] / rel.x_norm.value), float(plot_x_lims[1] / rel.x_norm.value), 100
+            )
             model_xs = np.repeat(model_x[..., None], num_rand, axis=1)
 
             upper = 50 + (conf_level / 2)
