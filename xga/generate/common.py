@@ -228,9 +228,9 @@ def mission_software_call(
                     # In case they are components of an annular spectrum but they are either none or not usable
                     elif prod_type_str == "annular spectrum set components":
                         warn(
-                            f"An annular spectrum component ({product.storage_key}) for {product.telescope} "
-                            f"{product.obs_id}{product.instrument} has not been generated properly (not "
-                            f"usable reason - {product.not_usable_reasons}). The std_err entry is:\n\n "
+                            f"An annular spectrum component ({getattr(product, 'storage_key', None)}) for "
+                            f"{product.telescope} {product.obs_id}{product.instrument} has not been generated "
+                            f"properly (not usable reason - {product.not_usable_reasons}). The std_err entry is:\n\n "
                             f"{product.unprocessed_stderr}\n\n The std_out entry is:\n\n "
                             f"{product.unprocessed_stdout}",
                             stacklevel=2,

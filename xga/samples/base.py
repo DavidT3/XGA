@@ -2,6 +2,7 @@
 #  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 1:34 PM. Copyright (c) The Contributors.
 """This module defines the BaseSample superclass for all XGA sample containers."""
 
+from typing import Any
 from warnings import warn
 
 import numpy as np
@@ -120,7 +121,7 @@ class BaseSample:
         #  declaration
         self._names = []
         self._cosmo = cosmology
-        self._sources = {}
+        self._sources: dict[str, Any] = {}
         # This stores the indexes of the sources that work and will be stored in this object, for use by things
         #  like the PointSample declaration, where names aren't strongly required but there are arguments that
         #  aren't passed to this object and stored by it.

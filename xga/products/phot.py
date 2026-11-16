@@ -250,9 +250,9 @@ class Image(BaseProduct):
             if any([len(e) != 2 for e in obs_inst_combs]):
                 raise ValueError("Entries in the obs_inst_combs list must be lists structured as [ObsID, Inst]")
             # And if it passes that we check that the instrument values are one of the allowed list
-            elif any([e[1] not in ALLOWED_INST[telescope].values() for e in obs_inst_combs]):
+            elif any([e[1] not in ALLOWED_INST[telescope].values() for e in obs_inst_combs]):  # type: ignore[attr-defined]  # See issue #1653
                 raise ValueError(
-                    f"The allowed instruments for {telescope} are: {', '.join(ALLOWED_INST[telescope].values())}"
+                    f"The allowed instruments for {telescope} are: {', '.join(ALLOWED_INST[telescope].values())}"  # type: ignore[attr-defined]  # See issue #1653
                 )
 
         # This attribute stores the combinations of ObsID and instrument that make up combined images, if the
@@ -4066,7 +4066,7 @@ class RateMap(Image):
         """
         # Delegate region validation, dictionary unwrapping, and processing to Image.regions, then synchronise the
         #  underlying Image component so accessing the Image from the RateMap sees the same regions
-        Image.regions.fset(self, new_reg)
+        Image.regions.fset(self, new_reg)  # type: ignore[attr-defined]
         self._im_obj.regions = new_reg
 
     @property
@@ -4096,7 +4096,7 @@ class RateMap(Image):
         """
         # Delegate matched-region validation and conversion to Image.matched_regions, then synchronise the underlying
         #  Image component
-        Image.matched_regions.fset(self, new_reg)
+        Image.matched_regions.fset(self, new_reg)  # type: ignore[attr-defined]
         self._im_obj.matched_regions = new_reg
 
 
@@ -4392,7 +4392,7 @@ class PSFGrid(BaseAggregateProduct):
         """
         if self._grid_loc is None:
             for pos in self._component_products:
-                self._grid_loc[pos[0], pos[1], :] = self._component_products.ra_dec
+                self._grid_loc[pos[0], pos[1], :] = self._component_products.ra_dec  # type: ignore[attr-defined]  # See issue #1653
         return self._grid_loc
 
     def unload_data(self) -> None:

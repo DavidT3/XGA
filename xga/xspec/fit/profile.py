@@ -217,7 +217,7 @@ def single_temp_apec_profile(
         sources = [sources]
 
     og_start_temp = start_temp.copy()
-    og_start_met = start_met.copy()
+    og_start_met = start_met.copy()  # type: ignore[attr-defined]  # See issue #1653
 
     deg_rad: dict[str, dict[str, Any]] = {}
     for src_ind, source in enumerate(sources):
@@ -416,7 +416,7 @@ def single_temp_apec_profile(
                     c="{" + " ".join([str(c) for c in start_con]) + "}",
                     nh="{" + " ".join([str(nh) for nh in start_nh]) + "}",
                     t="{" + " ".join([str(t) for t in start_temp.value]) + "}",
-                    a="{" + " ".join([str(a) for a in start_met.value]) + "}",
+                    a="{" + " ".join([str(a) for a in start_met.value]) + "}",  # type: ignore[attr-defined]  # See issue #1653
                     z="{" + " ".join([str(z) for z in start_z]) + "}",
                     n="{" + " ".join([str(n) for n in start_norm.value]) + "}",
                 )

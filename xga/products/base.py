@@ -514,7 +514,7 @@ class BaseProduct:
             return self.radec_wcs.wcs.radesys
         else:
             raise AttributeError(
-                f"XGA {self._prod_type} ({self.__name__} class) does not have an 'radec_sky_wcs' "
+                f"XGA {self._prod_type} ({self.__name__} class) does not have an 'radec_sky_wcs' "  # type: ignore[attr-defined]  # See issue #1653
                 f"or 'radec_wcs' property to retrieve the RA-DEC system from."
             )
 
@@ -535,7 +535,7 @@ class BaseProduct:
             return self.radec_wcs.wcs.equinox
         else:
             raise AttributeError(
-                f"XGA {self._prod_type} ({self.__name__} class) does not have an 'radec_sky_wcs' "
+                f"XGA {self._prod_type} ({self.__name__} class) does not have an 'radec_sky_wcs' "  # type: ignore[attr-defined]  # See issue #1653
                 f"or 'radec_wcs' property to retrieve the RA-DEC equinox from."
             )
 
@@ -2613,7 +2613,7 @@ class BaseProfile1D:
         # Setting some aesthetic parameters for the main plotting axis
         main_ax.tick_params(axis="both", direction="in", which="both", top=True, right=True)
 
-        if self.type == "brightness_profile" and self.psf_corrected:
+        if self.type == "brightness_profile" and getattr(self, "psf_corrected", False):
             leg_label = self.src_name + " PSF Corrected"
         else:
             leg_label = self.src_name
@@ -2708,7 +2708,7 @@ class BaseProfile1D:
             else:
                 lo_rad = self.fit_radii.min()
                 hi_rad = self.fit_radii.max()
-            mod_rads = np.linspace(lo_rad, hi_rad, 500)
+            mod_rads = Quantity(np.linspace(lo_rad, hi_rad, 500))
 
             mod_col_ind = 0
             for method in self._good_model_fits:
@@ -2716,10 +2716,10 @@ class BaseProfile1D:
                     model_obj = self._good_model_fits[method][model]
                     mod_reals = model_obj.get_realisations(mod_rads)
                     # mean_model = np.mean(mod_reals, axis=1)
-                    median_model = np.nanpercentile(mod_reals, 50, axis=1)
+                    median_model = Quantity(np.nanpercentile(mod_reals, 50, axis=1))
 
-                    upper_model = np.nanpercentile(mod_reals, 84.1, axis=1)
-                    lower_model = np.nanpercentile(mod_reals, 15.9, axis=1)
+                    upper_model = Quantity(np.nanpercentile(mod_reals, 84.1, axis=1))
+                    lower_model = Quantity(np.nanpercentile(mod_reals, 15.9, axis=1))
 
                     mod_lab = model_obj.publication_name + f" - {self._nice_fit_methods[method]}"
                     cur_line = main_ax.plot(
@@ -4001,7 +4001,11 @@ class BaseAggregateProfile1D:
             else:
                 p_name = p.src_name + f" {p.telescope}"
 
-            if p.type == "brightness_profile" and p.psf_corrected and p.custom_aggregate_label is None:
+            if (
+                p.type == "brightness_profile"
+                and getattr(p, "psf_corrected", False)
+                and p.custom_aggregate_label is None
+            ):
                 leg_label = p_name + " PSF Corrected"
             elif p.custom_aggregate_label is None:
                 leg_label = p_name
@@ -4080,12 +4084,12 @@ class BaseAggregateProfile1D:
                         else:
                             lo_rad = p.fit_radii.min()
                             hi_rad = p.fit_radii.max()
-                        mod_rads = np.linspace(lo_rad, hi_rad, 500)
+                        mod_rads = Quantity(np.linspace(lo_rad, hi_rad, 500))
                         mod_reals = model_obj.get_realisations(mod_rads)
-                        median_model = np.nanpercentile(mod_reals, 50, axis=1)
+                        median_model = Quantity(np.nanpercentile(mod_reals, 50, axis=1))
 
-                        upper_model = np.nanpercentile(mod_reals, 84.1, axis=1)
-                        lower_model = np.nanpercentile(mod_reals, 15.9, axis=1)
+                        upper_model = Quantity(np.nanpercentile(mod_reals, 84.1, axis=1))
+                        lower_model = Quantity(np.nanpercentile(mod_reals, 15.9, axis=1))
 
                         colour = line[0].get_color()
 

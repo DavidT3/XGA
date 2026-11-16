@@ -33,7 +33,6 @@ from ..relations.fit import (
     scaling_relation_lira,
     scaling_relation_odr,
 )
-from ..sources.base import BaseSource
 from ..sources.extended import GalaxyCluster
 from .base import BaseSample
 
@@ -207,7 +206,7 @@ class ClusterSample(BaseSample):
         # Now that we've made those images the BaseSource objects aren't required anymore, we're about
         #  to define GalaxyClusters
         del self._sources
-        self._sources = {}
+        self._sources: dict[str, GalaxyCluster] = {}
 
         # We have this final names list in case so that we don't need to remove elements of self.names if one of the
         #  clusters doesn't pass the observation cleaning stage.
@@ -2161,7 +2160,24 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
-    def __getitem__(self, key: int | str) -> GalaxyCluster | BaseSource:
+    def __iter__(self) -> ClusterSample:
+        """Called when initiating iterating through a ClusterSample object. Resets the counter _n."""
+        self._n = 0
+        return self
+
+    def __next__(self) -> GalaxyCluster:
+        """
+        Iterates the counter _n, uses it to find the name of the corresponding cluster, then retrieves
+        that cluster from the _sources dictionary.
+        """
+        if self._n < self.__len__():
+            result = self.__getitem__(self._names[self._n])
+            self._n += 1
+            return result
+        else:
+            raise StopIteration
+
+    def __getitem__(self, key: int | str) -> GalaxyCluster:
         """
         This returns the relevant source when a sample is addressed using the name of a source as the key,
         or using an integer index. This overrides the BaseSample return but is functionally identical, only the

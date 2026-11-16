@@ -4,6 +4,7 @@
 for extended sources.
 """
 
+from typing import cast
 from warnings import warn
 
 import numpy as np
@@ -14,7 +15,7 @@ from ..exceptions import NoProductAvailableError
 from ..generate.sas import region_setup
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.profile import annular_mask
-from ..products.profile import GasTemperature3D
+from ..products.profile import APECNormalisation1D, GasTemperature3D, ProjectedGasTemperature1D
 from ..samples import ClusterSample
 from ..sources import BaseSource, GalaxyCluster
 from ..xspec.fit import single_temp_apec_profile
@@ -1145,12 +1146,14 @@ def onion_deproj_temp_prof(
 
             try:
                 # The projected temperature profile we're going to use
-                proj_temp = src.get_proj_temp_profiles(
-                    cur_rads, group_spec, min_counts, min_sn, over_sample, telescope=tel
+                proj_temp = cast(
+                    ProjectedGasTemperature1D,
+                    src.get_proj_temp_profiles(cur_rads, group_spec, min_counts, min_sn, over_sample, telescope=tel),
                 )
                 # The normalisation profile(s) from the fit that produced the projected temperature profile.
-                apec_norm_prof = src.get_apec_norm_profiles(
-                    cur_rads, group_spec, min_counts, min_sn, over_sample, telescope=tel
+                apec_norm_prof = cast(
+                    APECNormalisation1D,
+                    src.get_apec_norm_profiles(cur_rads, group_spec, min_counts, min_sn, over_sample, telescope=tel),
                 )
 
             except NoProductAvailableError:
@@ -1162,7 +1165,7 @@ def onion_deproj_temp_prof(
             #  just use that one rather than making another (which would be silly and also eat up more storage
             #  because they are automatically saved to disk).
             try:
-                existing_3d_temp_prof = src.get_3d_temp_profiles(set_id=proj_temp.set_ident)
+                existing_3d_temp_prof = cast(GasTemperature3D, src.get_3d_temp_profiles(set_id=proj_temp.set_ident))
                 all_3d_temp_profs[tel][src_ind] = existing_3d_temp_prof
                 continue
             except NoProductAvailableError:

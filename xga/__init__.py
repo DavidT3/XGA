@@ -11,7 +11,7 @@ except Exception:
     try:
         from . import _version
 
-        __version__ = _version.get_versions()["version"]
+        __version__ = _version.__version__
     except Exception:
         __version__ = "0.0.0"
 
@@ -22,9 +22,12 @@ except Exception:
 #  function doesn't set any global constants, just makes sure the file exists.
 import sys
 from types import ModuleType
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .utils import _prep_xga_config_file
+
+if TYPE_CHECKING:
+    from .utils import *  # noqa: F403
 
 _prep_xga_config_file()
 

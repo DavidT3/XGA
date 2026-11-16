@@ -2963,7 +2963,7 @@ class AnnularSpectra(BaseAggregateProduct):
         elif isinstance(arf, BaseProduct) and inst != arf.instrument:
             raise ValueError(
                 f"The 'inst' ({inst}) argument does not match the instrument set for the XGA product "
-                f"containing the cross-arf ({arf.inst})."
+                f"containing the cross-arf ({arf.instrument})."
             )
 
         # I think I will allow either a string path, or a product (as I am declaring these arfs in BaseProducts in
@@ -4385,7 +4385,7 @@ class AnnularSpectra(BaseAggregateProduct):
         if self.proper_radii is not None:
             y_lims = [self.proper_annulus_centres.value[0], self.proper_radii.value[-1]]
         else:
-            y_lims = [self.annulus_centres.value[0], self.proper_radii.value[-1]]
+            y_lims = [self.annulus_centres.value[0], self.proper_radii.value[-1]]  # type: ignore[attr-defined]  # See issue #1653
         ax.set_ylim3d(y_lims)
 
         # plt.tight_layout()
@@ -4514,7 +4514,7 @@ class AnnularSpectra(BaseAggregateProduct):
         if self.proper_radii is not None:
             y_lims = [self.proper_annulus_centres.value[0], self.proper_radii.value[-1]]
         else:
-            y_lims = [self.annulus_centres.value[0], self.proper_radii.value[-1]]
+            y_lims = [self.annulus_centres.value[0], self.proper_radii.value[-1]]  # type: ignore[attr-defined]  # See issue #1653
         ax.set_ylim3d(y_lims)
 
         # Sets up the legend so that matching data point and models are on the same line in the legend

@@ -9,7 +9,7 @@ from multiprocessing import Pool
 from random import randint
 from shutil import rmtree
 from subprocess import PIPE, Popen, TimeoutExpired
-from typing import Any
+from typing import Any, cast
 from warnings import warn
 
 import fitsio
@@ -20,6 +20,7 @@ from tqdm import tqdm
 
 from .. import OUTPUT, XSPEC_VERSION
 from ..exceptions import XGADeveloperError, XSPECNotFoundError
+from ..products import AnnularSpectra, Spectrum
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 
@@ -181,6 +182,7 @@ def xspec_call(xspec_func: Callable[..., Any]) -> Callable[..., Any]:
 
         # The first argument of all of these XSPEC functions will be the source object (or a list of),
         # so rather than return them from the XSPEC model function I'll just access them like this.
+        sources: BaseSample | list[BaseSource]
         if isinstance(args[0], BaseSource):
             sources = [args[0]]
         elif isinstance(args[0], (list, BaseSample)):
@@ -327,27 +329,32 @@ def xspec_call(xspec_func: Callable[..., Any]) -> Callable[..., Any]:
 
                                 if not comb_spec:
                                     # Finds the appropriate matching spectrum object for the current table line
-                                    spec = cur_src.get_products(
-                                        "spectrum", sp_info[0], sp_info[1], extra_key=sp_key, telescope=tel
-                                    )[0]
+                                    spec = cast(
+                                        Spectrum,
+                                        cur_src.get_products(
+                                            "spectrum", sp_info[0], sp_info[1], extra_key=sp_key, telescope=tel
+                                        )[0],
+                                    )
                                 else:
-                                    spec = cur_src.get_products("combined_spectrum", inst=sp_info[1], extra_key=sp_key)[
-                                        0
-                                    ]
+                                    spec = cast(
+                                        Spectrum,
+                                        cur_src.get_products("combined_spectrum", inst=sp_info[1], extra_key=sp_key)[0],
+                                    )
 
                             elif ann_fit:
                                 ann_id = int(sp_key.split("_ident")[-1].split("_")[1])
 
-                                ann_spec = cur_src.get_annular_spectra(
-                                    set_id=inv_ent_lookup[o_file_lu][8], telescope=tel
+                                ann_spec = cast(
+                                    AnnularSpectra,
+                                    cur_src.get_annular_spectra(set_id=inv_ent_lookup[o_file_lu][8], telescope=tel),
                                 )
 
                                 # comb_spec here refers to whether the obs_id is combined
                                 if not comb_spec:
-                                    spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
+                                    spec = cast(Spectrum, ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1]))
 
                                 else:
-                                    spec = ann_spec.get_spectra(ann_id, inst=sp_info[1])
+                                    spec = cast(Spectrum, ann_spec.get_spectra(ann_id, inst=sp_info[1]))
 
                                 ann_lums.setdefault(spec.annulus_ident, {})
                                 ann_obs_order.setdefault(spec.annulus_ident, [])
@@ -542,13 +549,19 @@ def xspec_call(xspec_func: Callable[..., Any]) -> Callable[..., Any]:
 
                             # Now onto retrieving spectra
                             if len(cur_src.obs_ids[tel]) == 1:
-                                spec = cur_src.get_products(
-                                    "spectrum", comb_oi, comb_inst, extra_key=storage_key, telescope=tel
-                                )[0]
+                                spec = cast(
+                                    Spectrum,
+                                    cur_src.get_products(
+                                        "spectrum", comb_oi, comb_inst, extra_key=storage_key, telescope=tel
+                                    )[0],
+                                )
                             else:
-                                spec = cur_src.get_products(
-                                    "combined_spectrum", comb_oi, comb_inst, extra_key=storage_key, telescope=tel
-                                )[0]
+                                spec = cast(
+                                    Spectrum,
+                                    cur_src.get_products(
+                                        "combined_spectrum", comb_oi, comb_inst, extra_key=storage_key, telescope=tel
+                                    )[0],
+                                )
                         # Now Chandra
                         elif tel == "chandra":
                             # We know that only ACIS is supported by XGA currently, so we can split on it to
@@ -564,13 +577,19 @@ def xspec_call(xspec_func: Callable[..., Any]) -> Callable[..., Any]:
                                     "support been added?"
                                 )
 
-                            spec = cur_src.get_products(
-                                "spectrum", search_sp_oi, "acis", extra_key=storage_key, telescope=tel
-                            )[0]
+                            spec = cast(
+                                Spectrum,
+                                cur_src.get_products(
+                                    "spectrum", search_sp_oi, "acis", extra_key=storage_key, telescope=tel
+                                )[0],
+                            )
                         else:
-                            spec = cur_src.get_products(
-                                "spectrum", comb[:10], comb[10:], extra_key=storage_key, telescope=tel
-                            )[0]
+                            spec = cast(
+                                Spectrum,
+                                cur_src.get_products(
+                                    "spectrum", comb[:10], comb[10:], extra_key=storage_key, telescope=tel
+                                )[0],
+                            )
                         spec.add_conv_factors(
                             res_table["lo_en"].values,
                             res_table["hi_en"].values,
@@ -615,7 +634,7 @@ def xspec_call(xspec_func: Callable[..., Any]) -> Callable[..., Any]:
                 for tel in ann_results:
                     # We fetch the annular spectra object that we just fitted, searching by using the set ID of
                     #  the last spectra that was opened in the loop
-                    ann_spec = cur_src.get_annular_spectra(set_id=set_ident[tel], telescope=tel)
+                    ann_spec = cast(AnnularSpectra, cur_src.get_annular_spectra(set_id=set_ident[tel], telescope=tel))
 
                     try:
                         ann_spec.add_fit_data(
@@ -669,7 +688,7 @@ def xspec_call(xspec_func: Callable[..., Any]) -> Callable[..., Any]:
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.
         if len(sources) == 1:
-            sources = sources[0]
+            return sources[0]
         return sources
 
     return wrapper
