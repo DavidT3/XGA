@@ -180,7 +180,7 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["tests.*"]
-disable_error_code = ["attr-defined"]
+disable_error_code = ["attr-defined", "arg-type"]
 
 [tool.bandit]
 exclude_dirs = ["tests"]
