@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 """Functions for matching input source coordinates to available X-ray observations and source regions."""
 
 from __future__ import annotations
@@ -225,6 +225,9 @@ def _on_obs_id(
     """
     # Possible that multiple exposure maps per ObsID-inst have been passed - we shall just make sure that we only
     #  use one per ObsID-Instrument
+    if isinstance(exp_maps, ExpMap):
+        exp_maps = [exp_maps]
+
     exp_for_use = {}
     for ex in exp_maps:
         if ex.obs_id not in exp_for_use:
@@ -606,6 +609,8 @@ def _vectorized_separation_match_wrapper(args: tuple) -> tuple[dict | DataFrame,
     return _vectorized_separation_match(*args)
 
 
+# @overload signatures allow Mypy to distinguish between returning per-telescope dictionaries of DataFrames when
+#  return_flat=False and returning a tuple of flat DataFrames when return_flat=True
 @overload
 def separation_match(
     src_ra: float | np.ndarray,

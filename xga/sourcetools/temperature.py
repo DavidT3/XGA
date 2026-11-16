@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 """This submodule implements methods to build sets of spatially resolved temperature measurements (e.g. profiles)
 for extended sources.
 """
@@ -402,9 +402,9 @@ def _cnt_bins(
     """
     # This just makes sure that the min_cnt variable is the astropy quantity that we expect it to be, otherwise
     #  some of the comparisons made between it and the values returned by background_subtracted_counts will fail
-    if type(min_cnt) is int:
+    if isinstance(min_cnt, int):
         min_cnt = Quantity(min_cnt, "ct")
-    elif (type(min_cnt) is Quantity and not min_cnt.unit.is_equivalent("ct")) or type(min_cnt) is not Quantity:
+    elif not isinstance(min_cnt, Quantity) or not min_cnt.unit.is_equivalent("ct"):
         raise TypeError("The min_cnt argument must be either an integer, or an astropy Quantity in units of 'ct'.")
 
     # Run the setup function for these functions that create different annular bins

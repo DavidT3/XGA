@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 
 """XGA submodule that implements methods to create sets of spatially resolved density measurements (e.g. profiles)
 for extended X-ray sources.
@@ -418,7 +418,7 @@ def _run_sb(
     min_snr: float,
     obs_id: str | None = None,
     inst: str | None = None,
-) -> SurfaceBrightness1D | list[SurfaceBrightness1D] | None:
+) -> SurfaceBrightness1D | None:
     """
     An internal function for the Surface Brightness based density functions, which just quickly
     assembles the requested surface brightness profile.
@@ -471,6 +471,8 @@ def _run_sb(
             int_mask = src.get_interloper_mask(telescope=telescope)
             # comb = True
         else:
+            if obs_id is None or inst is None:
+                raise ValueError("If an ObsID is supplied, an instrument must be supplied as well, and vice versa.")
             rt = src.get_ratemaps(
                 obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, telescope=telescope
             )
@@ -532,6 +534,9 @@ def _run_sb(
 
         if sb_prof is not None and not success:
             warn(f"Minimum SNR rebinning failed for {src.name}", stacklevel=2)
+
+    if isinstance(sb_prof, list):
+        sb_prof = sb_prof[0]
 
     return sb_prof
 

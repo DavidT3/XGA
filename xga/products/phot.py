@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 """
 This module defines XGA photometric product classes, including Image, ExpMap, RateMap, PSF, and PSFGrid,
 for storing, manipulating, and visualising imaging X-ray data products.
@@ -710,7 +710,7 @@ class Image(BaseProduct):
         # As for some reason I've allowed certain important info about these products to be updated after init,
         #  this getter actually generates the storage key on demand, rather than returning a stored value
 
-        if any([self._energy_bounds[0] is None, self._energy_bounds[1] is None]):
+        if self._energy_bounds[0] is None or self._energy_bounds[1] is None:
             raise ValueError("The product storage key cannot be generated if the energy bounds are None.")
 
         # Start with the simple stuff - these products are energy bound, so that info will be in ALL keys
@@ -721,7 +721,7 @@ class Image(BaseProduct):
             key += "_" + self.psf_model + "_" + str(self.psf_bins) + "_" + self.psf_algorithm + str(self.psf_iterations)
 
         # And now smoothing information
-        if self.smoothed:
+        if self.smoothed and self._smoothed_info is not None:
             # Grab the smoothing parameter's names and values, then smoosh them into a string
             sp = "_".join([str(k) + str(v) for k, v in self._smoothed_info.items()])
             # Then add the parameters and method name to the storage key
@@ -1015,6 +1015,8 @@ class Image(BaseProduct):
         # If this WCS is None then _read_on_demand definitely hasn't run, this one MUST be set
         if self._wcs_radec is None:
             self._read_wcs_on_demand()
+        if self._wcs_radec is None:
+            raise XGADeveloperError("Image RA-Dec WCS failed to load on demand.")
         return self._wcs_radec
 
     # These two however, can be none, so the user should be allowed to set add WCS-es to those
@@ -1183,31 +1185,31 @@ class Image(BaseProduct):
                 out_coord = Quantity(self.radec_wcs.all_pix2world(coords, 0), output_unit)
 
             # These go between degrees and sky XY coordinates
-            elif input_unit == Unit("deg") and output_unit.is_equivalent("skyxy"):
+            elif input_unit == Unit("deg") and output_unit.is_equivalent("skyxy") and self.skyxy_wcs is not None:
                 interim = self.radec_wcs.all_world2pix(coords, 0)
                 out_coord = Quantity(self.skyxy_wcs.all_pix2world(interim, 0), output_unit)
-            elif input_unit.is_equivalent("skyxy") and output_unit == Unit("deg"):
+            elif input_unit.is_equivalent("skyxy") and output_unit == Unit("deg") and self.skyxy_wcs is not None:
                 interim = self.skyxy_wcs.all_world2pix(coords, 0)
                 out_coord = Quantity(self.radec_wcs.all_pix2world(interim, 0), deg)
 
             # These go between sky XY and pixel coordinates
-            elif input_unit.is_equivalent("skyxy") and output_unit == Unit("pix"):
+            elif input_unit.is_equivalent("skyxy") and output_unit == Unit("pix") and self.skyxy_wcs is not None:
                 out_coord = Quantity(self.skyxy_wcs.all_world2pix(coords, 0), output_unit).round(0).astype(int)
-            elif input_unit == Unit("pix") and output_unit.is_equivalent("skyxy"):
+            elif input_unit == Unit("pix") and output_unit.is_equivalent("skyxy") and self.skyxy_wcs is not None:
                 out_coord = Quantity(self.skyxy_wcs.all_pix2world(coords, 0), output_unit)
 
             # These go between degrees and Det XY coordinates
-            elif input_unit == Unit("deg") and output_unit.is_equivalent("detxy"):
+            elif input_unit == Unit("deg") and output_unit.is_equivalent("detxy") and self.detxy_wcs is not None:
                 interim = self.radec_wcs.all_world2pix(coords, 0)
                 out_coord = Quantity(self.detxy_wcs.all_pix2world(interim, 0), output_unit)
-            elif input_unit.is_equivalent("detxy") and output_unit == Unit("deg"):
+            elif input_unit.is_equivalent("detxy") and output_unit == Unit("deg") and self.detxy_wcs is not None:
                 interim = self.detxy_wcs.all_world2pix(coords, 0)
                 out_coord = Quantity(self.radec_wcs.all_pix2world(interim, 0), deg)
 
             # These go between det XY and pixel coordinates
-            elif input_unit.is_equivalent("detxy") and output_unit == Unit("pix"):
+            elif input_unit.is_equivalent("detxy") and output_unit == Unit("pix") and self.detxy_wcs is not None:
                 out_coord = Quantity(self.detxy_wcs.all_world2pix(coords, 0), output_unit).round(0).astype(int)
-            elif input_unit == Unit("pix") and output_unit.is_equivalent("detxy"):
+            elif input_unit == Unit("pix") and output_unit.is_equivalent("detxy") and self.detxy_wcs is not None:
                 out_coord = Quantity(self.detxy_wcs.all_pix2world(coords, 0), output_unit)
 
             # It is possible to convert between XMM coordinates and pixel and supply coordinates
@@ -3449,6 +3451,8 @@ class RateMap(Image):
         # Calling this ensures the image object is read into memory
         if self._data is None:
             self._construct_on_demand()
+        if self._data is None:
+            raise XGADeveloperError("RateMap data failed to construct on demand.")
         return self._data.copy()
 
     @data.setter
@@ -4403,3 +4407,32 @@ class PSFGrid(BaseAggregateProduct):
         """
         for p in self._component_products:
             del self._component_products[p].data
+
+    def __getitem__(self, ind: int) -> PSF:
+        """
+        Return the component PSF at the given index.
+
+        :param int ind: The index of the PSF in the component products dictionary.
+        :return: The selected PSF object.
+        :rtype: PSF
+        """
+        return self._component_products[list(self._component_products.keys())[ind]]
+
+    def __iter__(self) -> PSFGrid:
+        """Called when initiating iterating through a PSFGrid object. Resets the counter _n."""
+        self._n = 0
+        return self
+
+    def __next__(self) -> PSF:
+        """
+        Iterate over the component PSFs in this PSFGrid.
+
+        :return: The next PSF in the iteration.
+        :rtype: PSF
+        """
+        if self._n < self.__len__():
+            out = self.__getitem__(self._n)
+            self._n += 1
+            return out
+        else:
+            raise StopIteration

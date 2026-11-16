@@ -1,10 +1,10 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 """This module defines product classes for interaction with, and analysis of, X-ray light curves."""
 
 import re
 from datetime import datetime as dt_datetime
-from typing import Any, Union
+from typing import Any, Union, overload
 from warnings import warn
 
 import matplotlib.dates as mdates
@@ -1660,6 +1660,23 @@ class AggregateLightCurve(BaseAggregateProduct):
         return np.concatenate(gtis), np.concatenate(tc_data)
 
     # Then define user-facing methods
+    # @overload signatures allow Mypy to infer that get_lightcurves returns a single LightCurve (rather than
+    #  list[LightCurve] | LightCurve) when inst and either telescope or obs_id are explicitly provided
+    @overload
+    def get_lightcurves(
+        self, time_chunk_id: int, obs_id: str | None = None, *, inst: str, telescope: str
+    ) -> LightCurve: ...
+
+    @overload
+    def get_lightcurves(
+        self, time_chunk_id: int, obs_id: str, inst: str, telescope: str | None = None
+    ) -> LightCurve: ...
+
+    @overload
+    def get_lightcurves(
+        self, time_chunk_id: int, obs_id: str | None = None, inst: str | None = None, telescope: str | None = None
+    ) -> list[LightCurve] | LightCurve: ...
+
     def get_lightcurves(
         self, time_chunk_id: int, obs_id: str | None = None, inst: str | None = None, telescope: str | None = None
     ) -> list[LightCurve] | LightCurve:
@@ -2344,7 +2361,7 @@ class AggregateLightCurve(BaseAggregateProduct):
                         ).value
                         * 1.05
                     )
-                elif y_lims is None and fracexp_corr:
+                elif y_lims is None:
                     low_lim = (
                         np.nanmin(
                             Quantity(

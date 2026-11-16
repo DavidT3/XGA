@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 
 """XGA submodule that implements methods of correcting for and modeling PSF effects."""
 
@@ -179,6 +179,8 @@ def rl_psf(
 
             # All the image objects of the specified energy range (so every combination of ObsID and instrument)
             match_images = source.get_images(lo_en=lo_en, hi_en=hi_en, telescope="xmm")
+            if isinstance(match_images, Image):
+                match_images = [match_images]
 
             # Just warns the user that some of the images may not be valid
             for matched in match_images:

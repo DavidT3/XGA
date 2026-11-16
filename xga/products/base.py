@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 """This module implements the base functionality for most XGA product classes."""
 
 import inspect
@@ -1297,8 +1297,8 @@ class BaseProfile1D:
         elif (radii_err is not None and radii_err.ndim != 1) or (values_err is not None and values_err.ndim != 1):
             raise ValueError(
                 "The radii_err and values_err arrays must be one-dimensional. The shape of "
-                f"radii_err is {radii_err.shape} and the shape of values_err is "
-                f"{values_err.shape}"
+                f"radii_err is {radii_err.shape} and the shape of values_err is "  # type: ignore[union-attr]  # TODO: Fix in #1653
+                f"{values_err.shape}"  # type: ignore[union-attr]  # TODO: Fix in #1653
             )
         # Making sure the arrays have the same number of entries
         elif radii.shape != values.shape:
@@ -1311,8 +1311,8 @@ class BaseProfile1D:
         ):
             raise ValueError(
                 "radii_err must be the same shape as radii, and values_err must be the same shape "
-                f"as values. The shape of radii_err is {radii_err.shape} where radii is {radii.shape}, and the shape "
-                f"of values_err is {values_err.shape} where values is {values.shape}"
+                f"as values. The shape of radii_err is {radii_err.shape} where radii is {radii.shape}, and the shape "  # type: ignore[union-attr]  # TODO: Fix in #1653
+                f"of values_err is {values_err.shape} where values is {values.shape}"  # type: ignore[union-attr]  # TODO: Fix in #1653
             )
 
         # I'm actually going to enforce that the central coordinates passed when declaring a profile must
@@ -1585,14 +1585,17 @@ class BaseProfile1D:
         success = True
         warning_str = ""
 
-        for prior in model.par_priors:
+        prior_list = []
+        for p_ind, prior in enumerate(model.par_priors):
             if prior["type"] != "uniform":
                 raise NotImplementedError(
                     "Non-uniform priors for profile fitting are not currently supported - please contact the "
                     "developers if you need this feature."
                 )
+            elif not isinstance(prior["prior"], Quantity):
+                raise TypeError("The 'prior' entry in each prior dictionary must be an Astropy Quantity.")
+            prior_list.append(prior["prior"].to(model.par_units[p_ind]).value)
 
-        prior_list = [p["prior"].to(model.par_units[p_ind]).value for p_ind, p in enumerate(model.par_priors)]
         prior_arr = np.array(prior_list)
 
         # We can run a curve_fit fit to try and get start values for the model parameters, and if that fails
@@ -1807,7 +1810,7 @@ class BaseProfile1D:
         lower_bounds = []
         upper_bounds = []
         for prior_ind, prior in enumerate(model.par_priors):
-            if prior["type"] == "uniform":
+            if prior["type"] == "uniform" and isinstance(prior["prior"], Quantity):
                 conv_prior = prior["prior"].to(model.par_units[prior_ind]).value
                 lower_bounds.append(conv_prior[0])
                 upper_bounds.append(conv_prior[1])
@@ -1960,6 +1963,7 @@ class BaseProfile1D:
         else:
             allowed = ""
 
+        # Using a separate variable name for the BaseModel1D instance to make Mypy happy
         if self._prof_type == "base":
             raise XGAFitError(
                 "A BaseProfile1D object currently cannot have a model fitted to it, as there is no physical context."
@@ -1969,7 +1973,7 @@ class BaseProfile1D:
                 f"{model} is not available for this type of profile, please use one of the following models {allowed}"
             )
         elif isinstance(model, str):
-            model = PROF_TYPE_MODELS[self._prof_type][model](self.radii_unit, self.values_unit)
+            model_instance: BaseModel1D = PROF_TYPE_MODELS[self._prof_type][model](self.radii_unit, self.values_unit)
         elif isinstance(model, BaseModel1D) and model.name not in PROF_TYPE_MODELS[self._prof_type]:
             raise XGAInvalidModelError(
                 f"{model} is not available for this type of profile, please use one of the following models {allowed}"
@@ -1980,6 +1984,10 @@ class BaseProfile1D:
                 f"with the data. This profile has an radius unit of {self.radii_unit.to_string()} and a value unit of "
                 f"{self.values_unit.to_string()}"
             )
+        elif isinstance(model, BaseModel1D):
+            model_instance = model
+        else:
+            raise TypeError("The model argument must be either a string model name or a BaseModel1D instance.")
 
         # I don't think I'm going to allow any fits without value uncertainties - just seems daft
         if self._values_err is None:
@@ -1992,17 +2000,17 @@ class BaseProfile1D:
 
         # Check whether a good fit result already exists for this model. We use the storage_key property that
         #  XGA model objects generate from their name and their start parameters
-        if not force_refit and model.name in self._good_model_fits[method]:
+        if not force_refit and model_instance.name in self._good_model_fits[method]:
             warn(
-                f"{model.name} already has a successful fit result for this profile using {method}, with those start "
-                "parameters",
+                f"{model_instance.name} already has a successful fit result for this profile using {method}, "
+                "with those start parameters",
                 stacklevel=2,
             )
             already_done = True
-        elif model.name in self._bad_model_fits[method]:
+        elif model_instance.name in self._bad_model_fits[method]:
             warn(
-                f"{model.name} already has a failed fit result for this profile using {method} with those start "
-                "parameters",
+                f"{model_instance.name} already has a failed fit result for this profile using {method} "
+                "with those start parameters",
                 stacklevel=2,
             )
             already_done = False
@@ -2011,24 +2019,26 @@ class BaseProfile1D:
 
         # Running the requested fitting method
         if not already_done and method == "mcmc":
-            model, success = self.emcee_fit(model, num_steps, num_walkers, progress_bar, show_warn, num_samples)
+            model_instance, success = self.emcee_fit(
+                model_instance, num_steps, num_walkers, progress_bar, show_warn, num_samples
+            )
         elif not already_done and method == "curve_fit":
-            model, success = self.nlls_fit(model, num_samples, show_warn)
+            model_instance, success = self.nlls_fit(model_instance, num_samples, show_warn)
         elif not already_done and method == "odr":
-            model, success = self._odr_fit(model, show_warn)
+            model_instance, success = self._odr_fit(model_instance, show_warn)
         else:
-            model = self.get_model_fit(model.name, method)
+            model_instance = self.get_model_fit(model_instance.name, method)
 
         # Storing the model in the internal dictionaries depending on whether the fit was successful or not
         if not already_done and success:
-            self._good_model_fits[method][model.name] = model
+            self._good_model_fits[method][model_instance.name] = model_instance
         elif not already_done and not success:
-            self._bad_model_fits[method][model.name] = model
+            self._bad_model_fits[method][model_instance.name] = model_instance
 
         if self.auto_save:
             # This method means that a change has happened to the model, so it should be re-saved
             self.save()
-        return model
+        return model_instance
 
     def allowed_models(self, table_format: str = "fancy_grid") -> None:
         """
@@ -2315,6 +2325,8 @@ class BaseProfile1D:
         # Retrieve the validated MCMC model fit instance (auto-resolving the model name if left as None and only a
         #  single model was fit with MCMC)
         model_obj = self.get_model_fit(model, "mcmc")
+        if model_obj.emcee_sampler is None:
+            raise XGAFitError("No emcee sampler is associated with this MCMC model fit.")
 
         # Extract the sampler chains, discarding either the auto-correlation burn-in cut-off (discard=True), a
         #  user-specified number of steps (discard is an int), or no steps (discard=False)

@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 """Implements sample classes for specific extended X-ray sources, such as galaxy clusters."""
 
 from __future__ import annotations
@@ -416,7 +416,7 @@ class ClusterSample(BaseSample):
         no_data = [name for name in self._failed_sources if "cleaning" not in self._failed_sources[name]]
         # If there are names in that list, then we do the warning
         if len(no_data) != 0:
-            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in telescope]
+            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in self.telescopes]
             warn(
                 "The following do not appear to have any {t} data, and will not be included in the "
                 "sample (can also check .failed_names); {n}".format(n=", ".join(no_data), t="/".join(nice_tels)),
@@ -1736,7 +1736,7 @@ class ClusterSample(BaseSample):
                 "As this is a method for a whole population, please use a named radius such as r200, r500, or r2500."
             )
 
-        if lx_inner_radius.value != 0:
+        if isinstance(lx_inner_radius, str) or lx_inner_radius.value != 0:
             lx_rn = "Core-Excised " + rn
         else:
             lx_rn = rn
@@ -2091,7 +2091,7 @@ class ClusterSample(BaseSample):
                 "As this is a method for a whole population, please use a named radius such as r200, r500, or r2500."
             )
 
-        if lx_inner_radius.value != 0:
+        if isinstance(lx_inner_radius, str) or lx_inner_radius.value != 0:
             lx_rn = "Core-Excised " + rn
         else:
             lx_rn = rn

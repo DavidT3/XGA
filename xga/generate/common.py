@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 """
 The xga.generate.common module contains shared infrastructure for calling external mission-specific software
 (such as SAS, eSASS, and CIAO), executing commands in parallel, and instantiating the resulting XGA product objects.
@@ -239,7 +239,7 @@ def mission_software_call(
                     # object that already exists in our source
                     elif prod_type_str == "cross arfs":
                         ei = product._extra_info
-                        ann_spec = sources[ind].get_annular_spectra(set_id=ei["ann_spec_set_id"])
+                        ann_spec = sources[ind].get_annular_spectra(set_id=int(ei["ann_spec_set_id"]))
                         ann_spec.add_cross_arf(
                             product,
                             ei["obs_id"],
@@ -511,7 +511,7 @@ def execute_cmd(
             raise NotImplementedError("Not implemented yet")
 
         # An extra step is required for annular spectrum set components
-        if cur_p_type == "annular spectrum set components":
+        if cur_p_type == "annular spectrum set components" and isinstance(prod, Spectrum):
             prod.annulus_ident = extra_info["ann_ident"]
             prod.set_ident = extra_info["set_ident"]
 
@@ -631,7 +631,7 @@ def get_annular_esass_region(
     #  like in evselect_spectrum for instance.
     if interloper_regions is None and inner_radius.isscalar:
         interloper_regions = source.regions_within_radii(inner_radius, outer_radius, telescope, central_coord)
-    elif interloper_regions is None and not inner_radius.isscalar:
+    elif interloper_regions is None:
         interloper_regions = source.regions_within_radii(min(inner_radius), max(outer_radius), telescope, central_coord)
 
     # So now we convert our interloper regions into their eSASS equivalents

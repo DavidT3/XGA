@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/12/2025, 17:14. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 """Sample classes for specific point-like X-ray sources, such as X-ray emitting stars."""
 
 from warnings import warn
@@ -283,7 +283,7 @@ class StarSample(BaseSample):
         no_data = [name for name in self._failed_sources if "cleaning" not in self._failed_sources[name]]
         # If there are names in that list, then we do the warning
         if len(no_data) != 0:
-            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in telescope]
+            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in self.telescopes]
             warn(
                 f"The following do not appear to have any {'/'.join(nice_tels)} data, and will not be included in the "
                 f"sample (can also check .failed_names); {', '.join(no_data)}",

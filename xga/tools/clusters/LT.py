@@ -1,6 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/15/26, 2:40 PM. Copyright (c) The Contributors.
-# ruff: noqa: N999
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 """End-to-end pipeline for measuring galaxy cluster X-ray luminosities, temperatures, and overdensity radii."""
 
 from warnings import warn
@@ -306,6 +305,11 @@ def luminosity_temperature_pipeline(
             "passed to 'rad_temp_rel' be measured within overdensity radii (e.g. R500), not a fixed "
             f"numerical aperture such as {rad_temp_rel.outer_aperture.to_string()}"
         )
+    elif rad_temp_rel.outer_aperture is None:
+        raise TypeError(
+            "The XGA luminosity-temperature-radius pipeline requires that the radius-temperature relation "
+            "passed to 'rad_temp_rel' have its 'outer_aperture' property set."
+        )
 
     # We already checked the string format when declaring a scaling relation, so we know if we got this
     #  far it should definitely be in the format of am overdensity name
@@ -346,7 +350,7 @@ def luminosity_temperature_pipeline(
     elif freeze_temp and temp_lum_rel.outer_aperture != o_dens:
         raise ValueError(
             "The outer aperture used to construct the relation passed as the 'temp_lum_rel' "
-            f"argument ({temp_lum_rel.outer_aperture.to_string()}), does not match the target overdensity "
+            f"argument ({temp_lum_rel.outer_aperture.to_string()}), does not match the target overdensity "  # type: ignore[union-attr]  # TODO: Fix in #1653
             f"({o_dens})."
         )
     elif freeze_temp and temp_lum_rel.core_radius_fraction != rad_temp_rel.core_radius_fraction:

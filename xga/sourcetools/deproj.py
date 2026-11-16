@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 """Functions for geometric deprojection and shell-annulus volume intersection calculations."""
 
 import numpy as np
@@ -22,11 +22,10 @@ def shell_ann_vol_intersect(
         and shell radii are along the 'y' axis.
     :rtype: Union[np.ndarray, Quantity]
     """
-    if all([type(shell_radii) is Quantity, type(ann_radii) is Quantity]) and shell_radii.unit != ann_radii.unit:
-        raise UnitConversionError("If quantities are passed, they must be in the same units.")
-    elif all([type(shell_radii) is Quantity, type(ann_radii) is Quantity]):
-        pass
-    elif all([type(shell_radii) is np.ndarray, type(ann_radii) is np.ndarray]):
+    if isinstance(shell_radii, Quantity) and isinstance(ann_radii, Quantity):
+        if shell_radii.unit != ann_radii.unit:
+            raise UnitConversionError("If quantities are passed, they must be in the same units.")
+    elif isinstance(shell_radii, np.ndarray) and isinstance(ann_radii, np.ndarray):
         pass
     else:
         raise TypeError(
@@ -60,11 +59,10 @@ def shell_volume(inn_radius: Quantity | np.ndarray, out_radius: Quantity | np.nd
     :return: The volume of the specified shell
     :rtype: Union[Quantity, np.ndarray]
     """
-    if all([type(inn_radius) is Quantity, type(out_radius) is Quantity]) and inn_radius.unit != out_radius.unit:
-        raise UnitConversionError("If quantities are passed, they must be in the same units.")
-    elif all([type(inn_radius) is Quantity, type(out_radius) is Quantity]):
-        pass
-    elif all([type(inn_radius) is np.ndarray, type(out_radius) is np.ndarray]):
+    if isinstance(inn_radius, Quantity) and isinstance(out_radius, Quantity):
+        if inn_radius.unit != out_radius.unit:
+            raise UnitConversionError("If quantities are passed, they must be in the same units.")
+    elif isinstance(inn_radius, np.ndarray) and isinstance(out_radius, np.ndarray):
         pass
     else:
         raise TypeError(

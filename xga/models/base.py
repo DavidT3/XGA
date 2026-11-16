@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:26 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 """
 The xga.models.base module defines the BaseModel1D superclass for analytical 1D profile models in XGA, providing
 common functionality for parameter management, unit validation, numerical derivatives, volume/spherical integration,
@@ -880,9 +880,9 @@ class BaseModel1D(metaclass=ABCMeta):
         :param tuple figsize: The size of figure to be set up.
         :param str colour: The colour that the line in the plot should be.
         """
-        if radii is None and self.x_lims is not None:
+        if radii is None and self._x_lims is not None:
             radii = Quantity(np.linspace(*self._x_lims.value, 100), self._x_unit)
-        elif radii is None and self._x_lims is None:
+        elif radii is None:
             raise ValueError(
                 "You did not set x-limits for this model, so you must pass radii values to the view method."
             )
@@ -1031,8 +1031,16 @@ class BaseModel1D(metaclass=ABCMeta):
             # Need to make sure the dictionary describing the prior on a parameter has the entries we expect
             if "prior" not in prior or "type" not in prior:
                 raise KeyError("All entries in prior list must be dictionaries, with 'prior' and 'type' keys.")
+            new_prior_val = prior["prior"]
+            old_prior_val = self._par_priors[prior_ind]["prior"]
+            if not isinstance(new_prior_val, Quantity):
+                raise TypeError(
+                    "The 'prior' entry in each prior dictionary must be an Astropy Quantity, "
+                    f"not {type(new_prior_val)}."
+                )
             # Check that the type of prior is currently supported
-            elif prior["type"] not in self._prior_types:
+            if prior["type"] not in self._prior_types:
+                # TODO: Fix in #1643 — set allowed properly using ALLOWED_PRIORS
                 allowed = ", "
                 raise ValueError(
                     "Priors of type {t} are not supported, currently supported types are; {a}".format(
@@ -1040,16 +1048,16 @@ class BaseModel1D(metaclass=ABCMeta):
                     )
                 )
             # And finally check the units of the characteristic values of the prior
-            elif not prior["prior"].unit.is_equivalent(self._par_priors[prior_ind]["prior"].unit):
+            elif isinstance(old_prior_val, Quantity) and not new_prior_val.unit.is_equivalent(old_prior_val.unit):
                 raise UnitConversionError(
-                    "Cannot convert new prior's {n} to old prior's {o}".format(
-                        n=prior["prior"].unit.to_string(), o=self._par_priors[prior_ind]["prior"].unit.to_string()
-                    )
+                    f"Cannot convert new prior's {new_prior_val.unit.to_string()} to "
+                    f"old prior's {old_prior_val.unit.to_string()}"
                 )
             else:
-                # We make sure that if the prior values are in an equivelant unit to the current prior then
+                # We make sure that if the prior values are in an equivalent unit to the current prior then
                 #  they are converted to the original unit, to be consistent.
-                prior["prior"] = prior["prior"].to(self._par_priors[prior_ind]["prior"].unit)
+                if isinstance(old_prior_val, Quantity):
+                    prior["prior"] = new_prior_val.to(old_prior_val.unit)
                 self._par_priors[prior_ind] = prior
 
     @property

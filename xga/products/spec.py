@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 """
 This module defines the XGA Spectrum and AnnularSpectra product classes for storing and interacting with
 X-ray spectra and their associated response and background files.
@@ -8,7 +8,7 @@ X-ray spectra and their associated response and background files.
 import os
 import re
 from copy import deepcopy
-from typing import Any
+from typing import Any, overload
 from warnings import warn
 
 import numpy as np
@@ -1457,7 +1457,12 @@ class Spectrum(BaseProduct):
             en_key = None
 
         # Checks that the requested energy band actually exists
-        if en_key is not None and en_key not in self._luminosities[model][fit_conf]:
+        if (
+            en_key is not None
+            and lo_en is not None
+            and hi_en is not None
+            and en_key not in self._luminosities[model][fit_conf]
+        ):
             av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[model][fit_conf].keys()])
             raise ParameterNotAssociatedError(
                 f"{lo_en.to('keV').value}-{hi_en.to('keV').value}keV luminosities were not measured for the {model} "
@@ -2662,6 +2667,16 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         return self._instruments
 
+    # @overload signatures allow Mypy to infer that get_spectra returns a single Spectrum (rather than
+    #  list[Spectrum] | Spectrum) when annulus_ident, obs_id, and inst are all explicitly provided
+    @overload
+    def get_spectra(self, annulus_ident: int, obs_id: str, inst: str) -> Spectrum: ...
+
+    @overload
+    def get_spectra(
+        self, annulus_ident: int, obs_id: str | None = None, inst: str | None = None
+    ) -> list[Spectrum] | Spectrum: ...
+
     def get_spectra(
         self, annulus_ident: int, obs_id: str | None = None, inst: str | None = None
     ) -> list[Spectrum] | Spectrum:
@@ -2793,7 +2808,7 @@ class AnnularSpectra(BaseAggregateProduct):
             )
 
         self._proper_radii = new_vals
-        pr = self.proper_radii.value
+        pr = new_vals.value
         # Minds the mid points of the annular boundaries - the centres of the bins
         mid_radii = [(pr[r_ind] + pr[r_ind + 1]) / 2 for r_ind in range(len(pr) - 1)]
         # Makes mid_radii a quantity
@@ -3290,7 +3305,8 @@ class AnnularSpectra(BaseAggregateProduct):
 
             # The parameters available will obviously be dynamic, so have to find out what they are and then
             #  then for each result find the +- errors.
-            par_headers = [n for n in tab_line[ai].dtype.names if n not in not_par]
+            dtype_names = tab_line[ai].dtype.names
+            par_headers = [n for n in dtype_names if n not in not_par] if dtype_names is not None else []
             mod_res: dict[str, dict[str, list[float]]] = {}
             for par in par_headers:
                 # The parameter name and the parameter index used by XSPEC are separated by |
@@ -3426,6 +3442,18 @@ class AnnularSpectra(BaseAggregateProduct):
             raise XGADeveloperError("Model and fit configuration failed to resolve to strings during check.")
         return model, fit_conf
 
+    # @overload signatures allow Mypy to distinguish between returning a dictionary of all parameter arrays when
+    #  par is None and returning a single numpy array when a specific parameter name string is supplied
+    @overload
+    def get_results(
+        self, annulus_ident: int, model: str | None = None, par: None = None, fit_conf: str | dict | None = None
+    ) -> dict[str, np.ndarray]: ...
+
+    @overload
+    def get_results(
+        self, annulus_ident: int, model: str | None = None, par: str = ..., fit_conf: str | dict | None = None
+    ) -> np.ndarray: ...
+
     def get_results(
         self, annulus_ident: int, model: str | None = None, par: str | None = None, fit_conf: str | dict | None = None
     ) -> dict[str, np.ndarray] | np.ndarray:
@@ -3552,9 +3580,9 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         # Checking the input energy limits are valid, and assembles the key to look for lums in those energy
         #  bounds. If the limits are none then so is the energy key
-        if all([lo_en is not None, hi_en is not None]) and lo_en > hi_en:
+        if lo_en is not None and hi_en is not None and lo_en > hi_en:
             raise ValueError("The low energy limit cannot be greater than the high energy limit")
-        elif all([lo_en is not None, hi_en is not None]):
+        elif lo_en is not None and hi_en is not None:
             en_key = "bound_{l}-{u}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value)
         else:
             en_key = None
@@ -3570,7 +3598,12 @@ class AnnularSpectra(BaseAggregateProduct):
             raise ModelNotAssociatedError(
                 f"{model} has not been fitted to this AnnularSpectra; available models are {av_mods}"
             )
-        elif en_key is not None and en_key not in self._luminosities[annulus_ident][model]:
+        elif (
+            en_key is not None
+            and lo_en is not None
+            and hi_en is not None
+            and en_key not in self._luminosities[annulus_ident][model]
+        ):
             av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[annulus_ident][model].keys()])
             raise ParameterNotAssociatedError(
                 "A luminosity within {l}-{u}keV was not measured for the fit "
@@ -3619,7 +3652,7 @@ class AnnularSpectra(BaseAggregateProduct):
         if isinstance(par_unit, str):
             par_unit = Unit(par_unit)
 
-        if self.proper_radii is None:
+        if self.proper_radii is None or self.proper_annulus_centres is None:
             raise UnitConversionError(
                 "Currently proper radius units are required to generate "
                 "profiles, please assign some using the proper_radii property."
@@ -3978,7 +4011,7 @@ class AnnularSpectra(BaseAggregateProduct):
         # Create figure object
         plt.figure(figsize=figsize)
         ax = plt.gca()
-        for sp in rel_spec:
+        for sp in rel_spec:  # type: ignore[union-attr]  # TODO: Fix in #1653
             ax = sp.get_view(
                 ax,
                 lo_lim,
@@ -4382,10 +4415,10 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Setting up y label (with dynamic unit) and the correct radius limits
         ax.set_ylabel(f"Radius [{chosen_unit.to_string()}]")
-        if self.proper_radii is not None:
+        if self.proper_radii is not None and self.proper_annulus_centres is not None:
             y_lims = [self.proper_annulus_centres.value[0], self.proper_radii.value[-1]]
         else:
-            y_lims = [self.annulus_centres.value[0], self.proper_radii.value[-1]]  # type: ignore[attr-defined]  # See issue #1653
+            y_lims = [self.annulus_centres.value[0], self.proper_radii.value[-1]]  # type: ignore[union-attr]  # TODO: Fix in #1653
         ax.set_ylim3d(y_lims)
 
         # plt.tight_layout()
@@ -4511,10 +4544,10 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Setting up y label (with dynamic unit) and the correct radius limits
         ax.set_ylabel(f"Radius [{chosen_unit.to_string()}]")
-        if self.proper_radii is not None:
+        if self.proper_radii is not None and self.proper_annulus_centres is not None:
             y_lims = [self.proper_annulus_centres.value[0], self.proper_radii.value[-1]]
         else:
-            y_lims = [self.annulus_centres.value[0], self.proper_radii.value[-1]]  # type: ignore[attr-defined]  # See issue #1653
+            y_lims = [self.annulus_centres.value[0], self.proper_radii.value[-1]]  # type: ignore[union-attr]  # TODO: Fix in #1653
         ax.set_ylim3d(y_lims)
 
         # Sets up the legend so that matching data point and models are on the same line in the legend

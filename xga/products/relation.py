@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:51 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 """
 This module defines the XGA ScalingRelation and AggregateScalingRelation product classes for storing, evaluating,
 and visualising fitted scaling relations.
@@ -1004,8 +1004,8 @@ class ScalingRelation:
         predicted_y = self._model_func((x_values / self.x_norm).value, *self.pars[:, 0]) * self.y_norm
 
         # If there was a power of E(z) applied to the data, we undo it for the prediction.
-        if self._ez_power is not None:
-            # We store this so that error propogation can use it later
+        if self._ez_power is not None and cosmo is not None:
+            # We store this so that error propagation can use it later
             ez = cosmo.efunc(redshift) ** self._ez_power
             predicted_y /= ez
         elif not x_values.isscalar:
@@ -1206,7 +1206,7 @@ class ScalingRelation:
                 color=data_colour,
                 capsize=2,
             )
-        elif len(self.x_data) != 0 and show_third_dim:
+        elif len(self.x_data) != 0 and show_third_dim and self.third_dimension_data is not None:
             # The user can either set the cmap with a string name, or actually pass a colormap object
             if isinstance(third_dim_cmap, str):
                 cmap = cm.get_cmap(third_dim_cmap)
@@ -1418,7 +1418,7 @@ class ScalingRelation:
             ax.set_xticklabels(y_minor_ticks, minor=True)
 
         # If we did colour the data by a third dimension, then we should add a colour-bar to the relation
-        if show_third_dim:
+        if show_third_dim and self.third_dimension_data is not None and self.third_dimension_name is not None:
             # Setting up the colorbar axis
             cbar = plt.colorbar(cmap_mapper, ax=plt.gca())
             # And making sure we include units

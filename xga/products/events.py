@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 """This module defines the XGA EventList product class for interfacing with X-ray event list data files."""
 
 import os.path
@@ -322,6 +322,19 @@ class EventList(BaseProduct):
             self._ev_per_channel = None
 
     # ------------- Define properties -------------
+    @property
+    def telescope(self) -> str:
+        """
+        Property getter for the name of the telescope that this event list was derived from. Overrides
+        the telescope property getter in BaseProduct.
+
+        :return: The telescope name.
+        :rtype: str
+        """
+        if self._tele is None:
+            raise XGADeveloperError("EventList telescope failed to be determined during initialisation.")
+        return self._tele
+
     @property
     def obs_ids(self) -> list | None:
         """
@@ -1003,6 +1016,7 @@ class EventList(BaseProduct):
         if (
             self._data_col_subset is not None
             and self._data_col_subset
+            and self._data is not None
             and columns is not None
             and set(list(self._data.colnames)) != set(columns)
         ):
@@ -1418,9 +1432,13 @@ class EventList(BaseProduct):
 
         # ------- Converting ints to assumed pixel coords --------
         # Making some arguments into quantities with an assumed unit if they were passed as integers.
-        # If a simple integer is passed, we assume that it is a bin size in pixels
+        # If a simple integer is passed, we assume that it is a bin size in pixels.
+        # Using a separate variable name for the Quantity bin size to make Mypy happy
+        bin_size_quant: Quantity | None
         if isinstance(bin_size, int):
-            bin_size = Quantity(bin_size, "pix")
+            bin_size_quant = Quantity(bin_size, "pix")
+        else:
+            bin_size_quant = bin_size
 
         # Converting any non-quantity integer boundary limits to Quantity objects, assuming 'pix' units
         if not isinstance(x_lims, Quantity) and (
@@ -1436,9 +1454,17 @@ class EventList(BaseProduct):
         # --------- Setting up x and y coordinate limits ---------
         # Parsing the user-specified data limits. We only require that the second element
         #  be greater than the first for non-degree coordinates
-        if x_lims is not None and not x_lims.unit.is_equivalent("deg") and x_lims.diff() <= 0:
+        if x_lims is None:
+            try:
+                x_lims = self.sky_pix_lims[0]
+            except ValueError:
+                # The final fallback - finding upper and lower limits using the data.
+                #  We deliberately use the unfiltered data here, as we would rather
+                #  err on the side of caution and have wider limits
+                x_lims = Quantity([self.data[x_col].min(), self.data[x_col].max()], "pix")
+        elif not x_lims.unit.is_equivalent("deg") and x_lims.diff() <= 0:
             raise ValueError("The second element of 'x_lims' must be greater than the first.")
-        elif x_lims is not None and x_lims.unit.is_equivalent("deg"):
+        elif x_lims.unit.is_equivalent("deg"):
             mid_pos = self.radec_sky_wcs.all_pix2world(
                 *Quantity([self.sky_pix_lims[0].mean(), self.sky_pix_lims[1].mean()]).value, 1
             )
@@ -1447,20 +1473,20 @@ class EventList(BaseProduct):
             x_lims = np.sort(Quantity([low_x_lim, upp_x_lim]))
             x_lims[0] = np.floor(x_lims[0])
             x_lims[1] = np.ceil(x_lims[1])
-        elif x_lims is None:
+        #
+        x_lims = x_lims.astype(int)
+
+        if y_lims is None:
             try:
-                x_lims = self.sky_pix_lims[0]
+                y_lims = self.sky_pix_lims[1]
             except ValueError:
                 # The final fallback - finding upper and lower limits using the data.
                 #  We deliberately use the unfiltered data here, as we would rather
                 #  err on the side of caution and have wider limits
-                x_lims = Quantity([self.data[x_col].min(), self.data[x_col].max()], "pix")
-        #
-        x_lims = x_lims.astype(int)
-
-        if y_lims is not None and not y_lims.unit.is_equivalent("deg") and y_lims.diff() <= 0:
+                y_lims = Quantity([self.data[y_col].min(), self.data[y_col].max()], "pix")
+        elif not y_lims.unit.is_equivalent("deg") and y_lims.diff() <= 0:
             raise ValueError("The second element of 'y_lims' must be greater than the first.")
-        elif y_lims is not None and (y_lims.unit.is_equivalent("deg")):
+        elif y_lims.unit.is_equivalent("deg"):
             mid_pos = self.radec_sky_wcs.all_pix2world(
                 *Quantity([self.sky_pix_lims[0].mean(), self.sky_pix_lims[1].mean()]).value, 1
             )
@@ -1469,14 +1495,6 @@ class EventList(BaseProduct):
             y_lims = np.sort(Quantity([low_y_lim, upp_y_lim]))
             y_lims[0] = np.floor(y_lims[0])
             y_lims[1] = np.ceil(y_lims[1])
-        elif y_lims is None:
-            try:
-                y_lims = self.sky_pix_lims[1]
-            except ValueError:
-                # The final fallback - finding upper and lower limits using the data.
-                #  We deliberately use the unfiltered data here, as we would rather
-                #  err on the side of caution and have wider limits
-                y_lims = Quantity([self.data[y_col].min(), self.data[y_col].max()], "pix")
         #
         x_lims = x_lims.astype(int)
         y_lims = y_lims.astype(int)
@@ -1488,11 +1506,11 @@ class EventList(BaseProduct):
 
         # Need to lower the telescope name for this check, as in XGA mission names are in lower case (not necessarily
         #  true in event file headers).
-        if bin_size is None and self.telescope.lower() in DEFAULT_IMAGE_BINNING:
+        if bin_size_quant is None and self.telescope.lower() in DEFAULT_IMAGE_BINNING:
             # Read out the default bin size for this mission if this event list's instrument is a key in the image
             #  binning constant dictionary
             if self.instrument.lower() in DEFAULT_IMAGE_BINNING[self.telescope.lower()]:
-                bin_size = Quantity(DEFAULT_IMAGE_BINNING[self.telescope.lower()][self.instrument.lower()], "pix")
+                bin_size_quant = Quantity(DEFAULT_IMAGE_BINNING[self.telescope.lower()][self.instrument.lower()], "pix")
 
             # If the instrument isn't a key, it is possible that the instrument name in the event list is different
             #  to that used by XGA, so we check an 'alternative name' constant set up for this purpose
@@ -1507,47 +1525,50 @@ class EventList(BaseProduct):
                 ][0]
 
                 if rel_xga_inst_name in DEFAULT_IMAGE_BINNING[self.telescope.lower()]:
-                    bin_size = Quantity(DEFAULT_IMAGE_BINNING[self.telescope.lower()][rel_xga_inst_name], "pix")
+                    bin_size_quant = Quantity(DEFAULT_IMAGE_BINNING[self.telescope.lower()][rel_xga_inst_name], "pix")
                 else:
-                    # This will trigger the separate bin_size is None check below, and a default of one
+                    # This will trigger the separate bin_size_quant is None check below, and a default of one
                     #  will be assigned - just means we don't need the same warning in two different
                     #  places, which is more elegant.
-                    bin_size = None
+                    bin_size_quant = None
 
         # The overall fallback, setting the binning to one.
-        # Note that this is deliberately not an elif. The 'if bin_size...' check above can end up
-        #  setting the bin_size to None in order to trigger this check. Means we don't need
+        # Note that this is deliberately not an elif. The 'if bin_size_quant...' check above can end up
+        #  setting the bin_size_quant to None in order to trigger this check. Means we don't need
         #  to have the same behaviour and warning in two different places.
-        if bin_size is None:
+        if bin_size_quant is None:
             warn(
                 f"No XGA default binning size has been set for the instrument '{self.instrument}' - "
                 f"defaulting to a bin size of 1. Pass to this function's `bin_size` argument to control "
                 f"binning directly.",
                 stacklevel=2,
             )
-            bin_size = Quantity(1, "pix")
+            bin_size_quant = Quantity(1, "pix")
 
         # We allow the bin_size argument to be in angular units, but make sure to translate it to pixels
-        if bin_size.unit.is_equivalent("deg"):
+        if bin_size_quant.unit.is_equivalent("deg"):
             # We enforce square pixels by using the first element of this calculation - though
             #  in most cases the calculated bin size for x and y axes will be the same
-            bin_size = np.ceil((bin_size / self.deg_per_sky).to("pix"))[0]
+            bin_size_quant = np.ceil((bin_size_quant / self.deg_per_sky).to("pix"))[0]
         # --------------------------------------------------------
 
         # ------------- Setting up the energy limits -------------
         # Initially check that both energy boundaries have been set
-        check_en = [lo_en is not None, hi_en is not None]
-        if any(check_en) and not all(check_en):
+        if (lo_en is not None and hi_en is None) or (lo_en is None and hi_en is not None):
             raise ValueError("If either 'lo_en' or 'hi_en' are specified, both must be.")
         # Check that they are both in the correct units
-        elif lo_en is not None and any([not lo_en.unit.is_equivalent("eV"), not hi_en.unit.is_equivalent("eV")]):
+        elif (
+            lo_en is not None
+            and hi_en is not None
+            and (not lo_en.unit.is_equivalent("eV") or not hi_en.unit.is_equivalent("eV"))
+        ):
             raise UnitConversionError("Quantities passed to 'lo_en' and 'hi_en' must be convertible to eV.")
         # Check validity of lower and upper energy limits
-        elif lo_en is not None and (lo_en >= hi_en):
+        elif lo_en is not None and hi_en is not None and (lo_en >= hi_en):
             raise ValueError("Value passed to 'lo_en' must be less than or equal to 'hi_en'.")
 
         # Setup filtering operations for the events data
-        if lo_en is not None:
+        if lo_en is not None and hi_en is not None:
             # Convert energy limits to channels if necessary
             lo_chan = (lo_en / self.ev_per_channel).decompose().value
             hi_chan = (hi_en / self.ev_per_channel).decompose().value
@@ -1558,9 +1579,9 @@ class EventList(BaseProduct):
         # ------------------ Generating an image from user input -------------------
         # After all of this converting and dealing with different potential inputs for bin_size, we store
         #  the final angular width/height of each pixel
-        ang_bin_size = (bin_size * self.deg_per_sky).to("deg")[0].value
+        ang_bin_size = (bin_size_quant * self.deg_per_sky).to("deg")[0].value
         # Make sure that the bin size is an integer
-        bin_size = bin_size.astype(int)
+        bin_size_quant = bin_size_quant.astype(int)
 
         # Makes sure that any extra columns that the user wishes to filter on are in the set we request
         #  from the get_filtered_data method (they would be added by that method, but with an annoying
@@ -1573,8 +1594,12 @@ class EventList(BaseProduct):
         if donor_image is None:
             # We define bin edges such that they are centered on the sky pixel coordinates
             #  (e.g. for bin_size=1, a bin covering sky pixel 1 has edges [0.5, 1.5))
-            x_bins = np.arange(x_lims.value[0] - 0.5, x_lims.value[1] + 0.5 + bin_size.value, bin_size.value)
-            y_bins = np.arange(y_lims.value[0] - 0.5, y_lims.value[1] + 0.5 + bin_size.value, bin_size.value)
+            x_bins = np.arange(
+                x_lims.value[0] - 0.5, x_lims.value[1] + 0.5 + bin_size_quant.value, bin_size_quant.value
+            )
+            y_bins = np.arange(
+                y_lims.value[0] - 0.5, y_lims.value[1] + 0.5 + bin_size_quant.value, bin_size_quant.value
+            )
 
             # We bin the filtered event data into the histogram
             binned_data = np.histogram2d(rel_evt_data[y_col], rel_evt_data[x_col], bins=(y_bins, x_bins))[0]
@@ -1648,7 +1673,7 @@ class EventList(BaseProduct):
         # Then whack it on the end of the initial header we constructed
         new_hdr.extend(wcs_hdr)
 
-        if lo_en is not None:
+        if lo_en is not None and hi_en is not None:
             new_hdr.append(("LO_EN", lo_en.to("keV").value, "Lower energy bound in keV"))
             new_hdr.append(("HI_EN", hi_en.to("keV").value, "Upper energy bound in keV"))
 

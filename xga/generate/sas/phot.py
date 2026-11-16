@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 2:06 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 """
 The xga.generate.sas.phot module implements wrapper functions for SAS tools that generate 'photometric' (i.e. images
 and things related to images) data products. As these functions wrap SAS tools specifically, they are only
@@ -17,6 +17,7 @@ from tqdm import tqdm
 from xga import NUM_CORES, OUTPUT
 from xga.exceptions import NoProductAvailableError, SASInputInvalid, TelescopeNotAssociatedError
 from xga.imagetools import data_limits
+from xga.products.phot import ExpMap, Image
 from xga.samples.base import BaseSample
 from xga.sources import BaseSource
 from xga.sources.base import NullSource
@@ -400,7 +401,12 @@ def emosaic(
             continue
 
         # This fetches all relevant images/expmaps with the passed energy bounds
-        matches = source.get_products(to_mosaic, extra_key=en_id, telescope="xmm")
+        if to_mosaic == "image":
+            matches: Image | ExpMap | list[Image] | list[ExpMap] = source.get_products(
+                "image", extra_key=en_id, telescope="xmm"
+            )
+        else:
+            matches = source.get_products("expmap", extra_key=en_id, telescope="xmm")
         if not isinstance(matches, list):
             matches = [matches]
 
