@@ -63,7 +63,7 @@ def execute_cmd(
     #  allows the timeout to kill the XSPEC run rather than the shell process. Entirely thanks to slayton on
     #   https://stackoverflow.com/questions/4789837/how-to-terminate-a-python-subprocess-launched-with-shell-true
     cmd = f'export PFILES="{tmp_hea_dir}:$HEADAS/syspfiles";' + f"exec xspec - {x_script}"
-    xspec_proc = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
+    xspec_proc = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)  # nosec B602
 
     # This makes sure the process is killed if it does timeout
     # Separate raw_out/raw_err byte variables to make Mypy happy, as it doesn't like bytes variables being

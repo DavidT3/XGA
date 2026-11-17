@@ -1302,8 +1302,8 @@ class EventList(BaseProduct):
             col_mask = np.ones(len(rel_data), dtype=bool)
             for cur_cmd in cur_filt_cmds:
                 if isinstance(cur_cmd, str):
-                    # Dynamically evaluate a string filtering command
-                    col_mask &= eval(f"rel_data['{cur_filt_col}'] {cur_cmd}")
+                    # Dynamically evaluate a string filtering command (replacement tracked in #1556)
+                    col_mask &= eval(f"rel_data['{cur_filt_col}'] {cur_cmd}")  # nosec B307
                 elif callable(cur_cmd):
                     # Or apply a user-defined lambda function
                     col_mask &= cur_cmd(rel_data[cur_filt_col])

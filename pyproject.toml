@@ -138,6 +138,10 @@ convention = "pep257"
 # Allow default arguments like, e.g., `lo_en: Quantity = Quantity(0.5, 'keV')`.
 extend-immutable-calls = ["astropy.units.Quantity", "astropy.units.quantity.Quantity", "astropy.units.Unit"]
 
+[tool.ruff.lint.per-file-ignores]
+# LT.py is an intentional uppercase module name for the Luminosity-Temperature pipeline
+"xga/tools/clusters/LT.py" = ["N999"]
+
 [tool.mypy]
 # Setting this to 3.12, despite us aiming for 3.10 in the rest of the pyproject, as it is
 #  the earliest Python version we still support, because otherwise mypy is completely

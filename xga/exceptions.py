@@ -2,6 +2,8 @@
 #  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:20 PM. Copyright (c) The Contributors.
 """This module defines custom exceptions for XGA."""
 
+from typing import Any
+
 
 class eSASSInputInvalid(Exception):  # noqa: N801, N818
     """Exception raised when a user provides an invalid input to an eSASS function."""
@@ -168,7 +170,7 @@ class XSPECNotFoundError(Exception):
 class ProductGenerationError(Exception):
     """Exception raised if an error occurs during a run of backend product-generation software."""
 
-    def __init__(self, *args: object) -> None:
+    def __init__(self, *args: Any) -> None:  # noqa: ANN401
         """
         Exception raised if an error is found to have occurred during a run of backend software that generates
         products for a telescope supported by XGA - equivalent to the now-removed SASGenerationError, but more general.
@@ -176,8 +178,8 @@ class ProductGenerationError(Exception):
         :param expression:
         :param message:
         """
-        # Assign self.message directly from args without a redundant Any attribute annotation, matching the other
-        #  exception classes in this module
+        # ProductGenerationError is initialized either with a string message (for a single product failure) or
+        #  a nested list of ProductGenerationError instances (aggregated across a batch in @mission_software_call)
         if args:
             self.message = args[0]
         else:

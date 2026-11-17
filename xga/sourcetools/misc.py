@@ -40,7 +40,7 @@ def nh_lookup(coord_pair: Quantity) -> Quantity:
 
     heasoft_cmd = f"nh 2000 {src_ra} {src_dec}"
 
-    out, err = Popen(heasoft_cmd, stdout=PIPE, stderr=PIPE, shell=True).communicate()
+    out, err = Popen(heasoft_cmd, stdout=PIPE, stderr=PIPE, shell=True).communicate()  # nosec B602
     # Catch errors from stderr
     if err.decode("UTF-8") != "":
         # Going to assume top line of error most important, and strip out the error type from the string

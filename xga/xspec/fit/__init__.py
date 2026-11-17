@@ -16,7 +16,6 @@ from .general import (
     single_temp_mekal,
 )
 from .models import custom_xspec_fit, describe_xspec_model, validate_and_parse_model
-
 from .profile import PROF_FIT_FUNC_MODEL_NAMES, single_temp_apec_profile
 
 __all__ = [

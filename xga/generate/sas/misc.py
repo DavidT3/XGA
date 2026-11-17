@@ -90,7 +90,7 @@ def mifbuild(sources: BaseSource | NullSource | BaseSample | list[BaseSource | N
             # This runs the passed command - it captures the stdout and stderr as well
             # Separate raw_out/raw_err byte variables to make Mypy happy, as it doesn't like bytes variables being
             #  reassigned with str
-            raw_out, raw_err = Popen(mif_cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
+            raw_out, raw_err = Popen(mif_cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()  # nosec B602
             # Captured out/err are byte type, will decode that into str for easier use
             out = raw_out.decode("UTF-8", errors="ignore")
             err = raw_err.decode("UTF-8", errors="ignore")

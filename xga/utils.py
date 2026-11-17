@@ -213,7 +213,7 @@ def _get_sas_info() -> tuple[Version | None, bool]:
         )
     else:
         # This way, the user can just import the SAS_VERSION from this utils code
-        sas_out, sas_err = Popen("sas --version", stdout=PIPE, stderr=PIPE, shell=True).communicate()
+        sas_out, sas_err = Popen("sas --version", stdout=PIPE, stderr=PIPE, shell=True).communicate()  # nosec B602, B607
         ver_str = sas_out.decode("UTF-8").strip("]\n")
 
         # The ver_str can contain info about sas (gui) or other things, we want the part in brackets or the end
@@ -291,7 +291,7 @@ def _get_ciao_info() -> tuple[Version | None, bool, Version | None, bool]:
     caldb_avail = False
 
     # Separate raw byte variables to make Mypy happy, as it doesn't like bytes variables being reassigned with str
-    raw_ciao_out, raw_ciao_err = Popen("ciaover -v", stdout=PIPE, stderr=PIPE, shell=True).communicate()
+    raw_ciao_out, raw_ciao_err = Popen("ciaover -v", stdout=PIPE, stderr=PIPE, shell=True).communicate()  # nosec B602, B607
     # Just turn those pesky byte outputs into strings
     ciao_out = raw_ciao_out.decode("UTF-8")
     ciao_err = raw_ciao_err.decode("UTF-8")
@@ -345,7 +345,9 @@ def _get_xspec_info() -> tuple[
         try:
             # null_script.xcm does absolutely nothing, it's just a way to get the version out
             null_path = importlib.resources.files(__package__) / "xspec_scripts/null_script.xcm"
-            xspec_out, xspec_err = Popen(f"xspec - {null_path}", stdout=PIPE, stderr=PIPE, shell=True).communicate()
+            xspec_out, xspec_err = Popen(  # nosec B602
+                f"xspec - {null_path}", stdout=PIPE, stderr=PIPE, shell=True
+            ).communicate()
             # Got to parse the stdout to get the XSPEC version
             xspec_vline = [line for line in xspec_out.decode("UTF-8").split("\n") if "XSPEC version" in line][0]
             xspec_version = Version(xspec_vline.split(": ")[-1])
