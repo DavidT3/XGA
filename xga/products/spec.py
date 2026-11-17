@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 9:26 PM. Copyright (c) The Contributors.
 """
 This module defines the XGA Spectrum and AnnularSpectra product classes for storing and interacting with
 X-ray spectra and their associated response and background files.
@@ -544,8 +544,9 @@ class Spectrum(BaseProduct):
         #  the read on demand method to grab the information from the file.
         if self._spec_counts is None:
             self._read_on_demand(True)
+        # Guard against _spec_counts remaining None after on-demand read (narrows type for Mypy)
         if self._spec_counts is None:
-            raise XGADeveloperError("Failed to read spectrum counts from file.")
+            raise FailedProductError("Failed to read spectrum counts from file.")
 
         return Quantity([self._spec_counts, np.sqrt(self._spec_counts)], "ct").T
 
@@ -680,8 +681,9 @@ class Spectrum(BaseProduct):
         if self._back_counts is None:
             # Passing false means it won't read the source spectrum, but instead the background spectrum
             self._read_on_demand(False)
+        # Guard against _back_counts remaining None after on-demand read (narrows type for Mypy)
         if self._back_counts is None:
-            raise XGADeveloperError("Failed to read background spectrum counts from file.")
+            raise FailedProductError("Failed to read background spectrum counts from file.")
 
         return Quantity([self._back_counts, np.sqrt(self._back_counts)], "ct").T
 

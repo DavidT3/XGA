@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 9:26 PM. Copyright (c) The Contributors.
 """
 This module defines the generic PointSource and ExtendedSource classes, which are usable by themselves, but more
 importantly exist to be inherited by classes representing specific astrophysical objects (e.g. galaxy clusters).
@@ -17,12 +17,12 @@ from numpy import ndarray
 
 from xga import DEFAULT_COSMO
 from xga.exceptions import (
+    InvalidProductError,
     NoProductAvailableError,
     NoRegionsError,
     NotAssociatedError,
     NoValidObservationsError,
     PeakConvergenceFailedError,
-    XGADeveloperError,
 )
 from xga.products import RateMap
 from xga.sourcetools import ang_to_rad, rad_to_ang
@@ -363,8 +363,9 @@ class ExtendedSource(BaseSource):
         count = 0
         # Allow 20 iterations by default before we kill this - alternatively loop will exit when centre converges
         #  to within 15kpc (or 0.15arcmin).
+        # Ensure the supplied RateMap has an associated telescope (required by get_mask)
         if rt.telescope is None:
-            raise XGADeveloperError("The supplied RateMap does not have an associated telescope.")
+            raise InvalidProductError("The supplied RateMap does not have an associated telescope.")
         while count < num_iter:
             aperture_mask = self.get_mask("search", rt.telescope, rt.obs_id, central_coords)[0]
 
@@ -831,8 +832,9 @@ class PointSource(BaseSource):
         :rtype: Tuple[Quantity, bool]
         """
         central_coords = SkyCoord(*self.ra_dec.to("deg"))
+        # Ensure the supplied RateMap has an associated telescope (required by get_mask)
         if rt.telescope is None:
-            raise XGADeveloperError("The supplied RateMap does not have an associated telescope.")
+            raise InvalidProductError("The supplied RateMap does not have an associated telescope.")
         aperture_mask = self.get_mask("search", rt.telescope, rt.obs_id, central_coords)[0]
         peak, near_edge = rt.simple_peak(aperture_mask, peak_unit)
 

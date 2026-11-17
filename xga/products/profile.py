@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 11:50 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 9:26 PM. Copyright (c) The Contributors.
 """This module defines specific (i.e. non-BaseProfile1D) XGA profile classes.
 
 Profile classes are used to store and interact with 1D radial profile information, with some classes
@@ -2776,8 +2776,9 @@ class HydrostaticMass(BaseProfile1D):
         #  it wouldn't be fully correct to use a fitted model to calculate the gas mass in that scenario, so we
         #  have to make a distinction.
         if self._dens_model is not None:
+            # Ensure the associated density model has been fit and has a non-None fit_method
             if self._dens_model.fit_method is None:
-                raise XGADeveloperError("The density model associated with this profile has not been fit.")
+                raise XGAFitError("The density model associated with this profile has not been fit.")
             # The case where we have used a density profile model
             gas_mass, gas_mass_dist = self._dens_prof.gas_mass(
                 self._dens_model.name, radius, conf_level=conf_level, fit_method=self._dens_model.fit_method
