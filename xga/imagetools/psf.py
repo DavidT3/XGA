@@ -4,6 +4,7 @@
 """XGA submodule that implements methods of correcting for and modeling PSF effects."""
 
 import os
+from collections.abc import Sequence
 from multiprocessing.dummy import Pool
 from warnings import warn
 
@@ -23,7 +24,7 @@ from ..sources import BaseSource
 
 
 def rl_psf(
-    sources: BaseSource | BaseSample | list[BaseSource],
+    sources: BaseSource | BaseSample | Sequence[BaseSource],
     iterations: int = 15,
     psf_model: str = "ELLBETA",
     lo_en: Quantity = Quantity(0.5, "keV"),
@@ -125,8 +126,10 @@ def rl_psf(
 
     # If just one source is passed in, make it a list of one, makes behaviour more consistent
     #  throughout this function.
-    if not isinstance(sources, (list, BaseSample)):
+    if isinstance(sources, BaseSource):
         sources = [sources]
+    elif not isinstance(sources, (list, BaseSample)):
+        sources = list(sources)
 
     # Only those sources that don't already have the individual PSF corrected images should be run
     sub_sources = []
@@ -138,6 +141,8 @@ def rl_psf(
 
         # All the image objects of the specified energy range (so every combination of ObsID and instrument)
         match_images = source.get_images(lo_en=lo_en, hi_en=hi_en, telescope="xmm")
+        if isinstance(match_images, Image):
+            match_images = [match_images]
 
         try:
             # Check to see if all individual PSF corrected images are present
@@ -151,6 +156,8 @@ def rl_psf(
                 psf_algo="rl",
                 telescope="xmm",
             )
+            if isinstance(psf_corr_prod, Image):
+                psf_corr_prod = [psf_corr_prod]
         except NoProductAvailableError:
             psf_corr_prod = []
 

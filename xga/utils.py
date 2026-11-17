@@ -388,7 +388,7 @@ def _get_xspec_info() -> tuple[
         )
         model_files_present = (model_dat_path is not None) and model_data_present
 
-        if not model_files_present:
+        if not model_files_present or model_dat_path is None:
             warn(
                 "An XSPEC installation was detected, but the XSPEC model files (spectral/manager/model.dat and "
                 "spectral/modelData) could not be found; XSPEC functionality will not work.",
@@ -1208,7 +1208,7 @@ def find_all_wcs(hdr: FITSHDR) -> list[WCS]:
 
 
 # Very handy function that is used in several places - just not really sure where else to put it but here
-def dict_search(key: str, var: dict) -> Iterator[Any]:
+def dict_search(key: str | int, var: dict) -> Iterator[Any]:
     """
     This simple function was very lightly modified from a stackoverflow answer, and is an
     efficient method of searching through a nested dictionary structure for specfic keys

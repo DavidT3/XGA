@@ -32,7 +32,7 @@ def _spec_cmds(
     group_spec: bool = True,
     min_counts: int = 5,
     min_sn: float | None = None,
-    over_sample: int | None = None,
+    over_sample: int | float | None = None,
     one_rmf: bool = True,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,

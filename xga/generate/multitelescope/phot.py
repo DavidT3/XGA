@@ -5,6 +5,7 @@ The xga.generate.multitelescope.phot module provides convenience functions that 
 product generation wrappers across all telescopes associated with a source or sample.
 """
 
+from collections.abc import Sequence
 from warnings import warn
 
 from astropy.units import Quantity
@@ -19,7 +20,7 @@ from xga.sources import BaseSource
 
 
 def all_telescope_combined_images(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | Sequence[BaseSource],
     lo_en: Quantity,
     hi_en: Quantity,
     telescope: str | list[str] | None = None,
@@ -52,7 +53,7 @@ def all_telescope_combined_images(
 
 
 def all_telescope_combined_expmaps(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | Sequence[BaseSource],
     lo_en: Quantity,
     hi_en: Quantity,
     telescope: str | list[str] | None = None,
@@ -85,7 +86,7 @@ def all_telescope_combined_expmaps(
 
 
 def all_telescope_images(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | Sequence[BaseSource],
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
     telescope: str | list[str] | None = None,
@@ -115,7 +116,7 @@ def all_telescope_images(
 
 
 def all_telescope_expmaps(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | Sequence[BaseSource],
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
     telescope: str | list[str] | None = None,

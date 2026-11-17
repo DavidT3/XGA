@@ -544,6 +544,8 @@ class Spectrum(BaseProduct):
         #  the read on demand method to grab the information from the file.
         if self._spec_counts is None:
             self._read_on_demand(True)
+        if self._spec_counts is None:
+            raise XGADeveloperError("Failed to read spectrum counts from file.")
 
         return Quantity([self._spec_counts, np.sqrt(self._spec_counts)], "ct").T
 
@@ -678,6 +680,8 @@ class Spectrum(BaseProduct):
         if self._back_counts is None:
             # Passing false means it won't read the source spectrum, but instead the background spectrum
             self._read_on_demand(False)
+        if self._back_counts is None:
+            raise XGADeveloperError("Failed to read background spectrum counts from file.")
 
         return Quantity([self._back_counts, np.sqrt(self._back_counts)], "ct").T
 
@@ -1282,6 +1286,8 @@ class Spectrum(BaseProduct):
 
         # Searches for column headers with 'Lx' in them (this has to be dynamic as the user can calculate
         #  luminosity in as many bands as they like)
+        if tab_line.dtype.names is None:
+            raise XGADeveloperError("Table line has no column names.")
         lx_inds = np.where(np.char.find(tab_line.dtype.names, "Lx") == 0)[0]
         lx_cols = np.array(tab_line.dtype.names)[lx_inds]
 
@@ -3341,7 +3347,11 @@ class AnnularSpectra(BaseAggregateProduct):
             self._luminosities[ai][model][fit_conf] = lums[ai]
 
     def _get_fit_checks(
-        self, annulus_ident: int, model: str | None = None, par: str | None = None, fit_conf: str | dict | None = None
+        self,
+        annulus_ident: int | None,
+        model: str | None = None,
+        par: str | None = None,
+        fit_conf: str | dict | None = None,
     ) -> tuple[str, str]:
         """
         An internal function to perform input checks and pre-processing for get methods that access fit results, or
@@ -3400,7 +3410,7 @@ class AnnularSpectra(BaseAggregateProduct):
             )
         # In this case the user passed no fit configuration key, but there are multiple fit configurations stored here
         elif fit_conf is None and len(self.fitted_model_configurations[model]) != 1:
-            av_fconfs = ", ".join(self._fit_results[annulus_ident][model].keys())
+            av_fconfs = ", ".join(self.fitted_model_configurations[model])
             raise ValueError(
                 f"The {model} model has been fit with multiple configuration, so fit_conf=None is not "
                 f"valid; available fit configurations are {av_fconfs}"

@@ -3,6 +3,7 @@
 
 import os.path
 import warnings
+from collections.abc import Sequence
 
 from astropy.units import Quantity
 
@@ -16,13 +17,13 @@ from .misc import cifbuild
 
 
 def region_setup(
-    sources: BaseSource | BaseSample | list[BaseSource],
+    sources: BaseSource | BaseSample | Sequence[BaseSource],
     outer_radius: str | Quantity,
     inner_radius: str | Quantity,
     disable_progress: bool,
     obs_id: str,
     num_cores: int = NUM_CORES,
-) -> tuple[BaseSource | BaseSample | list[BaseSource], list[Quantity], list[Quantity]]:
+) -> tuple[BaseSource | BaseSample | Sequence[BaseSource], list[Quantity], list[Quantity]]:
     """
     The preparation and value checking stage for SAS spectrum generation.
 

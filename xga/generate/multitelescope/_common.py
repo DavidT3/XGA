@@ -2,6 +2,8 @@
 #  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 13:03. Copyright (c) The Contributors
 
 
+from collections.abc import Sequence
+
 import numpy as np
 
 from xga.exceptions import TelescopeNotAssociatedError
@@ -10,7 +12,9 @@ from xga.sources import BaseSource
 from xga.sourcetools._common import _get_all_telescopes
 
 
-def check_tel_associated(sources: BaseSource | BaseSample, telescope: str | list[str] | None) -> list[str]:
+def check_tel_associated(
+    sources: BaseSource | BaseSample | Sequence[BaseSource], telescope: str | list[str] | None
+) -> list[str]:
     """
     Simple check meant to be used on user-specified telescope names, to ensure they are associated with at
     least one source.

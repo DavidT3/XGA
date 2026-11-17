@@ -137,7 +137,7 @@ def _create_stack(
         for src in sources:
             try:
                 # A temporary temperature variable
-                temp_temp = src.get_temperature(scale_radius, model="constant*tbabs*apec", telescope=telescope)[0]
+                temp_temp = src.get_temperature(scale_radius, model="constant*tbabs*apec", telescope=telescope)[0]  # type: ignore[arg-type]  # TODO: Fix in #1653
             except (ModelNotAssociatedError, ParameterNotAssociatedError):
                 warn(f"{src.name}'s temperature fit is not valid, defaulting to a temperature of 3 keV", stacklevel=2)
                 temp_temp = Quantity(3, "keV")
@@ -152,7 +152,7 @@ def _create_stack(
     # Now to generate a combined conversion factor from count rate to luminosity
     for source in sources:
         combined_factors.append(
-            source.combined_lum_conv_factor(scale_radius, lo_en=lo_en, hi_en=hi_en, telescope=telescope).value
+            source.combined_lum_conv_factor(scale_radius, lo_en=lo_en, hi_en=hi_en, telescope=telescope).value  # type: ignore[arg-type]  # TODO: Fix in #1653
         )
 
     # Check for NaN values in the brightness profiles we've retrieved - very bad if they exist
@@ -304,7 +304,7 @@ def stacked_radial_brightness(
         )
         # We obviously want to remove point sources from the profiles we make, so get the mask that removes
         #  interlopers
-        int_mask = source.get_interloper_mask(telescope=telescope)
+        int_mask = source.get_interloper_mask(telescope=telescope)  # type: ignore[arg-type]  # TODO: Fix in #1653
 
         # Tells the source object to give us the requested scale radius in units of kpc
         rad = source.get_radius(scale_radius, kpc)
@@ -1030,7 +1030,7 @@ def view_radial_model_stack(
                 pix_peak = rt.coord_conv(cur_src.peak, pix)
             else:
                 pix_peak = rt.coord_conv(cur_src.ra_dec, pix)
-            inter_mask = cur_src.get_interloper_mask(telescope=telescope)
+            inter_mask = cur_src.get_interloper_mask(telescope=telescope)  # type: ignore[arg-type]  # TODO: Fix in #1653
             rad = cur_src.get_radius(scale_radius, kpc)
 
             prof_prods = cur_src.get_products("combined_brightness_profile", telescope=telescope)

@@ -495,7 +495,9 @@ def single_temp_apec_profile(
 
                 try:
                     ann_spec.get_results(0, model, "kT", fit_conf)
-                except (ModelNotAssociatedError, FitConfNotAssociatedError):
+                except (ModelNotAssociatedError, FitConfNotAssociatedError) as err:
+                    if source.redshift is None:
+                        raise ValueError(f"{source.name} has no redshift and cannot be fitted here.") from err
                     out_file, script_file, inv_ent = _write_xspec_script(
                         source,
                         file_prefix,

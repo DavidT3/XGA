@@ -449,8 +449,10 @@ def radial_brightness(
         deg_outer_rad = outer_rad.to("deg")
     elif outer_rad.unit == pix:
         deg_outer_rad = pix_rad_to_physical(rt, outer_rad, deg, centre, z, cosmo)
-    else:
+    elif z is not None:
         deg_outer_rad = rad_to_ang(outer_rad, z, cosmo).to("deg")
+    else:
+        raise ValueError("Cannot convert physical 'outer_rad' without a redshift.")
 
     deg_cen = rt.coord_conv(centre, deg)
     # Now I've finally implemented some profile product classes I can just smoosh everything into a convenient product

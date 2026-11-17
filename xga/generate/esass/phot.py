@@ -7,6 +7,7 @@ compatible with source/sample instances that have eROSITA observations associate
 """
 
 import os
+from collections.abc import Sequence
 from random import randint
 from typing import Any
 
@@ -628,7 +629,7 @@ def expmap(
 
 
 def combine_phot_prod(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | Sequence[BaseSource],
     to_combine: str,
     lo_en: Quantity = Quantity(0.2, "keV"),
     hi_en: Quantity = Quantity(10, "keV"),
@@ -644,7 +645,7 @@ def combine_phot_prod(
     just as easily use xga.generate.esass.phot.evtool_image/expmap directly, with
     'combine_obs=True' as an argument.
 
-    :param BaseSource/NullSource/BaseSample sources: A single source object, or sample of sources
+    :param BaseSource/BaseSample sources: A single source object, or sample of sources
     :param str to_combine: The data type to produce, can be either image or expmap.
     :param Quantity lo_en: The lower energy limit for the image or expmap, in astropy energy units.
     :param Quantity hi_en: The upper energy limit for the image or expmap, in astropy energy units.
@@ -653,6 +654,13 @@ def combine_phot_prod(
     :param bool disable_progress: Setting this to true will turn off the eSASS generation progress
         bar.
     """
+    # NullSources are not allowed to be combined, as they can have any observations associated and thus won't
+    #  necessarily overlap
+    if isinstance(sources, NullSource) or (
+        isinstance(sources, Sequence) and any(isinstance(s, NullSource) for s in sources)
+    ):
+        raise TypeError("You cannot create combined images or exposure maps of a NullSource.")
+
     if to_combine not in ["image", "expmap"]:
         raise ValueError("The 'to_combine' argument accepts either 'image' or 'expmap' as a value.")
 

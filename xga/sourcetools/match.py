@@ -126,7 +126,7 @@ def _vectorized_separation_match(
         # We identify all ObsIDs that are completely blacklisted for this telescope
         excl_cols = [col for col in rel_bl.columns if "EXCLUDE" in col]
         if len(excl_cols) > 0:
-            is_fully_bl = np.logical_and.reduce([rel_bl[col].eq(True).values for col in excl_cols])
+            is_fully_bl = np.logical_and.reduce([rel_bl[col].eq(True).to_numpy() for col in excl_cols])
             fully_bl_df = rel_bl[is_fully_bl]
             fully_bl_obsids = set(fully_bl_df["ObsID"].values)
         else:
@@ -446,8 +446,9 @@ def _process_init_match(
     # TODO Honestly I think I should just rewrite this - at the moment I just want to convert it so it acts the same
     #  as it did but for multi-mission stuff though
 
-    # We use integer indices as identifiers instead of string representations, as it is much faster for large samples
-    all_indices = list(range(len(src_ra)))
+    # We use integer indices as identifiers instead of string representations, as it is much faster for large samples.
+    #  np.atleast_1d ensures a scalar float input is promoted to a 1-element 1D array before calling len()
+    all_indices = list(range(len(np.atleast_1d(src_ra))))
 
     final_obs_ids = {}
     final_res = {}
@@ -774,9 +775,8 @@ def separation_match(
         #  variables being reassigned with lists
         flat_res_chunks: list[DataFrame] = []
         flat_bl_chunks: list[DataFrame] = []
-        if not return_flat:
-            sparse_results = {tel: {} for tel in telescope}
-            sparse_bl = {tel: {} for tel in telescope}
+        dict_res: dict[str, dict] = {tel: {} for tel in telescope}
+        dict_bl: dict[str, dict] = {tel: {} for tel in telescope}
 
         with (
             tqdm(desc="Searching for telescope observations near source coordinates", total=num_chunks) as onwards,
@@ -787,11 +787,12 @@ def separation_match(
                 # Merge the sparse results from each chunk
                 if not return_flat:
                     for tel in telescope:
-                        sparse_results[tel].update(chunk_res[tel])
-                        sparse_bl[tel].update(chunk_bl[tel])
+                        dict_res[tel].update(chunk_res[tel])  # type: ignore[index]
+                        dict_bl[tel].update(chunk_bl[tel])  # type: ignore[index]
                 else:
-                    flat_res_chunks.append(chunk_res)
-                    flat_bl_chunks.append(chunk_bl)
+                    if isinstance(chunk_res, DataFrame) and isinstance(chunk_bl, DataFrame):
+                        flat_res_chunks.append(chunk_res)
+                        flat_bl_chunks.append(chunk_bl)
                 onwards.update(1)
 
         if return_flat:
@@ -804,6 +805,9 @@ def separation_match(
                 sparse_results = DataFrame(columns=cols)
                 cols = list(BLACKLIST[telescope[0]].columns) + ["src_idx", "dist", "telescope"]
                 sparse_bl = DataFrame(columns=cols)
+        else:
+            sparse_results = dict_res
+            sparse_bl = dict_bl
 
     if return_flat:
         # We can just return the flat DataFrames now
@@ -1154,8 +1158,9 @@ def on_detector_match(
         # We need to make sure we check if single_res[tel] is not None
         tot_res = 0
         for tel in single_res:
-            if single_res[tel] is not None:
-                tot_res += len(single_res[tel])
+            tel_res = single_res[tel]
+            if tel_res is not None:
+                tot_res += len(tel_res)
 
         # As in this case there is only one source, we can include more information in our error message telling
         #  the user that there are no matches
@@ -1172,7 +1177,8 @@ def on_detector_match(
         any_detections = False
         for r in results:
             for tel in telescope:
-                if r[tel] is not None and len(r[tel]) > 0:
+                tel_res = r[tel]
+                if tel_res is not None and len(tel_res) > 0:
                     any_detections = True
                     break
             if any_detections:
@@ -1256,6 +1262,9 @@ def region_match(
     elif isinstance(src_ra, list):
         src_ra = np.array(src_ra)
         src_dec = np.array(src_dec)
+    else:
+        src_ra = np.asarray(src_ra)
+        src_dec = np.asarray(src_dec)
 
     # This runs the simple xmm match and gathers the results.
     s_match, s_match_bl = separation_match(src_ra, src_dec, distance, telescope, num_cores=num_cores, return_flat=True)
@@ -1420,7 +1429,7 @@ def region_match(
 
     # This formats the match and no-match information so that the output is the same length and order as the input
     #  source lists
-    to_return = []
+    to_return: list[dict | None] = []
     for s_idx in all_repr:  # all_repr is now range(len(src_ra))
         to_ret_en = {}
         if s_idx in reg_match_info:

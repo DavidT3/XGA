@@ -374,6 +374,7 @@ def xspec_call(xspec_func: Callable[..., Any]) -> Callable[..., Any]:
                             elif with_cross_arf and spec.instrument not in ann_lums[spec.annulus_ident]:
                                 ann_lums[spec.annulus_ident][spec.instrument] = processed_lums
 
+                        ann_chosen_lums: dict[int, Any] = {}
                         if tel == "xmm":
                             # Ideally the luminosity reported in the source object will be a PN lum, but its not
                             #  impossible that a PN value won't be available. - it shouldn't matter much, lums across
@@ -387,15 +388,14 @@ def xspec_call(xspec_func: Callable[..., Any]) -> Callable[..., Any]:
                                 chosen_lums = inst_lums["mos1"]
                             else:
                                 # TODO THIS IS DISGUSTING
-                                chosen_lums = {}
                                 for cur_ann_id in ann_lums:
                                     if "pn" in ann_lums[cur_ann_id]:
                                         cur_chos_lum = ann_lums[cur_ann_id]["pn"]
-                                    elif "mos2" in ann_lums:
+                                    elif "mos2" in ann_lums[cur_ann_id]:
                                         cur_chos_lum = ann_lums[cur_ann_id]["mos2"]
                                     else:
                                         cur_chos_lum = ann_lums[cur_ann_id]["mos1"]
-                                    chosen_lums[cur_ann_id] = cur_chos_lum
+                                    ann_chosen_lums[cur_ann_id] = cur_chos_lum
                         else:
                             # TODO THIS ISN'T NECESSARILY THE WAY I WANT TO DO THIS
                             # TODO IF MORE MISSIONS GET CROSS-ARF SUPPORT THIS WILL NEED TO CHANGE
@@ -476,7 +476,7 @@ def xspec_call(xspec_func: Callable[..., Any]) -> Callable[..., Any]:
                             }
 
                             ann_spec.add_fit_data(
-                                model, ann_results, chosen_lums, ann_obs_order, fit_conf_lookup[o_file_lu]
+                                model, ann_results, ann_chosen_lums, ann_obs_order, fit_conf_lookup[o_file_lu]
                             )
 
                             # This is a straight copy of a code block further down the file
@@ -591,10 +591,10 @@ def xspec_call(xspec_func: Callable[..., Any]) -> Callable[..., Any]:
                                 )[0],
                             )
                         spec.add_conv_factors(
-                            res_table["lo_en"].values,
-                            res_table["hi_en"].values,
-                            res_table[f"rate_{comb}"].values,
-                            res_table[f"Lx_{comb}"].values,
+                            res_table["lo_en"].to_numpy(),
+                            res_table["hi_en"].to_numpy(),
+                            res_table[f"rate_{comb}"].to_numpy(),
+                            res_table[f"Lx_{comb}"].to_numpy(),
                             model,
                         )
 

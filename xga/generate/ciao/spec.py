@@ -7,6 +7,7 @@ are only compatible with source/sample instances that have Chandra observations 
 """
 
 import os
+from collections.abc import Sequence
 from copy import copy
 from random import randint
 from typing import Any
@@ -26,13 +27,13 @@ from .run import ciao_call
 
 
 def _chandra_spec_cmds(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | Sequence[BaseSource],
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     group_spec: bool = True,
     min_counts: int = 5,
     min_sn: float | None = None,
-    over_sample: int | None = None,
+    over_sample: int | float | None = None,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
     force_gen: bool = False,
@@ -71,7 +72,13 @@ def _chandra_spec_cmds(
     # This function supports passing both individual sources and samples - but if it is a source we like to be able
     #  to iterate over it, so we put it in a list. Using a separate variable name to make Mypy happy, as it doesn't
     #  like BaseSource | BaseSample being reassigned with a list.
-    src_list = [sources] if isinstance(sources, BaseSource) else sources
+    src_list: list[BaseSource] | BaseSample
+    if isinstance(sources, BaseSource):
+        src_list = [sources]
+    elif isinstance(sources, BaseSample):
+        src_list = sources
+    else:
+        src_list = list(sources)
 
     _, inner_radii, outer_radii = region_setup(
         src_list,

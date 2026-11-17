@@ -343,7 +343,7 @@ class ScalingRelation:
             raise ValueError(
                 "You cannot set the 'point_names' argument if you have not passed data to x_data and y_data."
             )
-        elif point_names is not None and len(point_names) != len(x_data):
+        elif point_names is not None and x_data is not None and len(point_names) != len(x_data):
             raise ValueError(
                 f"You have passed a 'point_names' argument that has a different number of entries ({len(point_names)}) "
                 f"than the data given to this scaling relation ({len(x_data)})."
@@ -357,7 +357,7 @@ class ScalingRelation:
             raise ValueError(
                 "You cannot set the 'third_dim_info' argument if you have not passed data to x_data and y_data."
             )
-        elif third_dim_info is not None and len(third_dim_info) != len(x_data):
+        elif third_dim_info is not None and x_data is not None and len(third_dim_info) != len(x_data):
             raise ValueError(
                 "You have passed a 'third_dim_info' argument that has a different number of "
                 f"entries ({len(third_dim_info)}) than the data given to this scaling relation "
@@ -851,7 +851,7 @@ class ScalingRelation:
             ax.set_ylabel(self._par_names[i])
             ax.yaxis.set_label_coords(-0.1, 0.5)
 
-        if num_ch > len(self._fit_pars):
+        if num_ch > len(self._fit_pars) and self._scatter_chain is not None:
             ax = axes[-1]
             ax.plot(self._scatter_chain, colour, alpha=0.7)
             ax.set_xlim(0, len(self._scatter_chain))

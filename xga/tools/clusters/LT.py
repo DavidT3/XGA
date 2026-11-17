@@ -373,10 +373,10 @@ def luminosity_temperature_pipeline(
     # Set up the ClusterSample to be used for this process (I did consider setting up a new one each time but that
     #  adds overhead, and I think that this way should work fine).
     samp = ClusterSample(
-        sample_data["ra"].values,
-        sample_data["dec"].values,
-        sample_data["redshift"].values,
-        sample_data["name"].values,
+        sample_data["ra"].to_numpy(),
+        sample_data["dec"].to_numpy(),
+        sample_data["redshift"].to_numpy(),
+        sample_data["name"].to_numpy(),
         use_peak=use_peak,
         peak_find_method=peak_find_method,
         clean_obs=clean_obs,

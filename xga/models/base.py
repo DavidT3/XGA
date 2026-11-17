@@ -273,7 +273,7 @@ class BaseModel1D(metaclass=ABCMeta):
 
     @staticmethod
     @abstractmethod
-    def model(x: Quantity, pars: list[Quantity]) -> Quantity:
+    def model(x: Quantity, *pars: Quantity) -> Quantity:
         """
         This is where the model function is actually defined, this MUST be overridden by every subclass
         model, hence why I've used the abstract method decorator.

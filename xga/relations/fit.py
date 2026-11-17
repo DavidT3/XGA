@@ -3,7 +3,7 @@
 """Functions for fitting scaling relations to sample measurements using curve_fit, ODR, or LIRA."""
 
 import inspect
-from types import FunctionType
+from collections.abc import Callable
 from warnings import warn
 
 import numpy as np
@@ -183,7 +183,7 @@ def _fit_initialise(
 
 
 def scaling_relation_curve_fit(
-    model_func: FunctionType,
+    model_func: Callable,
     y_values: Quantity,
     y_errs: Quantity,
     x_values: Quantity,
@@ -279,7 +279,7 @@ def scaling_relation_curve_fit(
 
 
 def scaling_relation_odr(
-    model_func: FunctionType,
+    model_func: Callable,
     y_values: Quantity,
     y_errs: Quantity,
     x_values: Quantity,

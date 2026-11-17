@@ -6,6 +6,7 @@ to check model names and access their functions.
 """
 
 import inspect
+from collections.abc import Callable
 from types import FunctionType
 from typing import Any
 
@@ -140,7 +141,7 @@ PROF_TYPE_MODELS: dict[str, dict[str, Any]] = {
 
 
 def convert_to_odr_compatible(
-    model_func: FunctionType, new_par_name: str = "β", new_data_name: str = "x_values"
+    model_func: Callable, new_par_name: str = "β", new_data_name: str = "x_values"
 ) -> FunctionType:
     """
     This is a bit of a weird one; its meant to convert model functions from the standard XGA setup
@@ -243,7 +244,14 @@ def convert_to_odr_compatible(
 # ==============================================================================
 
 
-def derivative(func: FunctionType, x0: float, dx: float = 1.0, n: int = 1, args: tuple = (), order: int = 3):
+def derivative(
+    func: Callable,
+    x0: float | np.ndarray,
+    dx: float = 1.0,
+    n: int = 1,
+    args: tuple = (),
+    order: int = 3,
+) -> float | np.ndarray:
     """
     Find the nth derivative of a function at a point.
 
@@ -263,7 +271,7 @@ def derivative(func: FunctionType, x0: float, dx: float = 1.0, n: int = 1, args:
     :rtype: float
     """
 
-    def _central_diff_weights(Np, ndiv=1):  # noqa: N803
+    def _central_diff_weights(Np: int, ndiv: int = 1) -> np.ndarray:  # noqa: N803
         """
         Return weights for a Np-point central derivative.
 

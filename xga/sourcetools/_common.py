@@ -1,6 +1,7 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 2:06 PM. Copyright (c) The Contributors.
 
+from collections.abc import Sequence
 from warnings import warn
 
 from astropy.units import Quantity
@@ -17,7 +18,7 @@ from ..xspec import single_temp_apec
 from .misc import model_check
 
 
-def _get_all_telescopes(sources: BaseSource | BaseSample | list[BaseSource]) -> list[str]:
+def _get_all_telescopes(sources: BaseSource | BaseSample | Sequence[BaseSource]) -> list[str]:
     """
     Returns a list of all the telescopes associated with at least one source. For most functions within
     xga.sourcetools, the initial sources argument may be a list, so the 'telescopes' attribute can't be
@@ -28,15 +29,15 @@ def _get_all_telescopes(sources: BaseSource | BaseSample | list[BaseSource]) -> 
         that were passed in.
     :rtype: List[str]
     """
-    if isinstance(sources, list):
+    if isinstance(sources, (BaseSource, BaseSample)):
+        all_telescopes = sources.telescopes
+    else:
         # This collects all telescopes associated with each source, so there will be duplicates
         all_telescopes_inc_dups = []
         for src in sources:
             all_telescopes_inc_dups.extend(src.telescopes)
         # Now removing the duplicates
         all_telescopes = list(set(all_telescopes_inc_dups))
-    else:
-        all_telescopes = sources.telescopes
 
     return all_telescopes
 
@@ -48,8 +49,8 @@ def _setup_global(
     abund_table: str,
     group_spec: bool,
     min_counts: int,
-    min_sn: int | float,
-    over_sample: float,
+    min_sn: int | float | None,
+    over_sample: int | float | None,
     num_cores: int,
     psf_bins: int,
     stacked_spectra: bool,

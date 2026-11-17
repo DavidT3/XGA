@@ -185,7 +185,7 @@ def mission_software_call(
             # Now we assign products to source objects
             all_to_raise = []
             # This is for the special case of generating an AnnularSpectra product
-            ann_spec_comps: dict[str, list[BaseProduct]] = {k: [] for k in results}
+            ann_spec_comps: dict[str, list[Spectrum]] = {k: [] for k in results}
             for entry in results:
                 # Made this lookup list earlier, using string representations of source objects.
                 # Finds the ind of the list of sources that we should add this set of products to
@@ -221,6 +221,7 @@ def mission_software_call(
                         product.type is not None
                         and product.usable
                         and prod_type_str == "annular spectrum set components"
+                        and isinstance(product, Spectrum)
                     ):
                         # Really we're just re-creating the results dictionary here, but I want these products
                         # to go through the error checking stuff like everything else does
@@ -677,6 +678,10 @@ def get_annular_esass_region(
     if len(esass_interloper) == 0:
         final_src = esass_source_area
     else:
+        if out_root_path is None or rand_ident is None:
+            raise XGADeveloperError(
+                "out_root_path and rand_ident must be supplied when writing temporary eSASS region files."
+            )
         # Multiple regions must be passed to eSASS via an ASCII
         #  file, so we will need somewhere to write them
         reg_file_path = os.path.join(out_root_path, f"temp_regs_{rand_ident}")

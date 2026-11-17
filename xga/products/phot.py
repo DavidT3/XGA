@@ -162,7 +162,14 @@ class Image(BaseProduct):
         """
         # Calls the init of the BaseProduct class, which does some base level setup
         super().__init__(
-            path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope, check_exists=check_exists
+            path,
+            obs_id,
+            instrument,
+            stdout_str,
+            stderr_str,
+            gen_cmd,
+            telescope=telescope,
+            check_exists=check_exists,
         )
 
         # TODO I hope that this will play well with the significant changes made in multi-mission XGA, which

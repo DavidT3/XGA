@@ -65,12 +65,12 @@ class BaseProduct:
 
     def __init__(
         self,
-        path: str,
-        obs_id: str,
-        instrument: str,
-        stdout_str: str,
-        stderr_str: str,
-        gen_cmd: str,
+        path: str | dict | list,
+        obs_id: str | None,
+        instrument: str | None,
+        stdout_str: str | None,
+        stderr_str: str | None,
+        gen_cmd: str | None,
         extra_info: dict | None = None,
         telescope: str | None = None,
         force_remote: bool = False,
@@ -175,17 +175,17 @@ class BaseProduct:
 
         # Try to determine if the file exists (if this init has been told to, at least)
         self._path: Any = None
-        if self._local_file:
+        if not isinstance(path, str):
+            # In-memory declarations (non-string path) skip existence checking entirely, as there is
+            #  no file path to check
+            self._path = path
+        elif self._local_file:
             if not check_exists or os.path.exists(path):
                 self._path = path
             else:
                 self._path = None
                 self._usable = False
                 self._why_unusable.append("ProductPathDoesNotExist")
-        elif not isinstance(path, str):
-            # In-memory declarations (non-string path) skip existence checking entirely, as there is
-            #  no file path to check
-            self._path = path
         elif not check_exists:
             # The user has explicitly told us not to check, so we trust that the path is valid
             self._path = path
@@ -220,8 +220,8 @@ class BaseProduct:
 
         # The base attributes for products - they let it know which telescope it came from, which instrument, and
         #  which specific observation - amongst other things
-        self._obs_id = obs_id
-        self._inst = instrument
+        self._obs_id: str = obs_id  # type: ignore[assignment]
+        self._inst: str = instrument  # type: ignore[assignment]
         self._tele = telescope
 
         # Replacing a null input for the generation command with an empty string
@@ -1229,7 +1229,7 @@ class BaseProfile1D:
         radii: Quantity,
         values: Quantity,
         centre: Quantity,
-        source_name: str,
+        source_name: str | None,
         obs_id: str,
         inst: str,
         radii_err: Quantity | None = None,
@@ -1330,7 +1330,12 @@ class BaseProfile1D:
                 "radii in degrees to 'deg_radii', this profile needs knowledge of the radii in degrees"
                 " to construct a storage key."
             )
-        elif not radii.unit.is_equivalent("deg") and set_storage_key is None and len(deg_radii) != len(radii):
+        elif (
+            not radii.unit.is_equivalent("deg")
+            and set_storage_key is None
+            and deg_radii is not None
+            and len(deg_radii) != len(radii)
+        ):
             raise ValueError(
                 "'deg_radii' is a different length to 'radii', they should be equivalent "
                 "quantities, simply in different units."
@@ -2626,9 +2631,9 @@ class BaseProfile1D:
         main_ax.tick_params(axis="both", direction="in", which="both", top=True, right=True)
 
         if self.type == "brightness_profile" and getattr(self, "psf_corrected", False):
-            leg_label = self.src_name + " PSF Corrected"
+            leg_label = (self.src_name or "") + " PSF Corrected"
         else:
-            leg_label = self.src_name
+            leg_label = self.src_name or ""
 
         # This subtracts the background if the user wants a background subtracted plot
         plot_y_vals = self.values.copy()
@@ -3185,10 +3190,11 @@ class BaseProfile1D:
             this method will use the save_path attribute of the profile.
         """
         #  Checks to see if the user has supplied their own custom save path.
-        if save_path is None and self.save_path is not None:
-            save_path = self.save_path
-        elif save_path is None and self.save_path is None:
-            raise TypeError("Base profiles cannot be saved")
+        if save_path is None:
+            if self.save_path is not None:
+                save_path = self.save_path
+            else:
+                raise TypeError("Base profiles cannot be saved")
 
         # Pickles and saves this profile instance.
         with open(save_path, "wb") as picklo:
@@ -3385,7 +3391,7 @@ class BaseProfile1D:
         return self._prof_type + "_profile"
 
     @property
-    def src_name(self) -> str:
+    def src_name(self) -> str | None:
         """
         Getter for the name attribute of this profile, what source object it was derived from.
 
@@ -4012,10 +4018,11 @@ class BaseAggregateProfile1D:
 
         # Cycles through the component profiles of this aggregate profile, plotting them all
         for p_ind, p in enumerate(self._profiles):
+            src_prefix = p.src_name or ""
             if p.obs_id != "combined":
-                p_name = p.src_name + f" {p.telescope}-{p.obs_id}-{p.instrument.upper()}"
+                p_name = src_prefix + f" {p.telescope}-{p.obs_id}-{p.instrument.upper()}"
             else:
-                p_name = p.src_name + f" {p.telescope}"
+                p_name = src_prefix + f" {p.telescope}"
 
             if (
                 p.type == "brightness_profile"

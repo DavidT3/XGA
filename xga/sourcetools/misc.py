@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Sequence
 from copy import deepcopy
 from subprocess import PIPE, Popen
 from typing import TYPE_CHECKING
@@ -172,7 +173,8 @@ def coord_to_name(coord_pair: Quantity, survey: str | None = None) -> str:
 
 
 def model_check(
-    sources: BaseSource | BaseSample | list[BaseSource], model: str | list[str] | BaseModel1D | list[BaseModel1D]
+    sources: BaseSource | BaseSample | Sequence[BaseSource],
+    model: str | BaseModel1D | Sequence[str | BaseModel1D],
 ) -> list[BaseModel1D] | list[str] | list[str | BaseModel1D]:
     """
     Very simple function that checks if a passed set of models is appropriately structured for the number of sources

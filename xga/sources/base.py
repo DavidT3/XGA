@@ -3316,9 +3316,9 @@ class BaseSource:
         hi_en: Quantity | None = None,
         psf_corr: bool = False,
         psf_model: str | None = "ELLBETA",
-        psf_bins: int = 4,
-        psf_algo: str = "rl",
-        psf_iter: int = 15,
+        psf_bins: int | None = 4,
+        psf_algo: str | None = "rl",
+        psf_iter: int | None = 15,
         telescope: str | None = None,
     ) -> Image | ExpMap | RateMap | list[Image] | list[ExpMap] | list[RateMap]:
         """
@@ -6117,7 +6117,11 @@ class BaseSource:
         return filt_att_files[0].path
 
     def source_back_regions(
-        self, reg_type: str, telescope: str, obs_id: str | None = None, central_coord: Quantity | None = None
+        self,
+        reg_type: str,
+        telescope: str,
+        obs_id: str | None = None,
+        central_coord: Quantity | SkyCoord | None = None,
     ) -> tuple[SkyRegion, SkyRegion]:
         """
         A method to retrieve source region and background region objects for a given source type with a
@@ -6264,7 +6268,11 @@ class BaseSource:
             return flat_ret_reg
 
     def get_source_mask(
-        self, reg_type: str, telescope: str, obs_id: str | None = None, central_coord: Quantity | None = None
+        self,
+        reg_type: str,
+        telescope: str,
+        obs_id: str | None = None,
+        central_coord: Quantity | SkyCoord | None = None,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Method to retrieve source and background masks for the given region type.
@@ -6429,7 +6437,11 @@ class BaseSource:
         return mask
 
     def get_mask(
-        self, reg_type: str, telescope: str, obs_id: str | None = None, central_coord: Quantity | None = None
+        self,
+        reg_type: str,
+        telescope: str,
+        obs_id: str | None = None,
+        central_coord: Quantity | SkyCoord | None = None,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Method to retrieve source and background masks for the given region type, WITH INTERLOPERS REMOVED.

@@ -911,7 +911,7 @@ def min_cnt_proj_temp_prof(
                     min_width,
                     lo_en,
                     hi_en,
-                    telescope,
+                    tel,
                     med_obs_id,
                     med_obs_inst,
                     psf_corr,
