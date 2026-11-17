@@ -3009,6 +3009,9 @@ class AnnularSpectra(BaseAggregateProduct):
             raise FileNotFoundError(f"The specified cross-arf file ({arf}) cannot be found.")
         elif isinstance(arf, str):
             arf_path = arf
+        else:
+            # Reject invalid arf input types upfront rather than failing with an UnboundLocalError on arf_path
+            raise TypeError("The 'arf' argument must be either a string path or an XGA BaseProduct instance.")
 
         # We make absolutely sure that the input annulus identifiers are integer representations, not strings, just
         #  to be safe as it could screw things up downstream from here
@@ -4146,8 +4149,8 @@ class AnnularSpectra(BaseAggregateProduct):
         if lo_lim >= hi_lim:
             raise ValueError("The hi_lim argument cannot be less than or equal to the lo_lim argument")
 
-        # Keep the original values of model and fit_conf - they can change in the loop
-        og_model = deepcopy(model)
+        # Keep the original value of fit_conf as it can be modified in the loop (model is only passed as a string
+        #  or sequence of strings and is not mutated in the loop)
         og_fit_conf = deepcopy(fit_conf)
         # Same deal with the energy limits
         og_lo_lim = lo_lim.copy()
@@ -4155,9 +4158,7 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # We iterate through all the annuli
         for ann_ident in range(0, self._num_ann):
-            # The value of model and fit_conf will likely be changed as part of this iteration, so we reset them to
-            #  the og values
-            model = deepcopy(og_model)
+            # Reset fit_conf and energy limits to their original values at the start of each iteration
             fit_conf = deepcopy(og_fit_conf)
             lo_lim = og_lo_lim.copy()
             hi_lim = og_hi_lim.copy()

@@ -34,6 +34,7 @@ from ..relations.fit import (
     scaling_relation_odr,
 )
 from ..sources.extended import GalaxyCluster
+from ..utils import check_telescope_choices
 from .base import BaseSample
 
 
@@ -407,7 +408,11 @@ class ClusterSample(BaseSample):
         no_data = [name for name in self._failed_sources if "cleaning" not in self._failed_sources[name]]
         # If there are names in that list, then we do the warning
         if len(no_data) != 0:
-            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in self.telescopes]
+            # Normalise the user-supplied telescope argument via check_telescope_choices so the warning lists every
+            #  telescope that was searched, rather than self.telescopes (which only contains telescopes associated with
+            #  surviving sources in the sample)
+            searched_tels = check_telescope_choices(telescope)
+            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in searched_tels]
             warn(
                 "The following do not appear to have any {t} data, and will not be included in the "
                 "sample (can also check .failed_names); {n}".format(n=", ".join(no_data), t="/".join(nice_tels)),

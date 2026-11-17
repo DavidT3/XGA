@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from copy import deepcopy
-from typing import Any, NoReturn
+from typing import Any, NoReturn, cast
 from warnings import warn
 
 import numpy as np
@@ -723,12 +723,28 @@ class Image(BaseProduct):
         # Start with the simple stuff - these products are energy bound, so that info will be in ALL keys
         key = f"bound_{float(self._energy_bounds[0].value)}-{float(self._energy_bounds[1].value)}"
 
-        # Then add PSF correction information
-        if self._psf_corrected and self.psf_model is not None and self.psf_algorithm is not None:
+        # Then add PSF correction information - first verify that all required PSF deconvolution properties are set
+        #  when psf_corrected is True so an incomplete PSF state never silently produces an un-suffixed storage key
+        if self.psf_corrected:
+            if (
+                self.psf_model is None
+                or self.psf_bins is None
+                or self.psf_algorithm is None
+                or self.psf_iterations is None
+            ):
+                raise ValueError(
+                    "Cannot generate storage key for a PSF-corrected Image when one or more PSF properties "
+                    "(psf_model, psf_bins, psf_algorithm, psf_iterations) are None."
+                )
             key += "_" + self.psf_model + "_" + str(self.psf_bins) + "_" + self.psf_algorithm + str(self.psf_iterations)
 
-        # And now smoothing information
-        if self.smoothed and self._smoothed_info is not None:
+        # And now smoothing information - likewise ensure both _smoothed_info and _smoothed_method are set when
+        #  smoothed is True before constructing the smoothing suffix
+        if self.smoothed:
+            if self._smoothed_info is None or self._smoothed_method is None:
+                raise ValueError(
+                    "Cannot generate storage key for a smoothed Image when smoothing information or method is None."
+                )
             # Grab the smoothing parameter's names and values, then smoosh them into a string
             sp = "_".join([str(k) + str(v) for k, v in self._smoothed_info.items()])
             # Then add the parameters and method name to the storage key
@@ -4423,12 +4439,13 @@ class PSFGrid(BaseAggregateProduct):
         :return: The selected PSF object.
         :rtype: PSF
         """
-        return self._component_products[list(self._component_products.keys())[ind]]
+        # Delegate to BaseAggregateProduct.__getitem__ while narrowing the return type from BaseProduct to PSF
+        return cast(PSF, super().__getitem__(ind))
 
     def __iter__(self) -> PSFGrid:
         """Called when initiating iterating through a PSFGrid object. Resets the counter _n."""
-        self._n = 0
-        return self
+        # Delegate iterator initialisation to BaseAggregateProduct.__iter__ while narrowing the return type to PSFGrid
+        return cast(PSFGrid, super().__iter__())
 
     def __next__(self) -> PSF:
         """
@@ -4437,9 +4454,6 @@ class PSFGrid(BaseAggregateProduct):
         :return: The next PSF in the iteration.
         :rtype: PSF
         """
-        if self._n < self.__len__():
-            out = self.__getitem__(self._n)
-            self._n += 1
-            return out
-        else:
-            raise StopIteration
+        # Delegate iteration step to BaseAggregateProduct.__next__ while narrowing the return type from BaseProduct
+        #  to PSF
+        return cast(PSF, super().__next__())

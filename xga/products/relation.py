@@ -1188,9 +1188,21 @@ class ScalingRelation:
         ax.minorticks_on()
         ax.tick_params(axis="both", direction="in", which="both", top=True, right=True)
 
-        # Checks on the validity of the value of show_third_dim are now in the view() method that
-        #  wraps this get_view. That is primarily because the knowledge of whether there IS
-        #  a third dimension to be plotted is required to set the default figure size.
+        # Automatically resolve show_third_dim=None based on whether third_dimension_data is present on this relation,
+        #  so direct callers of get_view() get the same default behaviour as view()
+        if show_third_dim is None:
+            show_third_dim = self.third_dimension_data is not None
+
+        # Check whether the user requested a third dimension of data to be plotted via point colour when no third
+        #  dimension data were supplied on creation; if so, warn and fall back to False
+        if show_third_dim and self.third_dimension_data is None:
+            warn(
+                "The 'show_third_dim' argument should only be set to True if 'third_dim_info' was set on "
+                "the creation of this scaling relation. Setting 'show_third_dim' to False.",
+                stacklevel=2,
+            )
+            show_third_dim = False
+
         # Check that the passed normalization class is actually valid
         if (show_third_dim and third_dim_norm_cmap != Normalize) and not Normalize.__subclasscheck__(
             third_dim_norm_cmap
@@ -1537,31 +1549,13 @@ class ScalingRelation:
         :param bool one_to_one: If True, a one-to-one line will be plotted on the scaling relation view. Default is
             False.
         """
-        # I wanted this to react to whether there is a third dimension of data or not, so that the warning below
-        #  is still shown if the user sets show_third_dim=True when there is no third dimension, but otherwise they
-        #  don't have to worry about/see that warning.
-        if show_third_dim is None and self.third_dimension_data is None:
-            show_third_dim = False
-        elif show_third_dim is None and self.third_dimension_data is not None:
-            show_third_dim = True
-
-        # We check to see a) whether the user wants a third dimension of data communicated via the colour of the
-        #  data, and b) if they actually passed the data necessary to make that happen. If there is no data but they
-        #  have set show_third_dim=True, we set it back to False
-        if show_third_dim and self.third_dimension_data is None:
-            warn(
-                "The 'show_third_dim' argument should only be set to True if 'third_dim_info' was set on "
-                "the creation of this scaling relation. Setting 'show_third_dim' to False.",
-                stacklevel=2,
-            )
-            show_third_dim = False
-
-        # We then set the default figure size (assuming the user hasn't passed one they want to replace it) with
-        #  (8, 8) or (9, 8) - it is variable because with a third data dimension a color-bar gets added, so we want
-        #  the x-size to be longer to accommodate it
-        if not show_third_dim and figsize is None:
+        # Determine whether a third dimension will actually be plotted so we can choose an appropriate default figure
+        #  size (wider when a colour-bar is added), while leaving the show_third_dim validation and warning to
+        #  get_view() so direct callers of get_view() are also covered and warnings are not emitted twice
+        will_plot_third_dim = self.third_dimension_data is not None and (show_third_dim is None or show_third_dim)
+        if not will_plot_third_dim and figsize is None:
             figsize = (8, 8)
-        elif show_third_dim and figsize is None:
+        elif will_plot_third_dim and figsize is None:
             figsize = (10, 8)
 
         # Setting up the matplotlib figure

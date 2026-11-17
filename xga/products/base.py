@@ -7,7 +7,7 @@ import os
 import pickle
 from copy import deepcopy
 from random import randint
-from typing import Any
+from typing import Any, cast
 from warnings import warn
 
 import emcee as em
@@ -1597,6 +1597,7 @@ class BaseProfile1D:
                     "Non-uniform priors for profile fitting are not currently supported - please contact the "
                     "developers if you need this feature."
                 )
+            # Ensure the prior bounds are stored as an Astropy Quantity before unit conversion
             elif not isinstance(prior["prior"], Quantity):
                 raise TypeError("The 'prior' entry in each prior dictionary must be an Astropy Quantity.")
             prior_list.append(prior["prior"].to(model.par_units[p_ind]).value)
@@ -1815,7 +1816,11 @@ class BaseProfile1D:
         lower_bounds = []
         upper_bounds = []
         for prior_ind, prior in enumerate(model.par_priors):
-            if prior["type"] == "uniform" and isinstance(prior["prior"], Quantity):
+            # Explicitly reject non-Quantity prior bounds rather than silently falling through to unbounded
+            #  [-np.inf, np.inf] parameter limits
+            if not isinstance(prior["prior"], Quantity):
+                raise TypeError("The 'prior' entry in each prior dictionary must be an Astropy Quantity.")
+            elif prior["type"] == "uniform":
                 conv_prior = prior["prior"].to(model.par_units[prior_ind]).value
                 lower_bounds.append(conv_prior[0])
                 upper_bounds.append(conv_prior[1])
@@ -2729,7 +2734,10 @@ class BaseProfile1D:
             else:
                 lo_rad = self.fit_radii.min()
                 hi_rad = self.fit_radii.max()
-            mod_rads = Quantity(np.linspace(lo_rad, hi_rad, 500))
+            # np.linspace and np.nanpercentile on Quantity inputs preserve units and return Quantity at runtime via
+            #  Astropy's NEP-18 __array_function__ dispatch, though NumPy's type stubs annotate them as NDArray;
+            #  cast() informs Mypy without redundant runtime Quantity wrapping
+            mod_rads = cast(Quantity, np.linspace(lo_rad, hi_rad, 500))
 
             mod_col_ind = 0
             for method in self._good_model_fits:
@@ -2737,10 +2745,10 @@ class BaseProfile1D:
                     model_obj = self._good_model_fits[method][model]
                     mod_reals = model_obj.get_realisations(mod_rads)
                     # mean_model = np.mean(mod_reals, axis=1)
-                    median_model = Quantity(np.nanpercentile(mod_reals, 50, axis=1))
+                    median_model = cast(Quantity, np.nanpercentile(mod_reals, 50, axis=1))
 
-                    upper_model = Quantity(np.nanpercentile(mod_reals, 84.1, axis=1))
-                    lower_model = Quantity(np.nanpercentile(mod_reals, 15.9, axis=1))
+                    upper_model = cast(Quantity, np.nanpercentile(mod_reals, 84.1, axis=1))
+                    lower_model = cast(Quantity, np.nanpercentile(mod_reals, 15.9, axis=1))
 
                     mod_lab = model_obj.publication_name + f" - {self._nice_fit_methods[method]}"
                     cur_line = main_ax.plot(
@@ -4107,12 +4115,15 @@ class BaseAggregateProfile1D:
                         else:
                             lo_rad = p.fit_radii.min()
                             hi_rad = p.fit_radii.max()
-                        mod_rads = Quantity(np.linspace(lo_rad, hi_rad, 500))
+                        # np.linspace and np.nanpercentile on Quantity inputs preserve units and return Quantity at
+                        #  runtime via Astropy's NEP-18 __array_function__ dispatch, though NumPy's type stubs
+                        #  annotate them as NDArray; cast() informs Mypy without redundant runtime Quantity wrapping
+                        mod_rads = cast(Quantity, np.linspace(lo_rad, hi_rad, 500))
                         mod_reals = model_obj.get_realisations(mod_rads)
-                        median_model = Quantity(np.nanpercentile(mod_reals, 50, axis=1))
+                        median_model = cast(Quantity, np.nanpercentile(mod_reals, 50, axis=1))
 
-                        upper_model = Quantity(np.nanpercentile(mod_reals, 84.1, axis=1))
-                        lower_model = Quantity(np.nanpercentile(mod_reals, 15.9, axis=1))
+                        upper_model = cast(Quantity, np.nanpercentile(mod_reals, 84.1, axis=1))
+                        lower_model = cast(Quantity, np.nanpercentile(mod_reals, 15.9, axis=1))
 
                         colour = line[0].get_color()
 

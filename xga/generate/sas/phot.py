@@ -388,10 +388,8 @@ def emosaic(
         elif psf_corr:
             en_id += "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
 
-        # Check if this combined product already exists and is usable
+        # Check if this combined product already exists and is usable (BaseSource.get_products always returns a list)
         exists = source.get_products(f"combined_{to_mosaic}", extra_key=en_id, telescope="xmm")
-        if not isinstance(exists, list):
-            exists = [exists]
 
         if len(exists) == 1 and exists[0].usable:
             sources_cmds.append(np.array([]))
@@ -400,15 +398,11 @@ def emosaic(
             sources_types.append(np.array([]))
             continue
 
-        # This fetches all relevant images/expmaps with the passed energy bounds
+        # This fetches all relevant images/expmaps with the passed energy bounds (get_products always returns a list)
         if to_mosaic == "image":
-            matches: Image | ExpMap | list[Image] | list[ExpMap] = source.get_products(
-                "image", extra_key=en_id, telescope="xmm"
-            )
+            matches: list[Image] | list[ExpMap] = source.get_products("image", extra_key=en_id, telescope="xmm")
         else:
             matches = source.get_products("expmap", extra_key=en_id, telescope="xmm")
-        if not isinstance(matches, list):
-            matches = [matches]
 
         # In theory this should never be triggered, because we already ran evselect_image so the images should be
         #  there - but I am now somehow having an error where we get to this point with no errors and no images, so

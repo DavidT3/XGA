@@ -12,6 +12,7 @@ from tqdm import tqdm
 from .. import DEFAULT_COSMO, PRETTY_TELESCOPE_NAMES
 from ..exceptions import NoValidObservationsError
 from ..sources.point import Star
+from ..utils import check_telescope_choices
 from .base import BaseSample
 
 
@@ -283,7 +284,11 @@ class StarSample(BaseSample):
         no_data = [name for name in self._failed_sources if "cleaning" not in self._failed_sources[name]]
         # If there are names in that list, then we do the warning
         if len(no_data) != 0:
-            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in self.telescopes]
+            # Normalise the user-supplied telescope argument via check_telescope_choices so the warning lists every
+            #  telescope that was searched, rather than self.telescopes (which only contains telescopes associated with
+            #  surviving sources in the sample)
+            searched_tels = check_telescope_choices(telescope)
+            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in searched_tels]
             warn(
                 f"The following do not appear to have any {'/'.join(nice_tels)} data, and will not be included in the "
                 f"sample (can also check .failed_names); {', '.join(no_data)}",

@@ -2,8 +2,6 @@
 #  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:20 PM. Copyright (c) The Contributors.
 """This module defines custom exceptions for XGA."""
 
-from typing import Any
-
 
 class eSASSInputInvalid(Exception):  # noqa: N801, N818
     """Exception raised when a user provides an invalid input to an eSASS function."""
@@ -178,7 +176,8 @@ class ProductGenerationError(Exception):
         :param expression:
         :param message:
         """
-        self.message: Any
+        # Assign self.message directly from args without a redundant Any attribute annotation, matching the other
+        #  exception classes in this module
         if args:
             self.message = args[0]
         else:

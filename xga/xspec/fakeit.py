@@ -12,7 +12,7 @@ from .. import COUNTRATE_CONV_SCRIPT, NUM_CORES, OUTPUT
 from ..exceptions import ModelNotAssociatedError, NoProductAvailableError, ParameterNotAssociatedError
 from ..products import Spectrum
 from ..samples.extended import ClusterSample
-from ..sources import BaseSource, GalaxyCluster
+from ..sources import GalaxyCluster
 from ..utils import ABUND_TABLES
 from .fit._common import _pregen_spectra
 from .run import xspec_call
@@ -97,10 +97,9 @@ def cluster_cr_conv(
         telescope,
     )
 
-    # pregen spectra can output a BaseSource after inputting it as a list, so turning this back to a list
-    # Separate variable name to make Mypy happy, as it doesn't like union source variables being reassigned with
-    #  a list of a narrowed source type
-    src_list = [pregen_sources] if isinstance(pregen_sources, BaseSource) else pregen_sources
+    # _pregen_spectra always returns a list of BaseSource objects or a BaseSample (wrapping a single source in a
+    #  one-element list), so pregen_sources is already a collection of sources
+    src_list = pregen_sources
 
     # Checks that the luminosity energy bands are pairs of values
     if conv_en.shape[1] != 2:

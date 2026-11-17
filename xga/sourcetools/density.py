@@ -63,8 +63,8 @@ def _dens_setup(
     min_counts: int = 5,
     min_sn: int | float | None = None,
     over_sample: float | None = None,
-    obs_id: str | list | dict[str, str | list] | None = None,
-    inst: str | list | dict[str, str | list] | None = None,
+    obs_id: dict[str, str | list] | None = None,
+    inst: dict[str, str | list] | None = None,
     conv_temp: Quantity | dict[str, Quantity] | None = None,
     conv_outer_radius: Quantity | str = "r500",
     conv_inner_radius: str | Quantity = Quantity(0, "arcsec"),
@@ -201,6 +201,13 @@ def _dens_setup(
                     "each source. If the telescope is not associated to a source put "
                     "in an empty string."
                 )
+        else:
+            # Explicitly reject non-dict obs_id inputs (such as bare strings or lists) instead of silently leaving
+            #  parsed_obs_id empty
+            raise TypeError(
+                "If the 'obs_id' argument is set, it must be a dictionary with telescope keys and string or list "
+                "values."
+            )
 
         if isinstance(inst, dict):
             # checking that there is a key for every telescope associated with the sample/source
@@ -233,6 +240,12 @@ def _dens_setup(
                     "instrument, or a list with an instrument for each source. If the "
                     "telescope is not associated to a source put in an empty string."
                 )
+        else:
+            # Explicitly reject non-dict inst inputs (such as bare strings or lists) instead of silently leaving
+            #  parsed_inst empty
+            raise TypeError(
+                "If the 'inst' argument is set, it must be a dictionary with telescope keys and string or list values."
+            )
 
     elif all([obs_id is None, inst is None]):
         parsed_obs_id = {tel: [None] * len(src_list) for tel in src_telescopes}
@@ -922,8 +935,8 @@ def inv_abel_data(
     min_counts: int = 5,
     min_sn: int | float | None = None,
     over_sample: float | None = None,
-    obs_id: str | list | dict | None = None,
-    inst: str | list | dict | None = None,
+    obs_id: dict[str, str | list] | None = None,
+    inst: dict[str, str | list] | None = None,
     conv_temp: Quantity | None = None,
     conv_outer_radius: Quantity = "r500",
     conv_inner_radius: Quantity = Quantity(0, "arcsec"),
