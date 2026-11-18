@@ -850,7 +850,11 @@ class BaseProduct:
         parsed_tel_warns: list[dict[str, str]] = []
         other_err_lines = []
 
-        if self.telescope is None or self.telescope == "xmm":
+        # We check self._tele directly rather than the self.telescope property because parse_stderr() is called
+        #  during BaseProduct.__init__ before subclass __init__ bodies run; subclasses like EventList override
+        #  the telescope property to disallow None once initialised, and only populate self._tele from the FITS
+        #  header after super().__init__() returns.
+        if self._tele is None or self._tele == "xmm":
             # err_str being "" is ideal, hopefully means that nothing has gone wrong
             if self.unprocessed_stderr != "":
                 # Errors will be added to the error summary, then raised later
@@ -886,7 +890,7 @@ class BaseProduct:
                 self._usable = False
                 self._why_unusable.append("OtherErrorPresent")
 
-        elif self.telescope in ["erosita", "erass"]:
+        elif self._tele in ["erosita", "erass"]:
             # The eSASS software puts everything in the stdout for some reason - so we have to parse that rather
             #  than stderr err_str being "" is ideal, hopefully means that nothing has gone wrong. We also note
             #  that some of the software that eSASS calls DOES populate the stderr if something has gone wrong,
@@ -936,7 +940,7 @@ class BaseProduct:
                 self._why_unusable.append("OtherErrorPresent")
 
         # Now for Chandra error identification
-        elif self.telescope == "chandra":
+        elif self._tele == "chandra":
             if self.unprocessed_stderr != "":
                 # Errors will be added to the error summary, then raised later
                 # That way if people try except the error away the object will have been constructed properly
