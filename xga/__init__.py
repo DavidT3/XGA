@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/26/26, 11:28 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/18/26, 12:23 PM. Copyright (c) The Contributors.
 """The __init__ for the main xga package, handling version setup, lazy configuration loading, and legacy shims."""
 
 try:
@@ -9,7 +9,7 @@ try:
     __version__ = _get_meta_version("xga")
 except Exception:
     try:
-        from . import _version
+        from . import _version  # type: ignore[attr-defined]
 
         __version__ = _version.__version__
     except Exception:

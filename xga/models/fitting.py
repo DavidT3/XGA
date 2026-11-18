@@ -16,7 +16,7 @@ import numpy as np
 
 def log_likelihood(
     theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.ndarray, m_func: Callable[..., Any]
-) -> np.ndarray:
+) -> float | np.floating[Any]:
     """
     Uses a simple Gaussian likelihood function, returns the logged value.
 
@@ -27,9 +27,10 @@ def log_likelihood(
     :param np.ndarray y_err: The uncertainties on the measured profile values.
     :param m_func: The model function that is being fit to.
     :return: The log-likelihood value.
-    :rtype: np.ndarray
+    :rtype: float | np.floating[Any]
     """
     # Just in case something goes wrong in the model function
+    lik: float | np.floating[Any]
     try:
         lik = -np.sum(np.log(y_err * np.sqrt(2 * np.pi)) + (((y - m_func(r, *theta)) ** 2) / (2 * y_err**2)))
     except ZeroDivisionError:
@@ -65,7 +66,7 @@ def log_uniform_prior(theta: np.ndarray, pr: list) -> float:
 
 def log_prob(
     theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.ndarray, m_func: Callable[..., Any], pr: list
-) -> np.ndarray | float:
+) -> float | np.floating[Any]:
     """
     The combination of the log prior and log likelihood.
 
@@ -78,10 +79,10 @@ def log_prob(
     :param List pr: A list of upper and lower limits for the parameters in theta, the limits of the
         uniform, uninformative priors.
     :return: The log probability value.
-    :rtype: np.ndarray
+    :rtype: float | np.floating[Any]
     """
     lp = log_uniform_prior(theta, pr)
-    ret_val: np.ndarray | float
+    ret_val: float | np.floating[Any]
     if not np.isfinite(lp):
         ret_val = -np.inf
     else:
