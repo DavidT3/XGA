@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/18/26, 10:33 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/18/26, 12:13 PM. Copyright (c) The Contributors.
+"""Implements sample classes for specific extended X-ray sources, such as galaxy clusters."""
 
 from warnings import warn
 
@@ -165,7 +166,7 @@ class ExtendedSample(BaseSample):
 
         # Remove the initial BaseSources that were declared
         del self._sources
-        self._sources: dict[float, int] = {}
+        self._sources = {}
 
         # A list to store the inds of any declarations that failed due to NoValidObservations, so some
         #  attributes can be cleaned up later
