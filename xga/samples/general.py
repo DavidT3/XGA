@@ -1,6 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
-"""Implements general sample classes for managing collections of generic extended and point X-ray sources."""
+#  Last modified by David J Turner (djturner@umbc.edu) 11/18/26, 10:33 AM. Copyright (c) The Contributors.
 
 from warnings import warn
 
@@ -148,25 +147,14 @@ class ExtendedSample(BaseSample):
         from xga.generate.multitelescope.phot import all_telescope_combined_expmaps, all_telescope_combined_images
 
         # Using the super defines BaseSources and stores them in the self._sources dictionary
-        super().__init__(
-            ra,
-            dec,
-            redshift,
-            name,
-            cosmology,
-            load_products=True,
-            load_fits=False,
-            no_prog_bar=no_prog_bar,
-            telescope=telescope,
-            search_distance=search_distance,
-        )
+        super().__init__(ra, dec, redshift, name, cosmology, load_products=True, load_fits=False, no_prog_bar=no_prog_bar, telescope=telescope, search_distance=search_distance)
 
         all_telescope_combined_images(self, peak_lo_en, peak_hi_en)
         all_telescope_combined_expmaps(self, peak_lo_en, peak_hi_en)
 
         # Remove the initial BaseSources that were declared
         del self._sources
-        self._sources = {}
+        self._sources: dict[float, int] = {}
 
         # A list to store the inds of any declarations that failed due to NoValidObservations, so some
         #  attributes can be cleaned up later
