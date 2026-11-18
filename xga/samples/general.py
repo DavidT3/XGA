@@ -147,7 +147,18 @@ class ExtendedSample(BaseSample):
         from xga.generate.multitelescope.phot import all_telescope_combined_expmaps, all_telescope_combined_images
 
         # Using the super defines BaseSources and stores them in the self._sources dictionary
-        super().__init__(ra, dec, redshift, name, cosmology, load_products=True, load_fits=False, no_prog_bar=no_prog_bar, telescope=telescope, search_distance=search_distance)
+        super().__init__(
+            ra,
+            dec,
+            redshift,
+            name,
+            cosmology,
+            load_products=True,
+            load_fits=False,
+            no_prog_bar=no_prog_bar,
+            telescope=telescope,
+            search_distance=search_distance,
+        )
 
         all_telescope_combined_images(self, peak_lo_en, peak_hi_en)
         all_telescope_combined_expmaps(self, peak_lo_en, peak_hi_en)
