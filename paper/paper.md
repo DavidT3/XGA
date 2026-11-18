@@ -18,7 +18,7 @@ authors:
     orcid: 0000-0002-9328-879X
     affiliation: 1
   - name: Violetta Korbina
-    orcid: 
+    orcid:
     affiliation: 1
 affiliations:
   - name: Department of Physics and Astronomy, University of Sussex, Brighton, BN1 9QH, UK
@@ -28,17 +28,17 @@ bibliography: paper.bib
 ---
 
 # Summary
-The _XMM_ Cluster Survey [XCS, @xcsfoundation] have developed a new Python module (X-ray: Generate and Analyse, hereafter 
-referred to as \texttt{XGA}) to provide interactive and automated analyses of X-ray emitting sources observed by the 
-_XMM_-Newton space telescope. \texttt{XGA} only requires that a set of cleaned, processed, event lists has been created, and (optionally) that a 
-source detector has generated region lists for the observations. \texttt{XGA} is centered around the concept of making 
-all available data easily accessible and analysable. The user provides information (e.g. RA, Dec, redshift) on the 
+The _XMM_ Cluster Survey [XCS, @xcsfoundation] have developed a new Python module (X-ray: Generate and Analyse, hereafter
+referred to as \texttt{XGA}) to provide interactive and automated analyses of X-ray emitting sources observed by the
+_XMM_-Newton space telescope. \texttt{XGA} only requires that a set of cleaned, processed, event lists has been created, and (optionally) that a
+source detector has generated region lists for the observations. \texttt{XGA} is centered around the concept of making
+all available data easily accessible and analysable. The user provides information (e.g. RA, Dec, redshift) on the
 source they wish to investigate, and \texttt{XGA} will locate all relevant observations and generate all required data products. This
 approach means that the user can quickly and easily complete common analyses without manually searching through large amounts of archival
-data for relevant observations, thus being left free to focus on extracting the maximum scientific gain. In the future, we 
-will add support for X-ray telescopes other than _XMM_ (e.g. _Chandra_, _eROSITA_), as well as the ability to perform 
-multi-mission joint analyses. With the advent of new X-ray observatories such as _eROSITA_ [@erosita], _XRISM_ [@xrism], 
-_ATHENA_ [@athena], and _Lynx_ [@lynx], it is the perfect time for a new, open-source, software package that is open for 
+data for relevant observations, thus being left free to focus on extracting the maximum scientific gain. In the future, we
+will add support for X-ray telescopes other than _XMM_ (e.g. _Chandra_, _eROSITA_), as well as the ability to perform
+multi-mission joint analyses. With the advent of new X-ray observatories such as _eROSITA_ [@erosita], _XRISM_ [@xrism],
+_ATHENA_ [@athena], and _Lynx_ [@lynx], it is the perfect time for a new, open-source, software package that is open for
 anyone to use and scrutinise.
 
 # Statement of need
@@ -73,10 +73,10 @@ as removing interloper sources) that vary from source to source.
 
 [^*]: david.turner@sussex.ac.uk
 
-![Demonstration of the view methods of the `RateMap` and `Spectrum` classes, when applied to the Abell 907 galaxy 
-cluster. Data from the _XMM_ EPIC-PN instrument of 0404910601 is used. _Left_: A count-rate map with a mask that 
-removes contaminant sources (using XCS region information) and applies an $R_{500}$ aperture. _Right_: A spectrum 
-generated for the $R_{500}$ region with contaminants removed, and fit with an absorbed plasma emission model using 
+![Demonstration of the view methods of the `RateMap` and `Spectrum` classes, when applied to the Abell 907 galaxy
+cluster. Data from the _XMM_ EPIC-PN instrument of 0404910601 is used. _Left_: A count-rate map with a mask that
+removes contaminant sources (using XCS region information) and applies an $R_{500}$ aperture. _Right_: A spectrum
+generated for the $R_{500}$ region with contaminants removed, and fit with an absorbed plasma emission model using
 XSPEC. \label{fig:rtspec}](figures/combo_rt_spec_a907.png)
 
 # Features
@@ -115,7 +115,7 @@ a method for fitting models, creating an interface with XSPEC [@xspec], a popula
 includes the ability to fit XSPEC models (e.g.~plasma emission and
 blackbody) and simplifies interaction with the underlying software and
 data by automatically performing simultaneous fits with all available
-data. 
+data.
 
 ![A flowchart giving a brief overview of the \texttt{XGA} workflow. \label{fig:flowchart}](figures/xga_flowchart.png)
 

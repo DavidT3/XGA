@@ -1,7 +1,11 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/14/26, 12:38 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
+"""Implements sample classes for specific extended X-ray sources, such as galaxy clusters."""
 
 from __future__ import annotations
+
+from typing import Any
+from warnings import warn
 
 import numpy as np
 from astropy.cosmology import Cosmology
@@ -19,9 +23,18 @@ from ..exceptions import (
     PeakConvergenceFailedError,
     TelescopeNotAssociatedError,
 )
+from ..models import power_law
 from ..products.profile import GasDensity3D
-from ..relations.fit import *
+from ..products.relation import ScalingRelation
+from ..relations.fit import (
+    ALLOWED_FIT_METHODS,
+    scaling_relation_curve_fit,
+    scaling_relation_emcee,
+    scaling_relation_lira,
+    scaling_relation_odr,
+)
 from ..sources.extended import GalaxyCluster
+from ..utils import check_telescope_choices
 from .base import BaseSample
 
 
@@ -84,14 +97,14 @@ class ClusterSample(BaseSample):
         dec: np.ndarray,
         redshift: np.ndarray,
         name: np.ndarray,
-        r200: Quantity = None,
-        r500: Quantity = None,
-        r2500: Quantity = None,
-        richness: np.ndarray = None,
-        richness_err: np.ndarray = None,
-        wl_mass: Quantity = None,
-        wl_mass_err: Quantity = None,
-        custom_region_radius: Quantity = None,
+        r200: Quantity | None = None,
+        r500: Quantity | None = None,
+        r2500: Quantity | None = None,
+        richness: np.ndarray | None = None,
+        richness_err: np.ndarray | None = None,
+        wl_mass: Quantity | None = None,
+        wl_mass_err: Quantity | None = None,
+        custom_region_radius: Quantity | None = None,
         use_peak: bool = True,
         peak_lo_en: Quantity = Quantity(0.5, "keV"),
         peak_hi_en: Quantity = Quantity(2.0, "keV"),
@@ -105,10 +118,10 @@ class ClusterSample(BaseSample):
         no_prog_bar: bool = False,
         psf_corr: bool = False,
         peak_find_method: str = "hierarchical",
-        telescope: str | list[str] = None,
-        search_distance: Quantity | dict = None,
+        telescope: str | list[str] | None = None,
+        search_distance: Quantity | dict | None = None,
         include_core_pnt_srcs: bool | list | np.ndarray = True,
-    ):
+    ) -> None:
         """
         The init of the ClusterSample XGA class, for the analysis of a large sample of galaxy clusters.
         Takes information on the clusters to enable analyses.
@@ -163,14 +176,14 @@ class ClusterSample(BaseSample):
         from xga.generate.multitelescope.phot import all_telescope_combined_expmaps, all_telescope_combined_images
 
         # We do a quick check on the length of certain arguments (if they are not just a single value)
-        if type(include_core_pnt_srcs) != bool and isinstance(include_core_pnt_srcs, (list, np.ndarray)):
+        if not isinstance(include_core_pnt_srcs, bool) and isinstance(include_core_pnt_srcs, (list, np.ndarray)):
             if len(include_core_pnt_srcs) != len(ra):
                 raise ValueError(
                     "If passing a non-scalar value for 'include_core_pnt_srcs', there must be an entry for each source."
                 )
-            elif any([type(en) != bool for en in include_core_pnt_srcs]):
+            elif any([not isinstance(en, bool) for en in include_core_pnt_srcs]):
                 raise TypeError("You must pass a bool or list/array of bools to the 'include_core_pnt_srcs' argument.")
-        elif type(include_core_pnt_srcs) != bool:
+        elif not isinstance(include_core_pnt_srcs, bool):
             # If we get to this point then someone has passed something illegal
             raise TypeError("You must pass a bool or list/array of bools to the 'include_core_pnt_srcs' argument.")
 
@@ -194,7 +207,7 @@ class ClusterSample(BaseSample):
         # Now that we've made those images the BaseSource objects aren't required anymore, we're about
         #  to define GalaxyClusters
         del self._sources
-        self._sources = {}
+        self._sources: dict[str, GalaxyCluster] = {}
 
         # We have this final names list in case so that we don't need to remove elements of self.names if one of the
         #  clusters doesn't pass the observation cleaning stage.
@@ -255,25 +268,16 @@ class ClusterSample(BaseSample):
                         cr = None
 
                     # Here we check the options that are allowed to be None
-                    if richness is not None:
-                        lam = richness[ind]
-                        lam_err = richness_err[ind]
-                    else:
-                        lam = None
-                        lam_err = None
-
-                    if wl_mass is not None:
-                        wlm = wl_mass[ind]
-                        wlm_err = wl_mass_err[ind]
-                    else:
-                        wlm = None
-                        wlm_err = None
+                    lam = richness[ind] if richness is not None else None
+                    lam_err = richness_err[ind] if richness_err is not None else None
+                    wlm = wl_mass[ind] if wl_mass is not None else None
+                    wlm_err = wl_mass_err[ind] if wl_mass_err is not None else None
 
                     # Setup the include_core_pnt_srcs value to be passed to the current cluster - either single bools
                     #  or lists/arrays of bools can be passed, so we just need to disentangle that
                     # If we get here then the preceding code has already made sure that the type is correct, and that
                     #  (if a non-scalar value was passed) every cluster has an entry
-                    if type(include_core_pnt_srcs) == bool:
+                    if isinstance(include_core_pnt_srcs, bool):
                         cur_inc_core_pnt_src = include_core_pnt_srcs
                     else:
                         cur_inc_core_pnt_src = include_core_pnt_srcs[ind]
@@ -404,7 +408,11 @@ class ClusterSample(BaseSample):
         no_data = [name for name in self._failed_sources if "cleaning" not in self._failed_sources[name]]
         # If there are names in that list, then we do the warning
         if len(no_data) != 0:
-            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in telescope]
+            # Normalise the user-supplied telescope argument via check_telescope_choices so the warning lists every
+            #  telescope that was searched, rather than self.telescopes (which only contains telescopes associated with
+            #  surviving sources in the sample)
+            searched_tels = check_telescope_choices(telescope)
+            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in searched_tels]
             warn(
                 "The following do not appear to have any {t} data, and will not be included in the "
                 "sample (can also check .failed_names); {n}".format(n=", ".join(no_data), t="/".join(nice_tels)),
@@ -441,7 +449,7 @@ class ClusterSample(BaseSample):
             signal to noise ratio calculated at the R200.
         :rtype: Dict[str, np.ndarray]
         """
-        snr_dict = {tel: [] for tel in self.telescopes}
+        snr_dict: dict[str, Any] = {tel: [] for tel in self.telescopes}
         for tel in self.telescopes:
             for s in self:
                 try:
@@ -460,7 +468,7 @@ class ClusterSample(BaseSample):
             signal to noise ratio calculated at the R500.
         :rtype: Dict[str, np.ndarray]
         """
-        snr_dict = {tel: [] for tel in self.telescopes}
+        snr_dict: dict[str, Any] = {tel: [] for tel in self.telescopes}
         for tel in self.telescopes:
             for s in self:
                 try:
@@ -479,7 +487,7 @@ class ClusterSample(BaseSample):
             signal to noise ratio calculated at the R2500.
         :rtype: Dict[str, np.ndarray]
         """
-        snr_dict = {tel: [] for tel in self.telescopes}
+        snr_dict: dict[str, Any] = {tel: [] for tel in self.telescopes}
         for tel in self.telescopes:
             for s in self:
                 try:
@@ -501,14 +509,16 @@ class ClusterSample(BaseSample):
         for gcs in self._sources.values():
             rs.append(gcs.richness.value)
 
-        rs = np.array(rs)
+        # Separate rs_arr variable to make Mypy happy, as it doesn't like list variables being reassigned with
+        #  np.ndarray
+        rs_arr = np.array(rs)
 
         # We're going to throw an error if all the richnesses are NaN, because obviously something is wrong
-        check_rs = rs[~np.isnan(rs)]
+        check_rs = rs_arr[~np.isnan(rs_arr)]
         if len(check_rs) == 0:
             raise ValueError("All richnesses appear to be NaN.")
 
-        return Quantity(rs)
+        return Quantity(rs_arr)
 
     @property
     def wl_mass(self) -> Quantity:
@@ -524,14 +534,16 @@ class ClusterSample(BaseSample):
             wlm.append(gcs.weak_lensing_mass.value)
             wlm_unit = gcs.weak_lensing_mass.unit
 
-        wlm = np.array(wlm)
+        # Separate wlm_arr variable to make Mypy happy, as it doesn't like list variables being reassigned with
+        #  np.ndarray
+        wlm_arr = np.array(wlm)
 
         # We're going to throw an error if all the weak lensing masses are NaN, because obviously something is wrong
-        check_wlm = wlm[~np.isnan(wlm)]
+        check_wlm = wlm_arr[~np.isnan(wlm_arr)]
         if len(check_wlm) == 0:
             raise ValueError("All weak lensing masses appear to be NaN.")
 
-        return Quantity(wlm, wlm_unit)
+        return Quantity(wlm_arr, wlm_unit)
 
     @property
     def r200(self) -> Quantity:
@@ -544,7 +556,7 @@ class ClusterSample(BaseSample):
         return self._get_overdens_rad_checks("r200")
 
     @r200.setter
-    def r200(self, new_val: Quantity):
+    def r200(self, new_val: Quantity) -> None:
         """
         The property setter for R200 for the galaxy clusters in this sample.
 
@@ -569,7 +581,7 @@ class ClusterSample(BaseSample):
         return self._get_overdens_rad_checks("r500")
 
     @r500.setter
-    def r500(self, new_val: Quantity):
+    def r500(self, new_val: Quantity) -> None:
         """
         The property setter for R500 for the galaxy clusters in this sample.
 
@@ -594,7 +606,7 @@ class ClusterSample(BaseSample):
         return self._get_overdens_rad_checks("r2500")
 
     @r2500.setter
-    def r2500(self, new_val: Quantity):
+    def r2500(self, new_val: Quantity) -> None:
         """
         The property setter for R2500 for the galaxy clusters in this sample.
 
@@ -642,7 +654,7 @@ class ClusterSample(BaseSample):
         # Return the radii
         return rads
 
-    def _set_overdens_rad_checks(self, rad_name: str, new_val: Quantity):
+    def _set_overdens_rad_checks(self, rad_name: str, new_val: Quantity) -> None:
         """
         An internal method that does some checks on the new radii being used to set overdensity radii for clusters
         in this sample - other checks are done on an individual level by the property setter of GalaxyCluster.
@@ -657,8 +669,8 @@ class ClusterSample(BaseSample):
         # Need to check that the passed quantity has the expected number of entries
         elif len(new_val) != len(self):
             raise ValueError(
-                f"The new {rad_name.upper()} quantity does not have the same number of entries ({len(new_val)}) as there are "
-                f"clusters in this sample ({len(self)})."
+                f"The new {rad_name.upper()} quantity does not have the same number of entries ({len(new_val)}) as "
+                f"there are clusters in this sample ({len(self)})."
             )
 
     def get_radius(self, rad_name: str) -> Quantity:
@@ -681,7 +693,7 @@ class ClusterSample(BaseSample):
         else:
             raise ValueError("Please pass either 'r2500', 'r500', or 'r200'.")
 
-    def Lx(
+    def Lx(  # type: ignore[override]  # noqa: N802
         self,
         outer_radius: str | Quantity,
         telescope: str,
@@ -691,12 +703,12 @@ class ClusterSample(BaseSample):
         hi_en: Quantity = Quantity(2.0, "keV"),
         group_spec: bool = True,
         min_counts: int = 5,
-        min_sn: float = None,
-        over_sample: float = None,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
         quality_checks: bool = True,
         stacked_spectra: bool = False,
-        fit_conf: str | dict = None,
-    ):
+        fit_conf: str | dict | None = None,
+    ) -> Quantity:
         """
         A get method for luminosities measured for the constituent sources of this sample. An error will be
         thrown if luminosities haven't been measured for the given region and model, no default model has been
@@ -756,7 +768,7 @@ class ClusterSample(BaseSample):
             fit_conf,
         )
 
-    def Tx(
+    def Tx(  # noqa: N802
         self,
         telescope: str,
         outer_radius: str | Quantity = "r500",
@@ -764,12 +776,12 @@ class ClusterSample(BaseSample):
         inner_radius: str | Quantity = Quantity(0, "arcsec"),
         group_spec: bool = True,
         min_counts: int = 5,
-        min_sn: float = None,
-        over_sample: float = None,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
         quality_checks: bool = True,
         stacked_spectra: bool = False,
-        fit_conf: str | dict = None,
-    ):
+        fit_conf: str | dict | None = None,
+    ) -> Quantity:
         """
         A get method for temperatures measured for the constituent clusters of this sample. An error will be
         thrown if temperatures haven't been measured for the given region (the default is R_500) and model (default
@@ -899,9 +911,9 @@ class ClusterSample(BaseSample):
     def gas_mass(
         self,
         rad_name: str,
-        telescope: str = None,
-        dens_model: str = None,
-        method: str = None,
+        telescope: str | None = None,
+        dens_model: str | None = None,
+        method: str | None = None,
         prof_outer_rad: Quantity | str = None,
         pix_step: int = 1,
         min_snr: float | int = 0.0,
@@ -910,7 +922,7 @@ class ClusterSample(BaseSample):
         psf_bins: int = 4,
         psf_algo: str = "rl",
         psf_iter: int = 15,
-        set_ids: list[int] = None,
+        set_ids: list[int] | None = None,
         quality_checks: bool = True,
     ) -> Quantity:
         """
@@ -979,14 +991,13 @@ class ClusterSample(BaseSample):
                 "If you wish to use density profiles generated from spectra you must supply a list of "
                 "set IDs with an entry for each cluster in this sample."
             )
-        elif set_ids is None:
-            set_ids = [None] * len(self)
+        parsed_set_ids: list[int] | list[None] = [None] * len(self) if set_ids is None else set_ids
 
         # Iterate through all of our Galaxy Clusters
         for gcs_ind, gcs in enumerate(self._sources.values()):
             gas_mass_rad = gcs.get_radius(rad_name, "kpc")
             try:
-                if prof_outer_rad is not None:
+                if out_rad_vals is not None:
                     dens_profs = gcs.get_density_profiles(
                         out_rad_vals[gcs_ind],
                         method,
@@ -1000,7 +1011,7 @@ class ClusterSample(BaseSample):
                         psf_bins=psf_bins,
                         psf_algo=psf_algo,
                         psf_iter=psf_iter,
-                        set_id=set_ids[gcs_ind],
+                        set_id=parsed_set_ids[gcs_ind],
                         telescope=telescope,
                     )
                 else:
@@ -1017,7 +1028,7 @@ class ClusterSample(BaseSample):
                         psf_bins=psf_bins,
                         psf_algo=psf_algo,
                         psf_iter=psf_iter,
-                        set_id=set_ids[gcs_ind],
+                        set_id=parsed_set_ids[gcs_ind],
                         telescope=telescope,
                     )
 
@@ -1079,21 +1090,23 @@ class ClusterSample(BaseSample):
                     stacklevel=2,
                 )
 
-        gms = np.array(gms)
+        # Separate gms_arr variable to make Mypy happy, as it doesn't like list variables being reassigned with
+        #  np.ndarray
+        gms_arr = np.array(gms)
 
         # We're going to throw an error if all the gas masses are NaN, because obviously something is wrong
-        check_gms = gms[~np.isnan(gms)]
+        check_gms = gms_arr[~np.isnan(gms_arr)]
         if len(check_gms) == 0:
             raise ValueError("All gas masses appear to be NaN.")
 
-        return Quantity(gms, "Msun")
+        return Quantity(gms_arr, "Msun")
 
     def hydrostatic_mass(
         self,
         rad_name: str,
         telescope: str,
-        temp_model_name: str = None,
-        dens_model_name: str = None,
+        temp_model_name: str | None = None,
+        dens_model_name: str | None = None,
         quality_checks: bool = True,
     ) -> Quantity:
         """
@@ -1128,7 +1141,7 @@ class ClusterSample(BaseSample):
             raise NotAssociatedError(f"The {telescope} telescope is not associated with any source in this sample.")
 
         # Iterate through all of our Galaxy Clusters
-        for gcs_ind, gcs in enumerate(self._sources.values()):
+        for _gcs_ind, gcs in enumerate(self._sources.values()):
             actual_rad = gcs.get_radius(rad_name, "kpc")
             try:
                 mass_profs = gcs.get_hydrostatic_mass_profiles(
@@ -1162,16 +1175,18 @@ class ClusterSample(BaseSample):
                 ms.append([np.nan, np.nan, np.nan])
                 warn(f"{gcs.name} doesn't have a matching hydrostatic mass profile associated", stacklevel=2)
 
-        ms = np.array(ms)
+        # Separate ms_arr variable to make Mypy happy, as it doesn't like list variables being reassigned with
+        #  np.ndarray
+        ms_arr = np.array(ms)
         # We're going to throw an error if all the masses are NaN, because obviously something is wrong
-        check_ms = ms[~np.isnan(ms)]
+        check_ms = ms_arr[~np.isnan(ms_arr)]
         if len(check_ms) == 0:
             raise ValueError("All hydrostatic masses appear to be NaN.")
 
-        return Quantity(ms, "Msun")
+        return Quantity(ms_arr, "Msun")
 
     def calc_overdensity_radii(
-        self, delta: int, telescope: str, temp_model_name: str = None, dens_model_name: str = None
+        self, delta: int, telescope: str, temp_model_name: str | None = None, dens_model_name: str | None = None
     ) -> Quantity:
         """
         A convenience method that allows for the calculation of overdensity radii from hydrostatic mass profiles
@@ -1206,7 +1221,7 @@ class ClusterSample(BaseSample):
             raise NotAssociatedError(f"The {telescope} telescope is not associated with any source in this sample.")
 
         # Iterating over the galaxy clusters in this sample
-        for gcs_ind, gcs in enumerate(self._sources.values()):
+        for _gcs_ind, gcs in enumerate(self._sources.values()):
             # First off, we try to fetch hydrostatic mass profile(s), and catch the exception if there
             #  aren't any matching profiles
             try:
@@ -1256,7 +1271,7 @@ class ClusterSample(BaseSample):
         x_norm: Quantity = Quantity(60),
         y_norm: Quantity = Quantity(1e12, "solMass"),
         fit_method: str = "odr",
-        start_pars: list = None,
+        start_pars: list | None = None,
         pix_step: int = 1,
         min_snr: float | int = 0.0,
         psf_corr: bool = True,
@@ -1264,7 +1279,7 @@ class ClusterSample(BaseSample):
         psf_bins: int = 4,
         psf_algo: str = "rl",
         psf_iter: int = 15,
-        set_ids: list[int] = None,
+        set_ids: list[int] | None = None,
         inv_efunc: bool = False,
     ) -> ScalingRelation:
         """
@@ -1385,7 +1400,7 @@ class ClusterSample(BaseSample):
 
     # I don't allow the user to supply an inner radius here because I cannot think of a reason why you'd want to
     #  make a scaling relation with a core excised temperature.
-    def gm_Tx(
+    def gm_Tx(  # noqa: N802
         self,
         rad_name: str,
         telescope: str,
@@ -1395,12 +1410,12 @@ class ClusterSample(BaseSample):
         x_norm: Quantity = Quantity(4, "keV"),
         y_norm: Quantity = Quantity(1e12, "solMass"),
         fit_method: str = "odr",
-        start_pars: list = None,
+        start_pars: list | None = None,
         model: str = "constant*tbabs*apec",
         group_spec: bool = True,
         min_counts: int = 5,
-        min_sn: float = None,
-        over_sample: float = None,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
         pix_step: int = 1,
         min_snr: float | int = 0.0,
         psf_corr: bool = True,
@@ -1408,7 +1423,7 @@ class ClusterSample(BaseSample):
         psf_bins: int = 4,
         psf_algo: str = "rl",
         psf_iter: int = 15,
-        set_ids: list[int] = None,
+        set_ids: list[int] | None = None,
         inv_efunc: bool = False,
     ) -> ScalingRelation:
         """
@@ -1536,22 +1551,22 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
-    def Lx_richness(
+    def Lx_richness(  # noqa: N802
         self,
         telescope: str,
         outer_radius: str = "r500",
         x_norm: Quantity = Quantity(60),
         y_norm: Quantity = Quantity(1e44, "erg/s"),
         fit_method: str = "odr",
-        start_pars: list = None,
+        start_pars: list | None = None,
         model: str = "constant*tbabs*apec",
         lo_en: Quantity = Quantity(0.5, "keV"),
         hi_en: Quantity = Quantity(2.0, "keV"),
         inner_radius: str | Quantity = Quantity(0, "arcsec"),
         group_spec: bool = True,
         min_counts: int = 5,
-        min_sn: float = None,
-        over_sample: float = None,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
         inv_efunc: bool = True,
     ) -> ScalingRelation:
         """
@@ -1656,14 +1671,14 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
-    def Lx_Tx(
+    def Lx_Tx(  # noqa: N802
         self,
         telescope: str,
         outer_radius: str = "r500",
         x_norm: Quantity = Quantity(4, "keV"),
         y_norm: Quantity = Quantity(1e44, "erg/s"),
         fit_method: str = "odr",
-        start_pars: list = None,
+        start_pars: list | None = None,
         model: str = "constant*tbabs*apec",
         lo_en: Quantity = Quantity(0.5, "keV"),
         hi_en: Quantity = Quantity(2.0, "keV"),
@@ -1671,8 +1686,8 @@ class ClusterSample(BaseSample):
         lx_inner_radius: str | Quantity = Quantity(0, "arcsec"),
         group_spec: bool = True,
         min_counts: int = 5,
-        min_sn: float = None,
-        over_sample: float = None,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
         inv_efunc: bool = True,
     ) -> ScalingRelation:
         """
@@ -1716,7 +1731,7 @@ class ClusterSample(BaseSample):
                 "As this is a method for a whole population, please use a named radius such as r200, r500, or r2500."
             )
 
-        if lx_inner_radius.value != 0:
+        if isinstance(lx_inner_radius, str) or lx_inner_radius.value != 0:
             lx_rn = "Core-Excised " + rn
         else:
             lx_rn = rn
@@ -1797,22 +1812,22 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
-    def mass_Tx(
+    def mass_Tx(  # noqa: N802
         self,
         telescope: str,
         outer_radius: str = "r500",
         x_norm: Quantity = Quantity(4, "keV"),
         y_norm: Quantity = Quantity(5e14, "Msun"),
         fit_method: str = "odr",
-        start_pars: list = None,
+        start_pars: list | None = None,
         model: str = "constant*tbabs*apec",
         tx_inner_radius: str | Quantity = Quantity(0, "arcsec"),
         group_spec: bool = True,
         min_counts: int = 5,
-        min_sn: float = None,
-        over_sample: float = None,
-        temp_model_name: str = None,
-        dens_model_name: str = None,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        temp_model_name: str | None = None,
+        dens_model_name: str | None = None,
         inv_efunc: bool = False,
     ) -> ScalingRelation:
         """
@@ -1922,9 +1937,9 @@ class ClusterSample(BaseSample):
         x_norm: Quantity = Quantity(60),
         y_norm: Quantity = Quantity(5e14, "Msun"),
         fit_method: str = "odr",
-        start_pars: list = None,
-        temp_model_name: str = None,
-        dens_model_name: str = None,
+        start_pars: list | None = None,
+        temp_model_name: str | None = None,
+        dens_model_name: str | None = None,
         inv_efunc: bool = False,
     ) -> ScalingRelation:
         """
@@ -2012,24 +2027,24 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
-    def mass_Lx(
+    def mass_Lx(  # noqa: N802
         self,
         telescope: str,
         outer_radius: str = "r500",
         x_norm: Quantity = Quantity(1e44, "erg/s"),
         y_norm: Quantity = Quantity(5e14, "Msun"),
         fit_method: str = "odr",
-        start_pars: list = None,
+        start_pars: list | None = None,
         model: str = "constant*tbabs*apec",
         lo_en: Quantity = Quantity(0.5, "keV"),
         hi_en: Quantity = Quantity(2.0, "keV"),
         lx_inner_radius: str | Quantity = Quantity(0, "arcsec"),
         group_spec: bool = True,
         min_counts: int = 5,
-        min_sn: float = None,
-        over_sample: float = None,
-        temp_model_name: str = None,
-        dens_model_name: str = None,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        temp_model_name: str | None = None,
+        dens_model_name: str | None = None,
         inv_efunc: bool = False,
     ) -> ScalingRelation:
         """
@@ -2071,7 +2086,7 @@ class ClusterSample(BaseSample):
                 "As this is a method for a whole population, please use a named radius such as r200, r500, or r2500."
             )
 
-        if lx_inner_radius.value != 0:
+        if isinstance(lx_inner_radius, str) or lx_inner_radius.value != 0:
             lx_rn = "Core-Excised " + rn
         else:
             lx_rn = rn
@@ -2139,6 +2154,23 @@ class ClusterSample(BaseSample):
             )
 
         return scale_rel
+
+    def __iter__(self) -> ClusterSample:
+        """Called when initiating iterating through a ClusterSample object. Resets the counter _n."""
+        self._n = 0
+        return self
+
+    def __next__(self) -> GalaxyCluster:
+        """
+        Iterates the counter _n, uses it to find the name of the corresponding cluster, then retrieves
+        that cluster from the _sources dictionary.
+        """
+        if self._n < self.__len__():
+            result = self.__getitem__(self._names[self._n])
+            self._n += 1
+            return result
+        else:
+            raise StopIteration
 
     def __getitem__(self, key: int | str) -> GalaxyCluster:
         """

@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 11:50 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 9:26 PM. Copyright (c) The Contributors.
 """This module defines specific (i.e. non-BaseProfile1D) XGA profile classes.
 
 Profile classes are used to store and interact with 1D radial profile information, with some classes
@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 from copy import copy
+from typing import TYPE_CHECKING
 from warnings import warn
 
 import numpy as np
@@ -34,6 +35,9 @@ from xga.products.base import BaseProfile1D
 from xga.products.phot import RateMap
 from xga.sourcetools.deproj import shell_ann_vol_intersect
 from xga.sourcetools.misc import ang_to_rad
+
+if TYPE_CHECKING:
+    from xga.sources.extended import GalaxyCluster
 
 
 class SurfaceBrightness1D(BaseProfile1D):
@@ -395,7 +399,7 @@ class GasMass1D(BaseProfile1D):
         radii: Quantity,
         values: Quantity,
         centre: Quantity,
-        source_name: str,
+        source_name: str | None,
         obs_id: str,
         inst: str,
         dens_method: str,
@@ -541,7 +545,7 @@ class GasDensity3D(BaseProfile1D):
         radii: Quantity,
         values: Quantity,
         centre: Quantity,
-        source_name: str,
+        source_name: str | None,
         obs_id: str,
         inst: str,
         dens_method: str,
@@ -1056,7 +1060,7 @@ class ProjectedGasTemperature1D(BaseProfile1D):
         radii: Quantity,
         values: Quantity,
         centre: Quantity,
-        source_name: str,
+        source_name: str | None,
         obs_id: str,
         inst: str,
         radii_err: Quantity | None = None,
@@ -1177,7 +1181,7 @@ class APECNormalisation1D(BaseProfile1D):
         radii: Quantity,
         values: Quantity,
         centre: Quantity,
-        source_name: str,
+        source_name: str | None,
         obs_id: str,
         inst: str,
         radii_err: Quantity | None = None,
@@ -1390,7 +1394,12 @@ class APECNormalisation1D(BaseProfile1D):
         return dens_prof
 
     def emission_measure_profile(
-        self, redshift: float, cosmo: Cosmology, abund_table: str = "angr", num_real: int = 100, sigma: int = 2
+        self,
+        redshift: float,
+        cosmo: Cosmology,
+        abund_table: str = "angr",
+        num_real: int = 100,
+        sigma: int | float = 2,
     ) -> EmissionMeasure1D:
         """
         A method to calculate the emission measure profile from the APEC normalisation profile, which in turn was
@@ -1473,7 +1482,7 @@ class EmissionMeasure1D(BaseProfile1D):
         radii: Quantity,
         values: Quantity,
         centre: Quantity,
-        source_name: str,
+        source_name: str | None,
         obs_id: str,
         inst: str,
         radii_err: Quantity | None = None,
@@ -1580,7 +1589,7 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
         radii: Quantity,
         values: Quantity,
         centre: Quantity,
-        source_name: str,
+        source_name: str | None,
         obs_id: str,
         inst: str,
         radii_err: Quantity | None = None,
@@ -1692,7 +1701,7 @@ class GasTemperature3D(BaseProfile1D):
         radii: Quantity,
         values: Quantity,
         centre: Quantity,
-        source_name: str,
+        source_name: str | None,
         obs_id: str,
         inst: str,
         radii_err: Quantity | None = None,
@@ -1801,7 +1810,7 @@ class BaryonFraction(BaseProfile1D):
         radii: Quantity,
         values: Quantity,
         centre: Quantity,
-        source_name: str,
+        source_name: str | None,
         obs_id: str,
         inst: str,
         radii_err: Quantity | None = None,
@@ -2767,6 +2776,9 @@ class HydrostaticMass(BaseProfile1D):
         #  it wouldn't be fully correct to use a fitted model to calculate the gas mass in that scenario, so we
         #  have to make a distinction.
         if self._dens_model is not None:
+            # Ensure the associated density model has been fit and has a non-None fit_method
+            if self._dens_model.fit_method is None:
+                raise XGAFitError("The density model associated with this profile has not been fit.")
             # The case where we have used a density profile model
             gas_mass, gas_mass_dist = self._dens_prof.gas_mass(
                 self._dens_model.name, radius, conf_level=conf_level, fit_method=self._dens_model.fit_method
@@ -4814,7 +4826,7 @@ class Generic1D(BaseProfile1D):
         radii: Quantity,
         values: Quantity,
         centre: Quantity,
-        source_name: str,
+        source_name: str | None,
         obs_id: str,
         inst: str,
         y_axis_label: str,

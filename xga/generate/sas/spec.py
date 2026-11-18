@@ -1,10 +1,16 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 10:11 PM. Copyright (c) The Contributors.
+"""
+The xga.generate.sas.spec module implements wrapper functions for SAS tools that generate spectroscopic data
+products (i.e. spectra, background spectra, RMFs, and ARFs). As these functions wrap SAS tools specifically, they
+are only compatible with source/sample instances that have XMM observations associated.
+"""
 
 import os
 from copy import copy
 from itertools import permutations
 from random import randint
+from typing import Any
 
 import numpy as np
 from astropy.units import Quantity
@@ -25,14 +31,14 @@ def _spec_cmds(
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
-    over_sample: int = None,
+    min_sn: float | None = None,
+    over_sample: int | float | None = None,
     one_rmf: bool = True,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
     force_gen: bool = False,
     debug_images: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     An internal function to generate all the commands necessary to produce an evselect spectrum, but is not
     decorated by the sas_call function, so the commands aren't immediately run. This means it can be used for
@@ -81,14 +87,14 @@ def _spec_cmds(
             "There are no XMM data associated with the source/sample, as such XMM spectra cannot be generated."
         )
 
-    # This function supports passing both individual sources and sets of sources
-    if isinstance(sources, BaseSource):
-        sources = [sources]
+    # This function supports passing both individual sources and sets of sources - using a separate variable
+    #  name to make Mypy happy, as it doesn't like BaseSource | BaseSample being reassigned with a list
+    src_list = [sources] if isinstance(sources, BaseSource) else sources
 
     if outer_radius != "region":
         from_region = False
-        sources, inner_radii, outer_radii = region_setup(
-            sources, outer_radius, inner_radius, disable_progress, "", num_cores
+        _, inner_radii, outer_radii = region_setup(
+            src_list, outer_radius, inner_radius, disable_progress, "", num_cores
         )
     else:
         # This is used in the extra information dictionary for when the XGA spectrum object is defined
@@ -125,7 +131,7 @@ def _spec_cmds(
         extra_name = ""
 
     # Have to make sure that all observations have an up to date cif file.
-    cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
+    cifbuild(src_list, disable_progress=disable_progress, num_cores=num_cores)
 
     # And if it was oversampled during generation then we need to include that as well
     if over_sample is not None:
@@ -173,10 +179,10 @@ def _spec_cmds(
     sources_paths = []
     sources_extras = []
     sources_types = []
-    for s_ind, source in enumerate(sources):
-        cmds = []
-        final_paths = []
-        extra_info = []
+    for s_ind, source in enumerate(src_list):
+        cmds: list[str] = []
+        final_paths: list[str] = []
+        extra_info: list[dict[str, Any]] = []
 
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
         #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to
@@ -576,7 +582,10 @@ def _spec_cmds(
                 cmd_str += "; " + new_grp
 
             # Adds clean up commands to move all generated files and remove temporary directory
-            cmd_str += f"; rm ccf.cif; find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {{}} ../ \\;; cd ..; rm -r {dest_dir}"
+            cmd_str += (
+                "; rm ccf.cif; find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {} ../ \\;; "
+                f"cd ..; rm -r {dest_dir}"
+            )
             cmds.append(cmd_str)  # Adds the full command to the set
             # Makes sure the whole path to the temporary directory is created
             os.makedirs(dest_dir)
@@ -620,14 +629,14 @@ def evselect_spectrum(
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
-    over_sample: float = None,
+    min_sn: float | None = None,
+    over_sample: float | None = None,
     one_rmf: bool = True,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
     force_gen: bool = False,
     debug_images: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A wrapper for all the SAS processes necessary to generate an XMM spectrum that can be analysed
     in XSPEC. Every observation associated with this source, and every instrument associated with that
@@ -681,18 +690,18 @@ def evselect_spectrum(
 
 @sas_call
 def spectrum_set(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     radii: list[Quantity] | Quantity,
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
-    over_sample: float = None,
+    min_sn: float | None = None,
+    over_sample: float | None = None,
     one_rmf: bool = True,
     num_cores: int = NUM_CORES,
     force_regen: bool = False,
     disable_progress: bool = False,
     debug_images: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     This function can be used to produce 'sets' of XGA Spectrum objects, generated in concentric circular annuli.
     Such spectrum sets can be used to measure projected spectroscopic quantities, or even be de-projected to attempt
@@ -827,7 +836,7 @@ def spectrum_set(
         # This is where the commands/extra information get concatenated from the different annuli
         src_cmds = np.array([])
         src_paths = np.array([])
-        src_out_types = []
+        src_out_types: Any = []
         src_extras = np.array([])
 
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
@@ -989,17 +998,17 @@ def spectrum_set(
 
 @sas_call
 def cross_arf(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     radii: list[Quantity] | Quantity,
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
-    over_sample: float = None,
-    set_id: str = None,
+    min_sn: float | None = None,
+    over_sample: float | None = None,
+    set_id: int | str | list | np.ndarray | None = None,
     detmap_bin: int = 200,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     This function will generate cross-arfs for annular spectra, which describe the contribution of each annulus
     to each other annulus due to XMM's relatively sizeable PSF. The cross-arfs are generated for each instrument
@@ -1042,15 +1051,18 @@ def cross_arf(
         raise TypeError("Please only pass source or sample objects for the 'sources' parameter of this function")
 
     # We want set_id to be iterable as well, so we wrap it in a list if it wasn't already a list or array
-    if set_id is not None and isinstance(set_id, (list, np.ndarray)):
-        set_id = [set_id]
+    parsed_set_id: list[Any] | np.ndarray
+    if isinstance(set_id, (int, str)):
+        parsed_set_id = [set_id]
     # We still want it to be iterable even if the user never specified it, so we make a list of Nones the same
     #  length as the sources variable
     elif set_id is None:
-        set_id = [None] * len(sources)
+        parsed_set_id = [None] * len(sources)
+    else:
+        parsed_set_id = set_id
 
     # This will trigger if the user passed too few or too many set ids for the number of sources there are
-    if len(set_id) != len(sources):
+    if len(parsed_set_id) != len(sources):
         raise ValueError(
             "If an XGA sample has been passed, and AnnularSpectra are being specified with the 'set_id' "
             "argument, then a list of set_ids with the same number of entries must be passed."
@@ -1076,7 +1088,7 @@ def cross_arf(
         # This is where the commands/extra information get concatenated from the different annuli
         src_cmds = np.array([])
         src_paths = np.array([])
-        src_out_types = []
+        src_out_types: Any = []
         src_extras = np.array([])
 
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
@@ -1096,14 +1108,14 @@ def cross_arf(
 
         try:
             ann_spec = src.get_annular_spectra(
-                radii, group_spec, min_counts, min_sn, over_sample, set_id[src_ind], telescope="xmm"
+                radii, group_spec, min_counts, min_sn, over_sample, parsed_set_id[src_ind], telescope="xmm"
             )
-        except NoProductAvailableError:
+        except NoProductAvailableError as err:
             # We make our own version of this error
             raise NoProductAvailableError(
                 f"The requested AnnularSpectra cannot be located for {src.name}, and this function "
                 "will not automatically generate annular spectra."
-            )
+            ) from err
 
         oi_combos = [(o_id, inst) for o_id, insts in ann_spec.instruments.items() for inst in insts]
         for oi in oi_combos:

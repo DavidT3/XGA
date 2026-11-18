@@ -32,4 +32,3 @@ sources.point module
    :members:
    :undoc-members:
    :show-inheritance:
-

@@ -1,4 +1,4 @@
-# Large parts of this are directly copied or adapted from 
+# Large parts of this are directly copied or adapted from
 #  https://packaging.python.org/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/
 
 # This action triggers the first stage of publishing this module. When a new tag is created and pushed to the remote repository, this action

@@ -1,11 +1,11 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 1:52 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 9:26 PM. Copyright (c) The Contributors.
 """
 This module defines the generic PointSource and ExtendedSource classes, which are usable by themselves, but more
 importantly exist to be inherited by classes representing specific astrophysical objects (e.g. galaxy clusters).
 """
 
-from typing import Any
+from typing import Any, overload
 from warnings import simplefilter, warn
 
 import numpy as np
@@ -17,6 +17,7 @@ from numpy import ndarray
 
 from xga import DEFAULT_COSMO
 from xga.exceptions import (
+    InvalidProductError,
     NoProductAvailableError,
     NoRegionsError,
     NotAssociatedError,
@@ -362,6 +363,9 @@ class ExtendedSource(BaseSource):
         count = 0
         # Allow 20 iterations by default before we kill this - alternatively loop will exit when centre converges
         #  to within 15kpc (or 0.15arcmin).
+        # Ensure the supplied RateMap has an associated telescope (required by get_mask)
+        if rt.telescope is None:
+            raise InvalidProductError("The supplied RateMap does not have an associated telescope.")
         while count < num_iter:
             aperture_mask = self.get_mask("search", rt.telescope, rt.obs_id, central_coords)[0]
 
@@ -440,6 +444,49 @@ class ExtendedSource(BaseSource):
             chosen = self._peaks[telescope][obs_id][inst]
 
         return chosen
+
+    # @overload signatures allow Mypy to infer that get_1d_brightness_profile returns a single SurfaceBrightness1D
+    #  (rather than SurfaceBrightness1D | list[SurfaceBrightness1D]) when lo_en and hi_en are explicitly provided
+    @overload
+    def get_1d_brightness_profile(
+        self,
+        outer_rad: Quantity | str,
+        obs_id: str = "combined",
+        inst: str = "combined",
+        central_coord: Quantity | None = None,
+        radii: Quantity | None = None,
+        *,
+        lo_en: Quantity,
+        hi_en: Quantity,
+        pix_step: int = 1,
+        min_snr: float | int = 0.0,
+        psf_corr: bool = False,
+        psf_model: str | None = "ELLBETA",
+        psf_bins: int | None = 4,
+        psf_algo: str | None = "rl",
+        psf_iter: int | None = 15,
+        telescope: str | None = None,
+    ) -> SurfaceBrightness1D: ...
+
+    @overload
+    def get_1d_brightness_profile(
+        self,
+        outer_rad: Quantity | str,
+        obs_id: str = "combined",
+        inst: str = "combined",
+        central_coord: Quantity | None = None,
+        radii: Quantity | None = None,
+        lo_en: Quantity | None = None,
+        hi_en: Quantity | None = None,
+        pix_step: int = 1,
+        min_snr: float | int = 0.0,
+        psf_corr: bool = False,
+        psf_model: str | None = "ELLBETA",
+        psf_bins: int | None = 4,
+        psf_algo: str | None = "rl",
+        psf_iter: int | None = 15,
+        telescope: str | None = None,
+    ) -> SurfaceBrightness1D | list[SurfaceBrightness1D]: ...
 
     def get_1d_brightness_profile(
         self,
@@ -785,6 +832,9 @@ class PointSource(BaseSource):
         :rtype: Tuple[Quantity, bool]
         """
         central_coords = SkyCoord(*self.ra_dec.to("deg"))
+        # Ensure the supplied RateMap has an associated telescope (required by get_mask)
+        if rt.telescope is None:
+            raise InvalidProductError("The supplied RateMap does not have an associated telescope.")
         aperture_mask = self.get_mask("search", rt.telescope, rt.obs_id, central_coords)[0]
         peak, near_edge = rt.simple_peak(aperture_mask, peak_unit)
 

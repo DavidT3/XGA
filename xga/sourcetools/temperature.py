@@ -1,9 +1,10 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 2:06 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 """This submodule implements methods to build sets of spatially resolved temperature measurements (e.g. profiles)
 for extended sources.
 """
 
+from typing import cast
 from warnings import warn
 
 import numpy as np
@@ -14,8 +15,8 @@ from ..exceptions import NoProductAvailableError
 from ..generate.sas import region_setup
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.profile import annular_mask
-from ..products.profile import GasTemperature3D
-from ..samples import BaseSample, ClusterSample
+from ..products.profile import APECNormalisation1D, GasTemperature3D, ProjectedGasTemperature1D
+from ..samples import ClusterSample
 from ..sources import BaseSource, GalaxyCluster
 from ..xspec.fit import single_temp_apec_profile
 from ._common import _get_all_telescopes
@@ -34,10 +35,10 @@ def _ann_bins_setup(
     obs_id: str | None = None,
     inst: str | None = None,
     psf_corr: bool = False,
-    psf_model: str = "ELLBETA",
-    psf_bins: int = 4,
-    psf_algo: str = "rl",
-    psf_iter: int = 15,
+    psf_model: str | None = "ELLBETA",
+    psf_bins: int | None = 4,
+    psf_algo: str | None = "rl",
+    psf_iter: int | None = 15,
 ) -> tuple:
     """
     This method just sets up radii, masks, etc. for annular binning functions in this file. The operations in
@@ -293,28 +294,28 @@ def _snr_bins(
             stacklevel=2,
         )
         cur_num_ann = ann_masks.shape[2]
-        snrs = []
+        snr_list = []
         for i in range(cur_num_ann):
             # We're calling the signal-to-noise calculation method of the ratemap for all of our annuli
-            snrs.append(
+            snr_list.append(
                 rt.signal_to_noise(ann_masks[:, :, i], back_mask, exp_corr, allow_negative, x_slice_lims, y_slice_lims)
             )
         # Becomes a numpy array because they're nicer to work with
-        snrs = np.array(snrs)
+        snrs = np.array(snr_list)
 
     while not acceptable:
         # How many annuli are there at this point in the loop?
         cur_num_ann = ann_masks.shape[2]
 
         # Just a list for the snrs to live in
-        snrs = []
+        snr_list = []
         for i in range(cur_num_ann):
             # We're calling the signal-to-noise calculation method of the ratemap for all of our annuli
-            snrs.append(
+            snr_list.append(
                 rt.signal_to_noise(ann_masks[:, :, i], back_mask, exp_corr, allow_negative, x_slice_lims, y_slice_lims)
             )
         # Becomes a numpy array because they're nicer to work with
-        snrs = np.array(snrs)
+        snrs = np.array(snr_list)
         # We find any indices of the array (== annuli) where the signal-to-noise is not above our minimum
         bad_snrs = np.where(snrs < min_snr)[0]
 
@@ -401,9 +402,9 @@ def _cnt_bins(
     """
     # This just makes sure that the min_cnt variable is the astropy quantity that we expect it to be, otherwise
     #  some of the comparisons made between it and the values returned by background_subtracted_counts will fail
-    if type(min_cnt) is int:
+    if isinstance(min_cnt, int):
         min_cnt = Quantity(min_cnt, "ct")
-    elif (type(min_cnt) is Quantity and not min_cnt.unit.is_equivalent("ct")) or type(min_cnt) is not Quantity:
+    elif not isinstance(min_cnt, Quantity) or not min_cnt.unit.is_equivalent("ct"):
         raise TypeError("The min_cnt argument must be either an integer, or an astropy Quantity in units of 'ct'.")
 
     # Run the setup function for these functions that create different annular bins
@@ -511,7 +512,7 @@ def _cnt_bins(
 
 
 def min_snr_proj_temp_prof(
-    sources: GalaxyCluster | ClusterSample,
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster],
     outer_radii: Quantity | list[Quantity],
     min_snr: float = 20,
     min_width: Quantity = Quantity(20, "arcsec"),
@@ -639,15 +640,16 @@ def min_snr_proj_temp_prof(
 
     # Makes sure that sources is iterable, even if it's just a single source - makes writing the rest of this
     #  function a bit neater.
-    if isinstance(sources, BaseSource):
-        sources = [sources]
+    # Using a new variable name to make Mypy happy, as it doesn't like variables of one type to be reassigned with
+    #  another (single source -> list of sources)
+    src_list = [sources] if isinstance(sources, BaseSource) else sources
 
     # We're setting up a dictionary that will contain lists of annular radius sets, with top level keys being
     #  telescope names, and values being lists. Each list will have one entry per source, even if that source
     #  doesn't have the telescope associated (in those cases, a null value will be added)
-    all_rads = {tel: [] for tel in src_telescopes}
+    all_rads: dict[str, list[Quantity | None]] = {tel: [] for tel in src_telescopes}
 
-    for src_ind, src in enumerate(sources):
+    for src_ind, src in enumerate(src_list):
         # Iterating through all the telescopes being considered
         for tel in src_telescopes:
             # Quite possible that not all sources will have the current telescope associated (if there are
@@ -687,7 +689,7 @@ def min_snr_proj_temp_prof(
                 stacked_inst = True if tel in ["erosita", "erass"] else False
                 lowest_ranked = src.snr_ranking(
                     out_rad_vals[src_ind], lo_en, hi_en, allow_negative, tel, stacked_inst=stacked_inst
-                )[tel][0]
+                )[tel][0]  # type: ignore[call-overload, index]  # See issue #1653
 
                 rads, snrs, ma = _snr_bins(
                     src,
@@ -713,11 +715,12 @@ def min_snr_proj_temp_prof(
             #  spectra (if necessary) and fitting to make some nice temperature profiles
             all_rads[tel].append(rads)
 
-    if len(sources) == 1:
-        sources = sources[0]
+    # Using a new variable name to make Mypy happy, as it doesn't like variables of one type to be reassigned with
+    #  another
+    fit_sources = src_list[0] if len(src_list) == 1 else src_list
 
     single_temp_apec_profile(
-        sources,
+        fit_sources,
         all_rads,
         group_spec=group_spec,
         min_counts=min_counts,
@@ -737,7 +740,7 @@ def min_snr_proj_temp_prof(
 
 
 def min_cnt_proj_temp_prof(
-    sources: GalaxyCluster | ClusterSample,
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster],
     outer_radii: Quantity | list[Quantity],
     min_cnt: int | Quantity = Quantity(1000, "ct"),
     min_width: Quantity = Quantity(20, "arcsec"),
@@ -841,15 +844,16 @@ def min_cnt_proj_temp_prof(
 
     # Makes sure that sources is iterable, even if it's just a single source - makes writing the rest of this
     #  function a bit neater.
-    if isinstance(sources, BaseSource):
-        sources = [sources]
+    # Using a new variable name to make Mypy happy, as it doesn't like variables of one type to be reassigned with
+    #  another (single source -> list of sources)
+    src_list = [sources] if isinstance(sources, BaseSource) else sources
 
     # We're setting up a dictionary that will contain lists of annular radius sets, with top level keys being
     #  telescope names, and values being lists. Each list will have one entry per source, even if that source
     #  doesn't have the telescope associated (in those cases, a null value will be added)
-    all_rads = {tel: [] for tel in src_telescopes}
+    all_rads: dict[str, list[Quantity | None]] = {tel: [] for tel in src_telescopes}
 
-    for src_ind, src in enumerate(sources):
+    for src_ind, src in enumerate(src_list):
         # Iterating through all the telescopes being considered
         for tel in src_telescopes:
             # Quite possible that not all sources will have the current telescope associated (if there are
@@ -888,15 +892,15 @@ def min_cnt_proj_temp_prof(
                 #  individual ObsID-inst combos there
                 stacked_inst = True if tel in ["erosita", "erass"] else False
                 cnt_rnk, cnts = src.count_ranking(out_rad_vals[src_ind], lo_en, hi_en, tel, stacked_inst=stacked_inst)[
-                    tel
+                    tel  # type: ignore[call-overload]  # See issue #1653
                 ]
                 # Obviously the median counts will not necessarily line up with any particular ObsID-instrument, but we
                 #  can use the interpolation feature of numpy percentile to find the nearest existing counts to the
                 #  median counts.
-                med_obs_ind = np.argwhere(cnts == np.nanpercentile(cnts, 50, interpolation="nearest"))[0]
+                med_obs_ind = np.argwhere(cnts == np.nanpercentile(cnts, 50, interpolation="nearest"))[0]  # type: ignore[call-overload]  # See issue #1653
                 # This pulls out the ObsID and instrument that we have chosen to base the annular bins on.
-                med_obs_id = cnt_rnk[med_obs_ind, 0][0]
-                med_obs_inst = cnt_rnk[med_obs_ind, 1][0]
+                med_obs_id = cnt_rnk[med_obs_ind, 0][0]  # type: ignore[index]  # See issue #1653
+                med_obs_inst = cnt_rnk[med_obs_ind, 1][0]  # type: ignore[index]  # See issue #1653
 
                 # In this instance though, we use the median (in terms of background subtracted counts)
                 #  individual (as in individual instrument too) observation to construct the annuli.
@@ -907,7 +911,7 @@ def min_cnt_proj_temp_prof(
                     min_width,
                     lo_en,
                     hi_en,
-                    telescope,
+                    tel,
                     med_obs_id,
                     med_obs_inst,
                     psf_corr,
@@ -923,12 +927,13 @@ def min_cnt_proj_temp_prof(
             all_rads[tel].append(rads)
 
     # Reverses a bodge employed at the beginning of this function
-    if len(sources) == 1:
-        sources = sources[0]
+    # Using a new variable name to make Mypy happy, as it doesn't like variables of one type to be reassigned with
+    #  another
+    fit_sources = src_list[0] if len(src_list) == 1 else src_list
 
     # This runs the fitting (and generation, if that has not already occurred) of the annular spectra.
     single_temp_apec_profile(
-        sources,
+        fit_sources,
         all_rads,
         group_spec=group_spec,
         min_counts=min_counts,
@@ -948,7 +953,7 @@ def min_cnt_proj_temp_prof(
 
 
 def onion_deproj_temp_prof(
-    sources: GalaxyCluster | ClusterSample,
+    sources: GalaxyCluster | ClusterSample | list[GalaxyCluster],
     outer_radii: Quantity | list[Quantity],
     annulus_method: str = "min_snr",
     min_snr: float = 30,
@@ -979,7 +984,7 @@ def onion_deproj_temp_prof(
     num_cores: int = NUM_CORES,
     stacked_spectra: bool = False,
     telescope: str | list[str] | None = None,
-) -> dict[str, list[GasTemperature3D]]:
+) -> dict[str, list[GasTemperature3D | None]]:
     """
     This function will generate de-projected, three-dimensional, gas temperature profiles of galaxy clusters using
     the 'onion peeling' deprojection method. It will also generate any projected temperature profiles that may be
@@ -1129,23 +1134,26 @@ def onion_deproj_temp_prof(
     telescope = list(ann_rads.keys())
 
     # So we can iterate through sources without worrying if there's more than one cluster
-    if not isinstance(sources, (BaseSample, list)):
-        sources = [sources]
+    # Using a new variable name to make Mypy happy, as it doesn't like variables of one type to be reassigned with
+    #  another (single source -> list of sources)
+    src_list = [sources] if isinstance(sources, BaseSource) else sources
 
-    all_3d_temp_profs = {key: [None] * len(sources) for key in telescope}
+    all_3d_temp_profs: dict[str, list[GasTemperature3D | None]] = {key: [None] * len(src_list) for key in telescope}
     # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof
-    for src_ind, src in enumerate(sources):
+    for src_ind, src in enumerate(src_list):
         for tel in telescope:
             cur_rads = ann_rads[tel][src_ind]
 
             try:
                 # The projected temperature profile we're going to use
-                proj_temp = src.get_proj_temp_profiles(
-                    cur_rads, group_spec, min_counts, min_sn, over_sample, telescope=tel
+                proj_temp = cast(
+                    ProjectedGasTemperature1D,
+                    src.get_proj_temp_profiles(cur_rads, group_spec, min_counts, min_sn, over_sample, telescope=tel),
                 )
                 # The normalisation profile(s) from the fit that produced the projected temperature profile.
-                apec_norm_prof = src.get_apec_norm_profiles(
-                    cur_rads, group_spec, min_counts, min_sn, over_sample, telescope=tel
+                apec_norm_prof = cast(
+                    APECNormalisation1D,
+                    src.get_apec_norm_profiles(cur_rads, group_spec, min_counts, min_sn, over_sample, telescope=tel),
                 )
 
             except NoProductAvailableError:
@@ -1157,7 +1165,7 @@ def onion_deproj_temp_prof(
             #  just use that one rather than making another (which would be silly and also eat up more storage
             #  because they are automatically saved to disk).
             try:
-                existing_3d_temp_prof = src.get_3d_temp_profiles(set_id=proj_temp.set_ident)
+                existing_3d_temp_prof = cast(GasTemperature3D, src.get_3d_temp_profiles(set_id=proj_temp.set_ident))
                 all_3d_temp_profs[tel][src_ind] = existing_3d_temp_prof
                 continue
             except NoProductAvailableError:

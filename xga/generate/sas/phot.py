@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 2:06 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 """
 The xga.generate.sas.phot module implements wrapper functions for SAS tools that generate 'photometric' (i.e. images
 and things related to images) data products. As these functions wrap SAS tools specifically, they are only
@@ -8,6 +8,7 @@ compatible with source/sample instances that have XMM observations associated.
 
 import os
 from random import randint
+from typing import Any
 
 import numpy as np
 from astropy.units import Quantity, deg
@@ -16,6 +17,7 @@ from tqdm import tqdm
 from xga import NUM_CORES, OUTPUT
 from xga.exceptions import NoProductAvailableError, SASInputInvalid, TelescopeNotAssociatedError
 from xga.imagetools import data_limits
+from xga.products.phot import ExpMap, Image
 from xga.samples.base import BaseSample
 from xga.sources import BaseSource
 from xga.sources.base import NullSource
@@ -27,13 +29,13 @@ from .run import sas_call
 # TODO Perhaps remove the option to add to the SAS expression
 @sas_call
 def evselect_image(
-    sources: BaseSource | NullSource | BaseSample,
+    sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource],
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
     add_expr: str = "",
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A convenient Python wrapper for a configuration of the SAS evselect command that makes images.
     Images will be generated for every observation associated with every source passed to this function.
@@ -146,12 +148,12 @@ def evselect_image(
 
 @sas_call
 def eexpmap(
-    sources: BaseSource | NullSource | BaseSample,
+    sources: BaseSource | NullSource | BaseSample | list[BaseSource | NullSource],
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A convenient Python wrapper for the SAS eexpmap command.
     Expmaps will be generated for every observation associated with every source passed to this function.
@@ -208,9 +210,9 @@ def eexpmap(
     sources_extras = []
     sources_types = []
     for source in sources:
-        cmds = []
-        final_paths = []
-        extra_info = []
+        cmds: list[str] = []
+        final_paths: list[str] = []
+        extra_info: list[dict[str, Any]] = []
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
         #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
@@ -289,7 +291,7 @@ def eexpmap(
 
 @sas_call
 def emosaic(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     to_mosaic: str,
     lo_en: Quantity = Quantity(0.5, "keV"),
     hi_en: Quantity = Quantity(2.0, "keV"),
@@ -300,7 +302,7 @@ def emosaic(
     psf_iter: int = 15,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A convenient Python wrapper for the SAS emosaic command. Every image associated with the source,
     that is in the energy band specified by the user, will be added together.
@@ -386,10 +388,8 @@ def emosaic(
         elif psf_corr:
             en_id += "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
 
-        # Check if this combined product already exists and is usable
+        # Check if this combined product already exists and is usable (BaseSource.get_products always returns a list)
         exists = source.get_products(f"combined_{to_mosaic}", extra_key=en_id, telescope="xmm")
-        if not isinstance(exists, list):
-            exists = [exists]
 
         if len(exists) == 1 and exists[0].usable:
             sources_cmds.append(np.array([]))
@@ -398,10 +398,11 @@ def emosaic(
             sources_types.append(np.array([]))
             continue
 
-        # This fetches all relevant images/expmaps with the passed energy bounds
-        matches = source.get_products(to_mosaic, extra_key=en_id, telescope="xmm")
-        if not isinstance(matches, list):
-            matches = [matches]
+        # This fetches all relevant images/expmaps with the passed energy bounds (get_products always returns a list)
+        if to_mosaic == "image":
+            matches: list[Image] | list[ExpMap] = source.get_products("image", extra_key=en_id, telescope="xmm")
+        else:
+            matches = source.get_products("expmap", extra_key=en_id, telescope="xmm")
 
         # In theory this should never be triggered, because we already ran evselect_image so the images should be
         #  there - but I am now somehow having an error where we get to this point with no errors and no images, so
@@ -481,12 +482,12 @@ def emosaic(
 
 @sas_call
 def psfgen(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     bins: int = 4,
     psf_model: str = "ELLBETA",
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A wrapper for the psfgen SAS task. Used to generate XGA PSF objects, which in turn can be used to correct
     XGA images/ratemaps for optical effects. By default we use the ELLBETA model reported in Read et al. 2011
@@ -609,8 +610,8 @@ def psfgen(
 
                 # These are the x and y bin centre coordinates - when converted to RA and DEC this is where the
                 #  PSF is generated at.
-                x_cen_coords = np.arange(*x_lims, x_step) + (x_step / 2)
-                y_cen_coords = np.arange(*y_lims, y_step) + (y_step / 2)
+                x_cen_coords = np.arange(float(x_lims[0]), float(x_lims[1]), x_step) + (x_step / 2)
+                y_cen_coords = np.arange(float(y_lims[0]), float(y_lims[1]), y_step) + (y_step / 2)
 
                 # Get all combinations of the central coordinates using meshgrid, then turn them into
                 #  an N row, 2 column numpy array of pixel coordinates for easy conversion to RA-DEC.
@@ -619,8 +620,8 @@ def psfgen(
 
                 # But I also want to know the boundaries of the bins so I can easily select which parts of
                 #  the image belong with each PSF in the grid
-                x_boundaries = np.linspace(*x_lims, bins + 1)
-                y_boundaries = np.linspace(*y_lims, bins + 1)
+                x_boundaries = np.linspace(float(x_lims[0]), float(x_lims[1]), bins + 1)
+                y_boundaries = np.linspace(float(y_lims[0]), float(y_lims[1]), bins + 1)
 
                 # These two arrays give the x and y boundaries of the bins in the same order as the pix_coords array
                 x_bound_coords = np.tile(np.stack([x_boundaries[0:-1].ravel(), x_boundaries[1:].ravel()]).T, (bins, 1))

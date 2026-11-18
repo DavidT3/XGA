@@ -1,9 +1,16 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:51 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
+"""
+This module defines the XGA ScalingRelation and AggregateScalingRelation product classes for storing, evaluating,
+and visualising fitted scaling relations.
+"""
+
+from __future__ import annotations
 
 import inspect
 import pickle
 import re
+from collections.abc import Callable
 from copy import deepcopy
 from datetime import date
 from warnings import warn
@@ -113,36 +120,36 @@ class ScalingRelation:
         self,
         fit_pars: np.ndarray,
         fit_par_errs: np.ndarray,
-        model_func,
+        model_func: Callable,
         x_norm: Quantity,
         y_norm: Quantity,
         x_name: str,
         y_name: str,
-        dim_hubb_ind=None,
+        dim_hubb_ind: float | int | None = None,
         fit_method: str = "unknown",
-        x_data: Quantity = None,
-        y_data: Quantity = None,
-        x_err: Quantity = None,
-        y_err: Quantity = None,
-        x_lims: Quantity = None,
-        odr_output: odr.Output = None,
-        chains: np.ndarray = None,
-        relation_name: str = None,
+        x_data: Quantity | None = None,
+        y_data: Quantity | None = None,
+        x_err: Quantity | None = None,
+        y_err: Quantity | None = None,
+        x_lims: Quantity | None = None,
+        odr_output: odr.Output | None = None,
+        chains: np.ndarray | None = None,
+        relation_name: str | None = None,
         relation_author: str = "XGA",
         relation_year: str = str(date.today().year),
         relation_doi: str = "",
-        scatter_par: np.ndarray = None,
-        scatter_chain: np.ndarray = None,
-        model_colour: str = None,
-        point_names: np.ndarray | list = None,
-        third_dim_info: np.ndarray | Quantity = None,
-        third_dim_name: str = None,
-        x_en_bounds: Quantity = None,
-        y_en_bounds: Quantity = None,
+        scatter_par: np.ndarray | None = None,
+        scatter_chain: np.ndarray | None = None,
+        model_colour: str | None = None,
+        point_names: np.ndarray | list | None = None,
+        third_dim_info: np.ndarray | Quantity | None = None,
+        third_dim_name: str | None = None,
+        x_en_bounds: Quantity | None = None,
+        y_en_bounds: Quantity | None = None,
         core_radius_fraction: float = 0.0,
-        outer_aperture: str | Quantity = None,
-        telescope: str = None,
-    ):
+        outer_aperture: str | Quantity | None = None,
+        telescope: str | None = None,
+    ) -> None:
         """
         The init for the ScalingRelation class, all information necessary to enable the different functions of
         this class will be supplied by the user here.
@@ -204,8 +211,8 @@ class ScalingRelation:
             self._x_data = x_data
         elif x_data is not None and x_data.unit != self.x_unit:
             raise UnitConversionError(
-                f"Any x data ({x_data.unit.to_string()}) passed must have the same units as the x_norm ({self.x_unit.to_string()}) "
-                "argument"
+                f"Any x data ({x_data.unit.to_string()}) passed must have the same units as the x_norm "
+                f"({self.x_unit.to_string()}) argument"
             )
         else:
             # An empty quantity is defined if there is no data, rather than leaving it as None
@@ -215,8 +222,8 @@ class ScalingRelation:
             self._x_err = x_err
         elif x_err is not None and x_err.unit != self.x_unit:
             raise UnitConversionError(
-                f"Any x error ({x_err.unit.to_string()}) passed must have the same units as the x_norm ({self.x_unit.to_string()}) "
-                "argument"
+                f"Any x error ({x_err.unit.to_string()}) passed must have the same units as the x_norm "
+                f"({self.x_unit.to_string()}) argument"
             )
         else:
             # An empty quantity is defined if there is no data, rather than leaving it as None
@@ -226,8 +233,8 @@ class ScalingRelation:
             self._y_data = y_data
         elif y_data is not None and y_data.unit != self.y_unit:
             raise UnitConversionError(
-                f"Any y data ({y_data.unit.to_string()}) passed must have the same units as the y_norm ({self.y_unit.to_string()}) "
-                "argument"
+                f"Any y data ({y_data.unit.to_string()}) passed must have the same units as the y_norm "
+                f"({self.y_unit.to_string()}) argument"
             )
         else:
             # An empty quantity is defined if there is no data, rather than leaving it as None
@@ -237,8 +244,8 @@ class ScalingRelation:
             self._y_err = y_err
         elif y_err is not None and y_err.unit != self.y_unit:
             raise UnitConversionError(
-                f"Any y error ({y_err.unit.to_string()}) passed must have the same units as the y_norm ({self.y_unit.to_string()}) "
-                "argument"
+                f"Any y error ({y_err.unit.to_string()}) passed must have the same units as the y_norm "
+                f"({self.y_unit.to_string()}) argument"
             )
         else:
             # An empty quantity is defined if there is no data, rather than leaving it as None
@@ -336,7 +343,7 @@ class ScalingRelation:
             raise ValueError(
                 "You cannot set the 'point_names' argument if you have not passed data to x_data and y_data."
             )
-        elif point_names is not None and len(point_names) != len(x_data):
+        elif point_names is not None and x_data is not None and len(point_names) != len(x_data):
             raise ValueError(
                 f"You have passed a 'point_names' argument that has a different number of entries ({len(point_names)}) "
                 f"than the data given to this scaling relation ({len(x_data)})."
@@ -350,7 +357,7 @@ class ScalingRelation:
             raise ValueError(
                 "You cannot set the 'third_dim_info' argument if you have not passed data to x_data and y_data."
             )
-        elif third_dim_info is not None and len(third_dim_info) != len(x_data):
+        elif third_dim_info is not None and x_data is not None and len(third_dim_info) != len(x_data):
             raise ValueError(
                 "You have passed a 'third_dim_info' argument that has a different number of "
                 f"entries ({len(third_dim_info)}) than the data given to this scaling relation "
@@ -425,7 +432,7 @@ class ScalingRelation:
         )
 
     @property
-    def model_func(self):
+    def model_func(self) -> Callable:
         """
         Provides the model function used to fit this relation.
 
@@ -454,7 +461,7 @@ class ScalingRelation:
         return self._y_name
 
     @property
-    def dimensionless_hubble_parameter(self) -> float | int:
+    def dimensionless_hubble_parameter(self) -> float | int | None:
         """
         This property should be set on the declaration of a scaling relation, and exists to tell the relation what
         power of E(z) has been applied to the y-axis data before fitting. This also helps the predict method remove
@@ -530,7 +537,7 @@ class ScalingRelation:
         return np.concatenate([self._y_data.reshape((num_points, 1)), self._y_err.reshape((num_points, 1))], axis=1)
 
     @property
-    def x_lims(self) -> Quantity:
+    def x_lims(self) -> Quantity | None:
         """
         If the user passed an x range in which the relation is valid on initialisation, then this will
         return those limits in the same units as the x-axis.
@@ -551,7 +558,7 @@ class ScalingRelation:
         return self._fit_method
 
     @property
-    def name(self) -> str:
+    def name(self) -> str | None:
         """
         A property getter for the name of the relation, this may not be unique in cases where no name was
         passed on declaration.
@@ -562,7 +569,7 @@ class ScalingRelation:
         return self._name
 
     @name.setter
-    def name(self, new_val: str):
+    def name(self, new_val: str) -> None:
         """
         A property setter for the name of the relation, it isn't a crucial quantity and the user may want to change
         it after declaration has already happened.
@@ -582,7 +589,7 @@ class ScalingRelation:
         return self._author
 
     @author.setter
-    def author(self, new_val: str):
+    def author(self, new_val: str) -> None:
         """
         Property setter for the author of the relation.
 
@@ -604,16 +611,16 @@ class ScalingRelation:
         return self._year
 
     @year.setter
-    def year(self, new_val: int | str):
+    def year(self, new_val: int | str) -> None:
         """
         The property setter for the year related with a particular scaling relation.
 
         :param int/str new_val: The new value for the year of the relation, either an integer year that can be
             converted to a string, or a string representing a year.
         """
-        if type(new_val) != int and type(new_val) != str:
+        if type(new_val) is not int and type(new_val) is not str:
             raise TypeError("You must set the year property with an integer or string.")
-        elif type(new_val) == int:
+        elif isinstance(new_val, int):
             new_val = str(new_val)
         self._year = new_val
 
@@ -629,7 +636,7 @@ class ScalingRelation:
         return self._doi
 
     @doi.setter
-    def doi(self, new_val: str):
+    def doi(self, new_val: str) -> None:
         """
         The property setter for the DOI of the work related with the relation.
 
@@ -641,7 +648,7 @@ class ScalingRelation:
         self._doi = new_val
 
     @property
-    def scatter_par(self) -> np.ndarray:
+    def scatter_par(self) -> np.ndarray | None:
         """
         A getter for the scatter information.
 
@@ -652,7 +659,7 @@ class ScalingRelation:
         return self._scatter
 
     @property
-    def scatter_chain(self) -> np.ndarray:
+    def scatter_chain(self) -> np.ndarray | None:
         """
         A getter for the scatter information chain.
 
@@ -662,7 +669,7 @@ class ScalingRelation:
         return self._scatter_chain
 
     @property
-    def chains(self) -> np.ndarray:
+    def chains(self) -> np.ndarray | None:
         """
         Property getter for the parameter chains.
 
@@ -696,7 +703,7 @@ class ScalingRelation:
             return "tab:gray"
 
     @model_colour.setter
-    def model_colour(self, new_colour: str):
+    def model_colour(self, new_colour: str) -> None:
         """
         Property setter for the model colour attribute, which controls the colour used in plots for the fit
          of this relation. New colours are checked against matplotlibs list of named colours.
@@ -753,7 +760,7 @@ class ScalingRelation:
         return self._third_dim_name
 
     @property
-    def x_energy_bounds(self) -> Quantity:
+    def x_energy_bounds(self) -> Quantity | None:
         """
         The energy bounds within which the x-axis data have been measured (e.g. a 0.5-2.0 keV luminosity).
 
@@ -764,7 +771,7 @@ class ScalingRelation:
         return self._x_quantity_en_bounds
 
     @x_energy_bounds.setter
-    def x_energy_bounds(self, new_val: Quantity):
+    def x_energy_bounds(self, new_val: Quantity) -> None:
         """
         Set the energy bounds within which the x-axis data have been measured (e.g. a 0.5-2.0 keV luminosity).
 
@@ -778,7 +785,7 @@ class ScalingRelation:
             self._x_quantity_en_bounds = new_val
 
     @property
-    def y_energy_bounds(self) -> Quantity:
+    def y_energy_bounds(self) -> Quantity | None:
         """
         The energy bounds within which the y-axis data have been measured (e.g. a 0.5-2.0 keV luminosity).
 
@@ -789,7 +796,7 @@ class ScalingRelation:
         return self._y_quantity_en_bounds
 
     @y_energy_bounds.setter
-    def y_energy_bounds(self, new_val: Quantity):
+    def y_energy_bounds(self, new_val: Quantity) -> None:
         """
         Set the energy bounds within which the y-axis data have been measured (e.g. a 0.5-2.0 keV luminosity).
 
@@ -803,7 +810,7 @@ class ScalingRelation:
             self._y_quantity_en_bounds = new_val
 
     @property
-    def telescope(self) -> str:
+    def telescope(self) -> str | None:
         """
         Returns the name of the telescope associated with this relation.
 
@@ -812,7 +819,7 @@ class ScalingRelation:
         """
         return self._telescope
 
-    def view_chains(self, figsize: tuple = None, colour: str = None) -> None:
+    def view_chains(self, figsize: tuple | None = None, colour: str | None = None) -> None:
         """
         Simple view method to quickly look at the MCMC chains for a scaling relation fit.
 
@@ -844,7 +851,7 @@ class ScalingRelation:
             ax.set_ylabel(self._par_names[i])
             ax.yaxis.set_label_coords(-0.1, 0.5)
 
-        if num_ch > len(self._fit_pars):
+        if num_ch > len(self._fit_pars) and self._scatter_chain is not None:
             ax = axes[-1]
             ax.plot(self._scatter_chain, colour, alpha=0.7)
             ax.set_xlim(0, len(self._scatter_chain))
@@ -855,7 +862,11 @@ class ScalingRelation:
         plt.show()
 
     def view_corner(
-        self, figsize: tuple = (10, 10), cust_par_names: list[str] = None, colour: str = None, save_path: str = None
+        self,
+        figsize: tuple = (10, 10),
+        cust_par_names: list[str] | None = None,
+        colour: str | None = None,
+        save_path: str | None = None,
     ) -> None:
         r"""
         A convenient view method to examine the corner plot of the parameter posterior distributions.
@@ -907,9 +918,9 @@ class ScalingRelation:
     def predict(
         self,
         x_values: Quantity,
-        redshift: float | np.ndarray = None,
-        cosmo: Cosmology = None,
-        x_errors: Quantity = None,
+        redshift: float | np.ndarray | None = None,
+        cosmo: Cosmology | None = None,
+        x_errors: Quantity | None = None,
     ) -> Quantity:
         """
         This method allows for the prediction of y values from this scaling relation, you just need to pass in an
@@ -981,8 +992,8 @@ class ScalingRelation:
             raise ValueError("You must supply one redshift for every entry in x_values.")
         elif self._ez_power is not None and isinstance(redshift, np.ndarray) and len(x_values) != len(redshift):
             raise ValueError(
-                f"The x_values argument has {len(x_values)} entries, and the redshift argument has {len(redshift)} entries; "
-                "please supply one redshift per x_value."
+                f"The x_values argument has {len(x_values)} entries, and the redshift argument has "
+                f"{len(redshift)} entries; please supply one redshift per x_value."
             )
 
         # Units that are convertible to the x-units of this relation are allowed, so we make sure we convert
@@ -993,8 +1004,8 @@ class ScalingRelation:
         predicted_y = self._model_func((x_values / self.x_norm).value, *self.pars[:, 0]) * self.y_norm
 
         # If there was a power of E(z) applied to the data, we undo it for the prediction.
-        if self._ez_power is not None:
-            # We store this so that error propogation can use it later
+        if self._ez_power is not None and cosmo is not None:
+            # We store this so that error propagation can use it later
             ez = cosmo.efunc(redshift) ** self._ez_power
             predicted_y /= ez
         elif not x_values.isscalar:
@@ -1056,32 +1067,32 @@ class ScalingRelation:
     def get_view(
         self,
         ax: Axes,
-        x_lims: Quantity = None,
+        x_lims: Quantity | None = None,
         log_scale: bool = True,
-        plot_title: str = None,
+        plot_title: str | None = None,
         data_colour: str = "black",
-        model_colour: str = None,
+        model_colour: str | None = None,
         grid_on: bool = False,
         conf_level: int = 90,
-        custom_x_label: str = None,
-        custom_y_label: str = None,
+        custom_x_label: str | None = None,
+        custom_y_label: str | None = None,
         fontsize: float = 15,
-        x_ticks: list = None,
-        x_minor_ticks: list = None,
-        y_ticks: list = None,
-        y_minor_ticks: list = None,
+        x_ticks: list | None = None,
+        x_minor_ticks: list | None = None,
+        y_ticks: list | None = None,
+        y_minor_ticks: list | None = None,
         label_points: bool = False,
         point_label_names: bool = False,
         point_label_colour: str = "black",
         point_label_size: int = 10,
         point_label_offset: tuple = (0.01, 0.01),
-        show_third_dim: bool = None,
+        show_third_dim: bool | None = None,
         third_dim_cmap: str | Colormap = "plasma",
         third_dim_norm_cmap: Normalize = Normalize,
-        third_dim_axis_formatters: dict = None,
-        y_lims: Quantity = None,
+        third_dim_axis_formatters: dict | None = None,
+        y_lims: Quantity | None = None,
         one_to_one: bool = False,
-    ):
+    ) -> Axes:
         """
         A get method that will populate a matplotlib axes with a high quality plot of this scaling relation (including
         the data it is based upon, if available), and then return it.
@@ -1146,9 +1157,9 @@ class ScalingRelation:
         #  if any were supplied at initialisation, if that isn't the case then we make our own from the data, and
         #  if there's no data then we get stroppy
         if x_lims is not None and x_lims.unit.is_equivalent(self.x_unit):
-            x_lims = x_lims.to(self.x_unit).value
+            plot_x_lims = x_lims.to(self.x_unit).value
         elif self.x_lims is not None:
-            x_lims = self.x_lims.value
+            plot_x_lims = self.x_lims.value
         elif x_lims is not None and not x_lims.unit.is_equivalent(self.x_unit):
             raise UnitConversionError(
                 f"Limits on the x-axis ({x_lims.unit.to_string()}) must be convertible to the x-axis units of this "
@@ -1157,11 +1168,13 @@ class ScalingRelation:
         elif x_lims is None and len(self._x_data) != 0:
             max_x_ind = np.nanargmax(self._x_data)
             min_x_ind = np.nanargmin(self._x_data)
-            x_lims = [
-                0.9 * (self._x_data[min_x_ind].value - self._x_err[min_x_ind].value),
-                1.1 * (self._x_data[max_x_ind].value + self._x_err[max_x_ind].value),
-            ]
-        elif x_lims is None and len(self._x_data) == 0:
+            plot_x_lims = np.array(
+                [
+                    0.9 * (self._x_data[min_x_ind].value - self._x_err[min_x_ind].value),
+                    1.1 * (self._x_data[max_x_ind].value + self._x_err[max_x_ind].value),
+                ]
+            )
+        else:
             raise ValueError("There are no data available to infer suitable axis limits from, please pass x limits.")
 
         # Just grabs the model colour from the property if the user doesn't set a value for model_colour
@@ -1169,15 +1182,27 @@ class ScalingRelation:
             model_colour = self.model_colour
 
         # Setting the axis limits
-        ax.set_xlim(x_lims)
+        ax.set_xlim(plot_x_lims)
 
         # Setup the aesthetics of the axis
         ax.minorticks_on()
         ax.tick_params(axis="both", direction="in", which="both", top=True, right=True)
 
-        # Checks on the validity of the value of show_third_dim are now in the view() method that
-        #  wraps this get_view. That is primarily because the knowledge of whether there IS
-        #  a third dimension to be plotted is required to set the default figure size.
+        # Automatically resolve show_third_dim=None based on whether third_dimension_data is present on this relation,
+        #  so direct callers of get_view() get the same default behaviour as view()
+        if show_third_dim is None:
+            show_third_dim = self.third_dimension_data is not None
+
+        # Check whether the user requested a third dimension of data to be plotted via point colour when no third
+        #  dimension data were supplied on creation; if so, warn and fall back to False
+        if show_third_dim and self.third_dimension_data is None:
+            warn(
+                "The 'show_third_dim' argument should only be set to True if 'third_dim_info' was set on "
+                "the creation of this scaling relation. Setting 'show_third_dim' to False.",
+                stacklevel=2,
+            )
+            show_third_dim = False
+
         # Check that the passed normalization class is actually valid
         if (show_third_dim and third_dim_norm_cmap != Normalize) and not Normalize.__subclasscheck__(
             third_dim_norm_cmap
@@ -1195,7 +1220,7 @@ class ScalingRelation:
                 color=data_colour,
                 capsize=2,
             )
-        elif len(self.x_data) != 0 and show_third_dim:
+        elif len(self.x_data) != 0 and show_third_dim and self.third_dimension_data is not None:
             # The user can either set the cmap with a string name, or actually pass a colormap object
             if isinstance(third_dim_cmap, str):
                 cmap = cm.get_cmap(third_dim_cmap)
@@ -1212,7 +1237,7 @@ class ScalingRelation:
             colours = cmap_mapper.to_rgba(self.third_dimension_data.value)
             # I didn't really want to do this but errorbar calls plot (rather than scatter) so it will only do one
             #  colour at a time.
-            for c_ind, col in enumerate(colours):
+            for c_ind, _col in enumerate(colours):
                 ax.errorbar(
                     self._x_data[c_ind].value,
                     self._y_data[c_ind].value,
@@ -1236,7 +1261,9 @@ class ScalingRelation:
                 if not np.isnan(cur_x) and not np.isnan(cur_y):
                     # This measures the x_size of the plot in display coordinates (TRANSFORMED from data, thus avoiding
                     #  any issues with the scaling of the axis)
-                    x_size = ax.transData.transform((x_lims[1], 0))[0] - ax.transData.transform((x_lims[0], 0))[0]
+                    x_size = (
+                        ax.transData.transform((plot_x_lims[1], 0))[0] - ax.transData.transform((plot_x_lims[0], 0))[0]
+                    )
                     # This does the same thing with the y-data
                     y_dat_lims = ax.get_ylim()
                     y_size = (
@@ -1270,7 +1297,7 @@ class ScalingRelation:
 
         model_par_dists = np.random.normal(model_pars, model_par_errs)
 
-        model_x = np.linspace(*(x_lims / self.x_norm.value), 100)
+        model_x = np.linspace(float(plot_x_lims[0] / self.x_norm.value), float(plot_x_lims[1] / self.x_norm.value), 100)
         model_xs = np.repeat(model_x[..., None], num_rand, axis=1)
 
         upper = 50 + (conf_level / 2)
@@ -1407,7 +1434,7 @@ class ScalingRelation:
             ax.set_xticklabels(y_minor_ticks, minor=True)
 
         # If we did colour the data by a third dimension, then we should add a colour-bar to the relation
-        if show_third_dim:
+        if show_third_dim and self.third_dimension_data is not None and self.third_dimension_name is not None:
             # Setting up the colorbar axis
             cbar = plt.colorbar(cmap_mapper, ax=plt.gca())
             # And making sure we include units
@@ -1432,33 +1459,33 @@ class ScalingRelation:
 
     def view(
         self,
-        x_lims: Quantity = None,
+        x_lims: Quantity | None = None,
         log_scale: bool = True,
-        plot_title: str = None,
-        figsize: tuple = None,
+        plot_title: str | None = None,
+        figsize: tuple | None = None,
         data_colour: str = "black",
-        model_colour: str = None,
+        model_colour: str | None = None,
         grid_on: bool = False,
         conf_level: int = 90,
-        custom_x_label: str = None,
-        custom_y_label: str = None,
+        custom_x_label: str | None = None,
+        custom_y_label: str | None = None,
         fontsize: float = 15,
         legend_fontsize: float = 13,
-        x_ticks: list = None,
-        x_minor_ticks: list = None,
-        y_ticks: list = None,
-        y_minor_ticks: list = None,
-        save_path: str = None,
+        x_ticks: list | None = None,
+        x_minor_ticks: list | None = None,
+        y_ticks: list | None = None,
+        y_minor_ticks: list | None = None,
+        save_path: str | None = None,
         label_points: bool = False,
         point_label_names: bool = False,
         point_label_colour: str = "black",
         point_label_size: int = 10,
         point_label_offset: tuple = (0.01, 0.01),
-        show_third_dim: bool = None,
+        show_third_dim: bool | None = None,
         third_dim_cmap: str | Colormap = "plasma",
         third_dim_norm_cmap: Normalize = Normalize,
-        third_dim_axis_formatters: dict = None,
-        y_lims: Quantity = None,
+        third_dim_axis_formatters: dict | None = None,
+        y_lims: Quantity | None = None,
         one_to_one: bool = False,
     ) -> None:
         """
@@ -1522,31 +1549,13 @@ class ScalingRelation:
         :param bool one_to_one: If True, a one-to-one line will be plotted on the scaling relation view. Default is
             False.
         """
-        # I wanted this to react to whether there is a third dimension of data or not, so that the warning below
-        #  is still shown if the user sets show_third_dim=True when there is no third dimension, but otherwise they
-        #  don't have to worry about/see that warning.
-        if show_third_dim is None and self.third_dimension_data is None:
-            show_third_dim = False
-        elif show_third_dim is None and self.third_dimension_data is not None:
-            show_third_dim = True
-
-        # We check to see a) whether the user wants a third dimension of data communicated via the colour of the
-        #  data, and b) if they actually passed the data necessary to make that happen. If there is no data but they
-        #  have set show_third_dim=True, we set it back to False
-        if show_third_dim and self.third_dimension_data is None:
-            warn(
-                "The 'show_third_dim' argument should only be set to True if 'third_dim_info' was set on "
-                "the creation of this scaling relation. Setting 'show_third_dim' to False.",
-                stacklevel=2,
-            )
-            show_third_dim = False
-
-        # We then set the default figure size (assuming the user hasn't passed one they want to replace it) with
-        #  (8, 8) or (9, 8) - it is variable because with a third data dimension a color-bar gets added, so we want
-        #  the x-size to be longer to accommodate it
-        if not show_third_dim and figsize is None:
+        # Determine whether a third dimension will actually be plotted so we can choose an appropriate default figure
+        #  size (wider when a colour-bar is added), while leaving the show_third_dim validation and warning to
+        #  get_view() so direct callers of get_view() are also covered and warnings are not emitted twice
+        will_plot_third_dim = self.third_dimension_data is not None and (show_third_dim is None or show_third_dim)
+        if not will_plot_third_dim and figsize is None:
             figsize = (8, 8)
-        elif show_third_dim and figsize is None:
+        elif will_plot_third_dim and figsize is None:
             figsize = (10, 8)
 
         # Setting up the matplotlib figure
@@ -1605,9 +1614,20 @@ class ScalingRelation:
         with open(save_path, "wb") as picklo:
             pickle.dump(self, picklo)
 
-    def __add__(self, other):
+    def __add__(
+        self, other: ScalingRelation | AggregateScalingRelation | list[ScalingRelation]
+    ) -> AggregateScalingRelation:
+        """
+        Combines this scaling relation with another ScalingRelation, an AggregateScalingRelation, or a list of
+        ScalingRelations to produce an AggregateScalingRelation object.
+
+        :param Union[ScalingRelation, AggregateScalingRelation, List[ScalingRelation]] other: The scaling
+            relation(s) to combine with this scaling relation.
+        :return: An AggregateScalingRelation instance containing the combined scaling relations.
+        :rtype: AggregateScalingRelation
+        """
         to_combine = [self]
-        if type(other) == list:
+        if type(other) is list:
             to_combine += other
         elif isinstance(other, ScalingRelation):
             to_combine.append(other)
@@ -1627,9 +1647,12 @@ class AggregateScalingRelation:
     :param List[ScalingRelation] relations: A list of scaling relations objects to be combined in this object.
     """
 
-    def __init__(self, relations: list[ScalingRelation]):
+    def __init__(self, relations: list[ScalingRelation]) -> None:
         """
         Init method for the AggregateScalingRelation, that allows for the joint viewing of sets of scaling relations.
+
+        :param List[ScalingRelation] relations: A list of ScalingRelation objects to be combined into an
+            AggregateScalingRelation.
         """
         # There aren't specific classes for different types of relations, but I do need to check that whatever
         #  relations are being added together have the same x and y units
@@ -1700,9 +1723,9 @@ class AggregateScalingRelation:
     def view_corner(
         self,
         figsize: tuple = (10, 10),
-        cust_par_names: list[str] = None,
-        contour_colours: list[str] = None,
-        save_path: str = None,
+        cust_par_names: list[str] | None = None,
+        contour_colours: list[str] | None = None,
+        save_path: str | None = None,
     ) -> None:
         r"""
         A corner plot viewing method that will combine chains from all the relations that make up this
@@ -1762,6 +1785,11 @@ class AggregateScalingRelation:
 
             par_names += [r"\sigma"]
             for rel in self._relations:
+                if rel.chains is None or rel.scatter_chain is None:
+                    raise ValueError(
+                        f"The scaling relation '{rel.name}' is missing parameter or scatter chains, cannot view "
+                        "aggregate corner plot."
+                    )
                 all_ch = np.hstack([rel.chains, rel.scatter_chain[..., None]])
                 samp_obj = MCSamples(samples=all_ch, label=rel.name, names=par_names, labels=par_names)
                 samples.append(samp_obj)
@@ -1791,25 +1819,25 @@ class AggregateScalingRelation:
     def get_view(
         self,
         ax: Axes,
-        x_lims: Quantity = None,
+        x_lims: Quantity | None = None,
         log_scale: bool = True,
-        plot_title: str = None,
-        colour_list: list = None,
+        plot_title: str | None = None,
+        colour_list: list | None = None,
         grid_on: bool = False,
         conf_level: int = 90,
         show_data: bool = True,
         fontsize: float = 15,
-        x_ticks: list = None,
-        x_minor_ticks: list = None,
-        y_ticks: list = None,
-        y_minor_ticks: list = None,
-        data_colour_list: list = None,
-        data_shape_list: list = None,
-        custom_x_label: str = None,
-        custom_y_label: str = None,
-        y_lims: Quantity = None,
+        x_ticks: list | None = None,
+        x_minor_ticks: list | None = None,
+        y_ticks: list | None = None,
+        y_minor_ticks: list | None = None,
+        data_colour_list: list | None = None,
+        data_shape_list: list | None = None,
+        custom_x_label: str | None = None,
+        custom_y_label: str | None = None,
+        y_lims: Quantity | None = None,
         one_to_one: bool = False,
-    ):
+    ) -> Axes:
         """
         A method that populates a passed matplotlib axis with a high quality plot of the component scaling
         relations in this AggregateScalingRelation, and then returns it.
@@ -1854,12 +1882,13 @@ class AggregateScalingRelation:
         set_mod_cols = list(set([r.model_colour for r in self._relations]))
         # Set up the colour cycle, if the user hasn't passed a colour list we'll try to use colours set for the
         #  individual relations, but if they haven't all been set then we'll use the predefined colour cycle
-        if colour_list is None and len(set_mod_cols) == len(self._relations):
-            # Don't use the set_mod_cols variable as its unordered due to the use of set
-            colour_list = [r.model_colour for r in self._relations]
-        elif colour_list is None and len(set_mod_cols) != len(self._relations):
-            colour_list = [PRETTY_COLOUR_CYCLE[i % len(PRETTY_COLOUR_CYCLE)] for i in range(len(self._relations))]
-        elif colour_list is not None and len(colour_list) != len(self._relations):
+        if colour_list is None:
+            if len(set_mod_cols) == len(self._relations):
+                # Don't use the set_mod_cols variable as its unordered due to the use of set
+                colour_list = [r.model_colour for r in self._relations]
+            else:
+                colour_list = [PRETTY_COLOUR_CYCLE[i % len(PRETTY_COLOUR_CYCLE)] for i in range(len(self._relations))]
+        elif len(colour_list) != len(self._relations):
             raise ValueError(
                 "If a colour_list is passed, then it must have the same number of entries as there are relations."
             )
@@ -1869,14 +1898,14 @@ class AggregateScalingRelation:
         #  model colours.
         if data_colour_list is None:
             data_colour_list = deepcopy(colour_list)
-        elif data_colour_list is not None and len(data_colour_list) != len(self._relations):
+        elif len(data_colour_list) != len(self._relations):
             raise ValueError(
                 "If a data_colour_list is passed, then it must have the same number of entries as there are relations."
             )
 
         if data_shape_list is None:
             data_shape_list = ["x" for i in range(0, len(self._relations))]
-        elif data_shape_list is not None and len(data_shape_list) != len(self._relations):
+        elif len(data_shape_list) != len(self._relations):
             raise ValueError(
                 "If a data_shape_list is passed, then it must have the same number of entries as there are relations."
             )
@@ -1903,23 +1932,25 @@ class AggregateScalingRelation:
                 f"scaling relation ({self.x_unit.to_string()})."
             )
         elif x_lims is not None and x_lims.unit.is_equivalent(self.x_unit):
-            x_lims = x_lims.to(self.x_unit).value
+            plot_x_lims = x_lims.to(self.x_unit).value
         elif comb_x_lims is not None:
-            x_lims = np.array([comb_x_lims.value.min(), comb_x_lims.value.max()])
+            plot_x_lims = np.array([comb_x_lims.value.min(), comb_x_lims.value.max()])
         elif x_lims is None and len(comb_x_data) != 0:
             max_x_ind = np.nanargmax(comb_x_data[:, 0])
             min_x_ind = np.nanargmin(comb_x_data[:, 0])
-            x_lims = [
-                0.9 * (comb_x_data[min_x_ind, 0].value - comb_x_data[min_x_ind, 1].value),
-                1.1 * (comb_x_data[max_x_ind, 0].value + comb_x_data[max_x_ind, 1].value),
-            ]
-        elif x_lims is None and len(comb_x_data) == 0:
+            plot_x_lims = np.array(
+                [
+                    0.9 * (comb_x_data[min_x_ind, 0].value - comb_x_data[min_x_ind, 1].value),
+                    1.1 * (comb_x_data[max_x_ind, 0].value + comb_x_data[max_x_ind, 1].value),
+                ]
+            )
+        else:
             raise ValueError("There is no data available to infer suitable axis limits from, please pass x limits.")
 
         ax.set_prop_cycle(new_col_cycle)
 
         # Setting the axis limits
-        ax.set_xlim(x_lims)
+        ax.set_xlim(plot_x_lims)
 
         # Setup the aesthetics of the axis
         ax.minorticks_on()
@@ -1930,7 +1961,7 @@ class AggregateScalingRelation:
             #  how to use the colour cycle object properly
             if len(rel.x_data.value[:, 0]) == 0 or not show_data:
                 # Sets up a null error bar instance for the colour basically
-                d_out = ax.errorbar(
+                ax.errorbar(
                     None,
                     None,
                     xerr=None,
@@ -1941,7 +1972,7 @@ class AggregateScalingRelation:
                     color=data_colour_list[rel_ind],
                 )
             else:
-                d_out = ax.errorbar(
+                ax.errorbar(
                     rel.x_data.value[:, 0],
                     rel.y_data.value[:, 0],
                     xerr=rel.x_data.value[:, 1],
@@ -1961,7 +1992,9 @@ class AggregateScalingRelation:
 
             model_par_dists = np.random.normal(model_pars, model_par_errs)
 
-            model_x = np.linspace(*(x_lims / rel.x_norm.value), 100)
+            model_x = np.linspace(
+                float(plot_x_lims[0] / rel.x_norm.value), float(plot_x_lims[1] / rel.x_norm.value), 100
+            )
             model_xs = np.repeat(model_x[..., None], num_rand, axis=1)
 
             upper = 50 + (conf_level / 2)
@@ -2105,26 +2138,26 @@ class AggregateScalingRelation:
 
     def view(
         self,
-        x_lims: Quantity = None,
+        x_lims: Quantity | None = None,
         log_scale: bool = True,
-        plot_title: str = None,
+        plot_title: str | None = None,
         figsize: tuple = (8, 8),
-        colour_list: list = None,
+        colour_list: list | None = None,
         grid_on: bool = False,
         conf_level: int = 90,
         show_data: bool = True,
         fontsize: float = 15,
         legend_fontsize: float = 13,
-        x_ticks: list = None,
-        x_minor_ticks: list = None,
-        y_ticks: list = None,
-        y_minor_ticks: list = None,
-        save_path: str = None,
-        data_colour_list: list = None,
-        data_shape_list: list = None,
-        custom_x_label: str = None,
-        custom_y_label: str = None,
-        y_lims: Quantity = None,
+        x_ticks: list | None = None,
+        x_minor_ticks: list | None = None,
+        y_ticks: list | None = None,
+        y_minor_ticks: list | None = None,
+        save_path: str | None = None,
+        data_colour_list: list | None = None,
+        data_shape_list: list | None = None,
+        custom_x_label: str | None = None,
+        custom_y_label: str | None = None,
+        y_lims: Quantity | None = None,
         one_to_one: bool = False,
     ) -> None:
         """
@@ -2203,11 +2236,28 @@ class AggregateScalingRelation:
         plt.show()
 
     def __len__(self) -> int:
+        """
+        The length of an AggregateScalingRelation is the number of ScalingRelation objects that make it up.
+
+        :return: The number of component ScalingRelation objects.
+        :rtype: int
+        """
         return len(self._relations)
 
-    def __add__(self, other):
+    def __add__(
+        self, other: ScalingRelation | AggregateScalingRelation | list[ScalingRelation]
+    ) -> AggregateScalingRelation:
+        """
+        Combines this aggregate scaling relation with another ScalingRelation, an AggregateScalingRelation, or a
+        list of ScalingRelations to produce a new AggregateScalingRelation object.
+
+        :param Union[ScalingRelation, AggregateScalingRelation, List[ScalingRelation]] other: The scaling
+            relation(s) to combine with this aggregate scaling relation.
+        :return: An AggregateScalingRelation instance containing the combined scaling relations.
+        :rtype: AggregateScalingRelation
+        """
         to_combine = self.relations
-        if type(other) == list:
+        if type(other) is list:
             to_combine += other
         elif isinstance(other, ScalingRelation):
             to_combine.append(other)

@@ -2,6 +2,7 @@
 #  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 2:06 PM. Copyright (c) The Contributors.
 
 import os
+from collections.abc import Sequence
 from random import randint
 from warnings import warn
 
@@ -100,7 +101,7 @@ def _check_inputs(
 
 
 def _pregen_spectra(
-    sources: BaseSource | BaseSample | list[BaseSource],
+    sources: BaseSource | BaseSample | Sequence[BaseSource],
     outer_radius: str | Quantity,
     inner_radius: str | Quantity,
     group_spec: bool = True,
@@ -243,6 +244,8 @@ def _pregen_spectra(
     #  and iteration can uniformly treat sources as a sequence alongside BaseSample/list inputs.
     if isinstance(sources, BaseSource):
         sources = [sources]
+    elif not isinstance(sources, (list, BaseSample)):
+        sources = list(sources)
 
     return sources, inn_rad_vals, out_rad_vals, src_telescopes, real_stacked_spectra
 

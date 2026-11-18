@@ -1,5 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 9/30/26, 10:29 AM. Copyright (c) The Contributors.
+"""Tests for the download_products batch product downloading utility function."""
 
 import os
 import tempfile
@@ -12,12 +13,11 @@ from . import HTTPS_ROOT, S3_ROOT, TEST_EVTS
 
 
 class TestDownloadProducts(unittest.TestCase):
-    """
-    Tests for the download_products batch downloading utility.
-    """
+    """Tests for the download_products batch downloading utility."""
 
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
+        """Set up remote event list paths and a shared temporary directory for the batch download tests."""
         rel_info_pn = TEST_EVTS["XMM_PN"]
         rel_info_m1 = TEST_EVTS["XMM_MOS1"]
         cls.url_evt_path = os.path.join(HTTPS_ROOT, rel_info_pn["path"])
@@ -28,7 +28,8 @@ class TestDownloadProducts(unittest.TestCase):
         cls.shared_td = tempfile.TemporaryDirectory()
 
     @classmethod
-    def tearDownClass(cls):
+    def tearDownClass(cls) -> None:
+        """Clean up the shared temporary directory used for the batch download tests."""
         cls.shared_td.cleanup()
 
     def test_download_products_url(self) -> None:

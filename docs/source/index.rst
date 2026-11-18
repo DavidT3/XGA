@@ -56,4 +56,3 @@ Welcome to X-ray: Generate and Analyse (XGA)'s documentation!
        adsurl = {https://ui.adsabs.harvard.edu/abs/2023ascl.soft01012T},
       adsnote = {Provided by the SAO/NASA Astrophysics Data System}
    }
-

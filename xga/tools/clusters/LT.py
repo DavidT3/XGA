@@ -1,5 +1,7 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/15/26, 2:40 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
+"""End-to-end pipeline for measuring galaxy cluster X-ray luminosities, temperatures, and overdensity radii."""
+
 from warnings import warn
 
 import numpy as np
@@ -41,14 +43,14 @@ def luminosity_temperature_pipeline(
     hi_en: Quantity = Quantity(7.9, "keV"),
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
-    over_sample: float = None,
+    min_sn: float | None = None,
+    over_sample: float | None = None,
     back_inn_rad_factor: float = 1.05,
     back_out_rad_factor: float = 1.5,
     clean_obs: bool = True,
     clean_obs_threshold: float = 0.7,
-    save_samp_results_path: str = None,
-    save_rad_history_path: str = None,
+    save_samp_results_path: str | None = None,
+    save_rad_history_path: str | None = None,
     cosmo: Cosmology = DEFAULT_COSMO,
     telescope: str = "xmm",
     search_distance: Quantity = None,
@@ -251,15 +253,93 @@ def luminosity_temperature_pipeline(
         )
     elif rad_temp_rel.telescope != telescope:
         raise ValueError(
-            f"The relation passed for the 'rad_temp_rel' argument was made for the {rad_temp_rel.telescope} telescope, but "
-            f"this pipeline is running for the {telescope} telescope (specified by the 'telescope' "
+            f"The relation passed for the 'rad_temp_rel' argument was made for the {rad_temp_rel.telescope} "
+            f"telescope, but this pipeline is running for the {telescope} telescope (specified by the 'telescope' "
             "argument)."
         )
 
-    # We ensure that the energy bounds used to measure the luminosity in the temperature-luminosity relation are also
-    #  being measured by our pipeline run - if they aren't already then we add them and give the user a warning. This
-    #  a bit of a clunky way of checking, but ah well these arrays will always be tiny
-    if freeze_temp:
+    # I'm going to make sure that the user isn't allowed to request that it not iterate at all
+    if min_iter < 2:
+        raise ValueError("The minimum number of iterations set by 'min_iter' must be 2 or more.")
+
+    # Also have to make sure the user hasn't something daft like make min_iter larger than max_iter
+    if max_iter <= min_iter:
+        raise ValueError(f"The max_iter value ({max_iter}) is less than or equal to the min_iter value ({min_iter}).")
+
+    # Trying to determine the targeted overdensity based on the name of the 'outer_aperture'
+    # The LT pipeline will not process if using a fixed aperture
+    if isinstance(rad_temp_rel.outer_aperture, Quantity):
+        raise TypeError(
+            "The XGA luminosity-temperature-radius pipeline requires that the radius-temperature relation "
+            "passed to 'rad_temp_rel' be measured within overdensity radii (e.g. R500), not a fixed "
+            f"numerical aperture such as {rad_temp_rel.outer_aperture.to_string()}"
+        )
+    elif rad_temp_rel.outer_aperture is None:
+        raise TypeError(
+            "The XGA luminosity-temperature-radius pipeline requires that the radius-temperature relation "
+            "passed to 'rad_temp_rel' have its 'outer_aperture' property set."
+        )
+
+    # We already checked the string format when declaring a scaling relation, so we know if we got this
+    #  far it should definitely be in the format of am overdensity name
+    o_dens = rad_temp_rel.outer_aperture.lower()
+
+    # Overdensity radius argument for the declaration of the sample
+    o_dens_arg = {o_dens: start_aperture}
+
+    # We also read out the core radius fraction into a smaller variable name, for later use
+    core_rad_frac = rad_temp_rel.core_radius_fraction
+
+    # Another warning if there is a combination of core-excision and frozen-temperature mode
+    if rad_temp_rel.core_excised and freeze_temp:
+        warn("Core-excised temperatures will not be reported when running in frozen-temperature mode.", stacklevel=2)
+
+    # The XGA LTR pipeline can be run in 'frozen temperature mode', which does not allow the temperature to vary
+    #  during the fitting process - instead it fixes the temperature at some value and essentially fits for the
+    #  normalisation, measures the luminosity, and uses that combined with a temp-lum scaling relation to calculate
+    #  the temperature that the next fitting step should be fixed at
+    rel_lum_bounds: Quantity | None = None
+    if freeze_temp and not isinstance(temp_lum_rel, ScalingRelation):
+        raise TypeError(
+            "The pipeline is operating in frozen-temperature mode, which means that at each step we "
+            "must estimate the next temperature with a temperature-luminosity relation; as such "
+            "'temp_lum_rel' cannot be None."
+        )
+    elif freeze_temp:
+        if not temp_lum_rel.x_unit.is_equivalent(Unit("erg/s")):
+            raise UnitConversionError(
+                "Frozen-temperature mode requires a temperature-luminosity relation, but the x-unit "
+                f"of the relation passed for argument 'rad_temp_rel' is {temp_lum_rel.x_unit.to_string()}. It cannot "
+                "be converted to erg/s."
+            )
+        elif not temp_lum_rel.y_unit.is_equivalent(Unit("keV")):
+            raise UnitConversionError(
+                "Frozen-temperature mode requires a temperature-luminosity relation, but the y-unit "
+                f"of the relation passed for argument 'rad_temp_rel' is {temp_lum_rel.y_unit.to_string()}. It cannot "
+                "be converted to keV."
+            )
+        elif temp_lum_rel.outer_aperture != o_dens:
+            raise ValueError(
+                "The outer aperture used to construct the relation passed as the 'temp_lum_rel' "
+                f"argument ({temp_lum_rel.outer_aperture.to_string()}), does not match the target overdensity "  # type: ignore[union-attr]  # TODO: Fix in #1653
+                f"({o_dens})."
+            )
+        elif temp_lum_rel.core_radius_fraction != rad_temp_rel.core_radius_fraction:
+            raise ValueError(
+                "The core radius used to construct the relation passed as the 'temp_lum_rel' "
+                f"argument ({temp_lum_rel.core_radius_fraction}), does not match that of the passed temperature-radius "
+                f"relation ({rad_temp_rel.core_radius_fraction})."
+            )
+        elif rad_temp_rel.telescope != telescope:
+            raise ValueError(
+                f"The relation passed for the 'temp_lum_rel' argument was made for the {temp_lum_rel.telescope} "
+                f"telescope, but this pipeline is running for the {telescope} telescope (specified by the 'telescope' "
+                "argument)."
+            )
+
+        # We ensure that the energy bounds used to measure the luminosity in the temperature-luminosity relation are
+        #  also being measured by our pipeline run - if they aren't already then we add them and give the user a
+        #  warning. This is a bit of a clunky way of checking, but ah well these arrays will always be tiny
         rel_lum_bounds = temp_lum_rel.x_energy_bounds
 
         # Have to make sure that the return from that wasn't None
@@ -287,88 +367,16 @@ def luminosity_temperature_pipeline(
                 stacklevel=2,
             )
 
-    # I'm going to make sure that the user isn't allowed to request that it not iterate at all
-    if min_iter < 2:
-        raise ValueError("The minimum number of iterations set by 'min_iter' must be 2 or more.")
-
-    # Also have to make sure the user hasn't something daft like make min_iter larger than max_iter
-    if max_iter <= min_iter:
-        raise ValueError(f"The max_iter value ({max_iter}) is less than or equal to the min_iter value ({min_iter}).")
-
-    # Trying to determine the targeted overdensity based on the name of the 'outer_aperture'
-    # The LT pipeline will not process if using a fixed aperture
-    if isinstance(rad_temp_rel.outer_aperture, Quantity):
-        raise TypeError(
-            "The XGA luminosity-temperature-radius pipeline requires that the radius-temperature relation "
-            "passed to 'rad_temp_rel' be measured within overdensity radii (e.g. R500), not a fixed "
-            f"numerical aperture such as {rad_temp_rel.outer_aperture.to_string()}"
-        )
-
-    # We already checked the string format when declaring a scaling relation, so we know if we got this
-    #  far it should definitely be in the format of am overdensity name
-    o_dens = rad_temp_rel.outer_aperture.lower()
-
-    # Overdensity radius argument for the declaration of the sample
-    o_dens_arg = {o_dens: start_aperture}
-
-    # We also read out the core radius fraction into a smaller variable name, for later use
-    core_rad_frac = rad_temp_rel.core_radius_fraction
-
-    # Another warning if there is a combination of core-excision and frozen-temperature mode
-    if rad_temp_rel.core_excised and freeze_temp:
-        warn("Core-excised temperatures will not be reported when running in frozen-temperature mode.", stacklevel=2)
-
-    # The XGA LTR pipeline can be run in 'frozen temperature mode', which does not allow the temperature to vary
-    #  during the fitting process - instead it fixes the temperature at some value and essentially fits for the
-    #  normalisation, measures the luminosity, and uses that combined with a temp-lum scaling relation to calculate
-    #  the temperature that the next fitting step should be fixed at
-    if freeze_temp and not isinstance(temp_lum_rel, ScalingRelation):
-        raise TypeError(
-            "The pipeline is operating in frozen-temperature mode, which means that at each step we "
-            "must estimate the next temperature with a temperature-luminosity relation; as such "
-            "'temp_lum_rel' cannot be None."
-        )
-    elif freeze_temp and not temp_lum_rel.x_unit.is_equivalent(Unit("erg/s")):
-        raise UnitConversionError(
-            "Frozen-temperature mode requires a temperature-luminosity relation, but the x-unit "
-            f"of the relation passed for argument 'rad_temp_rel' is {temp_lum_rel.x_unit.to_string()}. It cannot be "
-            "converted to erg/s."
-        )
-    elif freeze_temp and not temp_lum_rel.y_unit.is_equivalent(Unit("keV")):
-        raise UnitConversionError(
-            "Frozen-temperature mode requires a temperature-luminosity relation, but the y-unit "
-            f"of the relation passed for argument 'rad_temp_rel' is {temp_lum_rel.y_unit.to_string()}. It cannot be "
-            "converted to keV."
-        )
-    elif freeze_temp and temp_lum_rel.outer_aperture != o_dens:
-        raise ValueError(
-            "The outer aperture used to construct the relation passed as the 'temp_lum_rel' "
-            f"argument ({temp_lum_rel.outer_aperture.to_string()}), does not match the target overdensity "
-            f"({o_dens})."
-        )
-    elif freeze_temp and temp_lum_rel.core_radius_fraction != rad_temp_rel.core_radius_fraction:
-        raise ValueError(
-            "The core radius used to construct the relation passed as the 'temp_lum_rel' "
-            f"argument ({temp_lum_rel.core_radius_fraction}), does not match that of the passed temperature-radius relation "
-            f"({rad_temp_rel.core_radius_fraction})."
-        )
-    elif freeze_temp and rad_temp_rel.telescope != telescope:
-        raise ValueError(
-            f"The relation passed for the 'temp_lum_rel' argument was made for the {temp_lum_rel.telescope} telescope, but "
-            f"this pipeline is running for the {telescope} telescope (specified by the 'telescope' "
-            "argument)."
-        )
-
     # Keeps track of the current iteration number
     iter_num = 0
 
     # Set up the ClusterSample to be used for this process (I did consider setting up a new one each time but that
     #  adds overhead, and I think that this way should work fine).
     samp = ClusterSample(
-        sample_data["ra"].values,
-        sample_data["dec"].values,
-        sample_data["redshift"].values,
-        sample_data["name"].values,
+        sample_data["ra"].to_numpy(),
+        sample_data["dec"].to_numpy(),
+        sample_data["redshift"].to_numpy(),
+        sample_data["name"].to_numpy(),
         use_peak=use_peak,
         peak_find_method=peak_find_method,
         clean_obs=clean_obs,
@@ -489,7 +497,9 @@ def luminosity_temperature_pipeline(
 
             # Just to be safe I'm adding a check to make sure bad_gen has entries
             if len(bad_gen) == 0:
-                raise ProductGenerationError("Failed to identify sources for which spectrum generation failed.")
+                raise ProductGenerationError(
+                    "Failed to identify sources for which spectrum generation failed."
+                ) from err
 
             # We define the indices that WON'T have been removed from the sample (so these can be used to address
             #  things like the pr_rs quantity we defined up top
@@ -558,6 +568,11 @@ def luminosity_temperature_pipeline(
         # But, if the pipeline has been run in frozen temperature mode then there ARE no temperatures to read out, so
         #  the temperature-luminosity scaling relation has to step in for us, and we just need to read out Lxs
         else:
+            if rel_lum_bounds is None or temp_lum_rel is None:
+                raise TypeError(
+                    "The pipeline is operating in frozen-temperature mode, so 'temp_lum_rel' must be set and "
+                    "have its 'x_energy_bounds' property defined."
+                )
             lx_all = samp.Lx(
                 samp.get_radius(o_dens),
                 inner_radius=samp.get_radius(o_dens) * core_rad_frac,
@@ -623,6 +638,11 @@ def luminosity_temperature_pipeline(
         # This HAS to go here because it is after sources have been deleted from the sample (if any are) and BEFORE
         #  the overdensity radius calculated from this iteration is added to the sources
         if freeze_temp:
+            if rel_lum_bounds is None or temp_lum_rel is None:
+                raise TypeError(
+                    "The pipeline is operating in frozen-temperature mode, so 'temp_lum_rel' must be set and "
+                    "have its 'x_energy_bounds' property defined."
+                )
             all_lx = samp.Lx(
                 samp.get_radius(o_dens),
                 inner_radius=samp.get_radius(o_dens) * core_rad_frac,
@@ -758,11 +778,14 @@ def luminosity_temperature_pipeline(
     # Now to assemble the final sample information dataframe - note that the sample does have methods for the bulk
     #  retrieval of temperature and luminosity values, but they aren't so useful here because I know that some of the
     #  original entries in sample_data might have been deleted from the sample object itself
-    for row_ind, row in loaded_samp_data.iterrows():
+    # Separate df_row_ind variable to make Mypy happy, as it doesn't like int row_ind being reassigned with Hashable
+    for df_row_ind, row in loaded_samp_data.iterrows():
         # We're iterating through the rows of the sample information passed in, because we want there to be an
         #  entry even if the LT pipeline didn't succeed. As such we have to check if the current row's cluster
         #  is actually still a part of the sample
         if row["name"] in samp.names:
+            if cur_rad_errs is None:
+                raise XGADeveloperError("cur_rad_errs must not be None after pipeline iterations.")
             # Grab the relevant source out of the ClusterSample object
             rel_src = samp[row["name"]]
             rel_rad = rel_src.get_radius(o_dens, "kpc")
@@ -988,7 +1011,7 @@ def luminosity_temperature_pipeline(
 
             # We know that at least the radius will always be there to be added to the dataframe, so we add the
             #  information in vals and cols
-            loaded_samp_data.loc[row_ind, cols] = np.array(vals)
+            loaded_samp_data.loc[df_row_ind, cols] = np.array(vals)
 
     # If the user wants to save the resulting dataframe to disk then we do so
     if save_samp_results_path is not None:
@@ -1002,7 +1025,7 @@ def luminosity_temperature_pipeline(
     #  of this pipeline I assemble a radius history dataframe (for all clusters that were initially in the
     #  ClusterSample), and want the final column to declare if they converged or not.
     rad_hist_acc_rad = []
-    for row_ind, row in loaded_samp_data.iterrows():
+    for _row_ind, row in loaded_samp_data.iterrows():
         if row["name"] in samp.names:
             # Did this radius converge?
             converged = acc_rad[np.argwhere(samp.names == row["name"])[0][0]]

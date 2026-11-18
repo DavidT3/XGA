@@ -8,6 +8,7 @@ individual download method.
 
 import os
 from collections.abc import Sequence
+from typing import Any
 
 from fsspec import AbstractFileSystem
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
@@ -50,7 +51,7 @@ def download_products(
     """
     # This is what we'll return - a mapping of product instance to either a successful local path, or
     #  an Exception if something went wrong further down. Built up incrementally as we go.
-    results = {}
+    results: dict[BaseProduct, str | Exception] = {}
 
     # We validate the save_path input - if it's a sequence it must match the length of the products list
     if not isinstance(save_path, str) and len(save_path) != len(products):
@@ -113,6 +114,7 @@ def download_products(
     # Now we need to decide how to group the products that need fetching by filesystem, so that we only
     #  construct (and thus authenticate/connect) each distinct filesystem once, and can then batch all the
     #  relevant files through a single 'get' call on that filesystem for maximum efficiency.
+    prod_groups: dict[str | tuple, tuple[Any, list[tuple[BaseProduct, str]]]] = {}
     if remote_file_sys is not None:
         # The user has explicitly supplied a filesystem to use for everything, so there's only one group -
         #  we trust that this filesystem is actually compatible with every product's remote location, as
@@ -133,7 +135,6 @@ def download_products(
         # Now we actually construct one filesystem instance per unique key identified above, using the
         #  first product in each group as the representative for building the filesystem (they should all
         #  be equivalent within a group by construction)
-        prod_groups = {}
         for key, grp_info in grouped.items():
             try:
                 grp_fs, _ = url_to_fs(grp_info[0][0].remote_path, **(grp_info[0][0].fsspec_kwargs or {}))

@@ -1,4 +1,4 @@
-# Large parts of this are directly copied or adapted from 
+# Large parts of this are directly copied or adapted from
 #  https://packaging.python.org/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/
 
 # This action triggers the second stage of publishing this module. When a new release is created this action will begin. It builds the module, then
@@ -9,7 +9,7 @@
 name: Publish XGA to real PyPI, triggered on creation of release
 
 # This action triggers when there is a release to the repo, but only when the release is published
-on: 
+on:
   release:
       types: [published]
 
@@ -20,7 +20,7 @@ jobs:
     name: Build and publish XGA
     # The build/publishing process runs on the latest Ubuntu - not super important what this is for this use case, so long as its not Windows
     runs-on: ubuntu-latest
-    
+
     # This job has several steps
     steps:
       # Checks out the master branch (what we want to build and publish - including the VCS info
@@ -34,7 +34,7 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: 3.12
-    
+
     # The next two chunks set up PIP properly and build the module
     - name: Install pypa/build
       run: >-
@@ -51,7 +51,7 @@ jobs:
         --wheel
         --outdir dist/
         .
-    
+
     # Then the module is published to the real PyPI index
     - name: Publish to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1

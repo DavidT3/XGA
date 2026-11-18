@@ -1,14 +1,13 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/6/26, 2:58 PM. Copyright (c) The Contributors.
-"""
-This module implements the bases for most XGA product classes.
-"""
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
+"""This module implements the base functionality for most XGA product classes."""
 
 import inspect
 import os
 import pickle
 from copy import deepcopy
 from random import randint
+from typing import Any, cast
 from warnings import warn
 
 import emcee as em
@@ -29,6 +28,7 @@ from ..exceptions import (
     ModelNotAssociatedError,
     ProductGenerationError,
     UnknownCommandlineError,
+    XGADeveloperError,
     XGAFitError,
     XGAInvalidModelError,
 )
@@ -39,8 +39,8 @@ from ..utils import OUTPUT, PRETTY_TELESCOPE_NAMES, SASERROR_LIST, SASWARNING_LI
 
 class BaseProduct:
     """
-    The super class for all X-ray products in XGA. Stores relevant file path information, ObsID, instrument, and telescope.
-    It can also parse the std_err output of some generation processes into specific errors.
+    The super class for all X-ray products in XGA. Stores relevant file path information, ObsID, instrument, and
+    telescope. It can also parse the std_err output of some generation processes into specific errors.
 
     :param str path: The path to where the product file SHOULD be located.
     :param str obs_id: The ObsID related to the product being declared.
@@ -65,18 +65,18 @@ class BaseProduct:
 
     def __init__(
         self,
-        path: str,
-        obs_id: str,
-        instrument: str,
-        stdout_str: str,
-        stderr_str: str,
-        gen_cmd: str,
+        path: str | dict | list,
+        obs_id: str | None,
+        instrument: str | None,
+        stdout_str: str | None,
+        stderr_str: str | None,
+        gen_cmd: str | None,
         extra_info: dict | None = None,
         telescope: str | None = None,
         force_remote: bool = False,
         fsspec_kwargs: dict | None = None,
         check_exists: bool = True,
-    ):
+    ) -> None:
         """
         The initialisation method for the BaseProduct class, the super class for all products in XGA. Stores
         relevant file path information, ObsID, instrument, and telescope. It can also parse the std_err output
@@ -111,7 +111,7 @@ class BaseProduct:
             if force_remote:
                 # Here the user has forced us to treat the path as remote
                 self._local_file = False
-                self._remote_type = "unknown"
+                self._remote_type: str | None = "unknown"
             else:
                 # Using the same fsspec protocol-splitting logic used elsewhere in XGA (e.g. for root data
                 #  directories in the config file) to determine whether this path is local or remote, and if
@@ -167,24 +167,25 @@ class BaseProduct:
         self._fsspec_kwargs = fsspec_kwargs
 
         # This attribute stores strings that indicate why a product object has been deemed as unusable
-        self._why_unusable = []
+        self._why_unusable: list[str] = []
 
         # This flag indicates whether we think this data product can be used for analysis - it can be set to False
         #  for different reasons, but the most important is that the file cannot be found
         self._usable = True
 
         # Try to determine if the file exists (if this init has been told to, at least)
-        if self._local_file:
+        self._path: Any = None
+        if not isinstance(path, str):
+            # In-memory declarations (non-string path) skip existence checking entirely, as there is
+            #  no file path to check
+            self._path = path
+        elif self._local_file:
             if not check_exists or os.path.exists(path):
                 self._path = path
             else:
                 self._path = None
                 self._usable = False
                 self._why_unusable.append("ProductPathDoesNotExist")
-        elif not isinstance(path, str):
-            # In-memory declarations (non-string path) skip existence checking entirely, as there is
-            #  no file path to check
-            self._path = path
         elif not check_exists:
             # The user has explicitly told us not to check, so we trust that the path is valid
             self._path = path
@@ -219,8 +220,8 @@ class BaseProduct:
 
         # The base attributes for products - they let it know which telescope it came from, which instrument, and
         #  which specific observation - amongst other things
-        self._obs_id = obs_id
-        self._inst = instrument
+        self._obs_id: str = obs_id  # type: ignore[assignment]
+        self._inst: str = instrument  # type: ignore[assignment]
         self._tele = telescope
 
         # Replacing a null input for the generation command with an empty string
@@ -228,9 +229,9 @@ class BaseProduct:
             gen_cmd = ""
         self._og_cmd = gen_cmd
 
-        self._energy_bounds = (None, None)
-        self._prod_type = None
-        self._src_name = None
+        self._energy_bounds: tuple[Quantity, Quantity] | tuple[None, None] = (None, None)
+        self._prod_type: str | None = None
+        self._src_name: str | None = None
 
         # This is now telescope aware, and will look for errors formatted in the way expected for a particular
         #  backend software for the telescope - to help with legacy support I am going to have it check for XMM
@@ -256,7 +257,7 @@ class BaseProduct:
         return self._usable
 
     @usable.setter
-    def usable(self, is_usable: bool):
+    def usable(self, is_usable: bool) -> None:
         """
         Setter for the usable property.
 
@@ -278,18 +279,19 @@ class BaseProduct:
         return self._path
 
     @path.setter
-    def path(self, prod_path: str):
+    def path(self, prod_path: str) -> None:
         """
         Property setter for the attribute containing the path to the product.
 
         :param str prod_path: The product path.
         """
         if not os.path.exists(prod_path):
-            prod_path = None
+            self._path = None
             # We won't be able to make use of this product if it isn't where we think it is
             self._usable = False
             self._why_unusable.append("ProductPathDoesNotExist")
-        self._path = prod_path
+        else:
+            self._path = prod_path
 
     @property
     def local_file(self) -> bool:
@@ -304,7 +306,7 @@ class BaseProduct:
         return self._local_file
 
     @local_file.setter
-    def local_file(self, is_local: bool):
+    def local_file(self, is_local: bool) -> None:
         """
         Setter for the local_file property.
 
@@ -331,7 +333,7 @@ class BaseProduct:
         """
         Property getter for the attribute containing the fsspec keyword arguments passed to this
         product at instantiation. These are for passing configuration information such as credentials for
-        the remote access of S3 buckets
+        the remote access of S3 buckets.
 
         :return: The fsspec keyword arguments passed to this product at instantiation.
         :rtype: dict
@@ -359,7 +361,7 @@ class BaseProduct:
         return self._gen_warn
 
     @property
-    def telescope(self) -> str:
+    def telescope(self) -> str | None:
         """
         Property getter for the name of the telescope that this product was derived from.
 
@@ -408,7 +410,7 @@ class BaseProduct:
         return self._inst
 
     @property
-    def type(self) -> str:
+    def type(self) -> str | None:
         """
         Property getter for the string identifier for the type of product this object is, mostly useful for
         internal methods of source objects.
@@ -441,7 +443,7 @@ class BaseProduct:
         return self._energy_bounds
 
     @property
-    def src_name(self) -> str:
+    def src_name(self) -> str | None:
         """
         Method to return the name of the object a product is associated with. The product becomes
         aware of this once it is added to a source object.
@@ -452,7 +454,7 @@ class BaseProduct:
         return self._src_name
 
     @src_name.setter
-    def src_name(self, name: str):
+    def src_name(self, name: str) -> None:
         """
         Property setter for the src_name attribute of a product, should only really be called by a source object,
         not by a user.
@@ -473,7 +475,7 @@ class BaseProduct:
         return self._why_unusable
 
     @not_usable_reasons.setter
-    def not_usable_reasons(self, reasons: list):
+    def not_usable_reasons(self, reasons: list) -> None:
         """
         Setter for the not_usable_reasons property.
 
@@ -512,7 +514,7 @@ class BaseProduct:
             return self.radec_wcs.wcs.radesys
         else:
             raise AttributeError(
-                f"XGA {self._prod_type} ({self.__name__} class) does not have an 'radec_sky_wcs' "
+                f"XGA {self._prod_type} ({self.__name__} class) does not have an 'radec_sky_wcs' "  # type: ignore[attr-defined]  # See issue #1653
                 f"or 'radec_wcs' property to retrieve the RA-DEC system from."
             )
 
@@ -533,7 +535,7 @@ class BaseProduct:
             return self.radec_wcs.wcs.equinox
         else:
             raise AttributeError(
-                f"XGA {self._prod_type} ({self.__name__} class) does not have an 'radec_sky_wcs' "
+                f"XGA {self._prod_type} ({self.__name__} class) does not have an 'radec_sky_wcs' "  # type: ignore[attr-defined]  # See issue #1653
                 f"or 'radec_wcs' property to retrieve the RA-DEC equinox from."
             )
 
@@ -543,7 +545,7 @@ class BaseProduct:
         return self._downloaded
 
     @downloaded.setter
-    def downloaded(self, is_downloaded: bool):
+    def downloaded(self, is_downloaded: bool) -> None:
         """
         Setter for the downloaded property.
 
@@ -602,8 +604,8 @@ class BaseProduct:
         :param str save_path: A local directory (preferred) or complete destination file path. Treated as a
             directory if it exists as one, ends with a path separator, or has no file extension.
         :param bool overwrite: Forces a re-download even if 'downloaded' is already True. Default False.
-        :param AbstractFileSystem remote_file_sys: An existing fsspec filesystem to use instead of constructing one from 'fsspec_kwargs' -
-            mainly for reuse by download_products().
+        :param AbstractFileSystem remote_file_sys: An existing fsspec filesystem to use instead of constructing one
+            from 'fsspec_kwargs' - mainly for reuse by download_products().
         :param bool show_warn: Whether to show a warning if this product is already local. Default True.
         :rtype: None
         """
@@ -845,10 +847,14 @@ class BaseProduct:
         # TODO honestly this method could be a little more sophisticated/elegant, but it'll do for now
         # Defined as empty as they are returned by this method
         tel_errs_msgs = []
-        parsed_tel_warns = []
+        parsed_tel_warns: list[dict[str, str]] = []
         other_err_lines = []
 
-        if self.telescope is None or self.telescope == "xmm":
+        # We check self._tele directly rather than the self.telescope property because parse_stderr() is called
+        #  during BaseProduct.__init__ before subclass __init__ bodies run; subclasses like EventList override
+        #  the telescope property to disallow None once initialised, and only populate self._tele from the FITS
+        #  header after super().__init__() returns.
+        if self._tele is None or self._tele == "xmm":
             # err_str being "" is ideal, hopefully means that nothing has gone wrong
             if self.unprocessed_stderr != "":
                 # Errors will be added to the error summary, then raised later
@@ -884,7 +890,7 @@ class BaseProduct:
                 self._usable = False
                 self._why_unusable.append("OtherErrorPresent")
 
-        elif self.telescope in ["erosita", "erass"]:
+        elif self._tele in ["erosita", "erass"]:
             # The eSASS software puts everything in the stdout for some reason - so we have to parse that rather
             #  than stderr err_str being "" is ideal, hopefully means that nothing has gone wrong. We also note
             #  that some of the software that eSASS calls DOES populate the stderr if something has gone wrong,
@@ -934,7 +940,7 @@ class BaseProduct:
                 self._why_unusable.append("OtherErrorPresent")
 
         # Now for Chandra error identification
-        elif self.telescope == "chandra":
+        elif self._tele == "chandra":
             if self.unprocessed_stderr != "":
                 # Errors will be added to the error summary, then raised later
                 # That way if people try except the error away the object will have been constructed properly
@@ -961,17 +967,15 @@ class BaseProduct:
             # This should only trigger if the telescope is not XMM/eROSITa/Chandra AND there was a non-empty
             #  string passed for the stderr
             warn(
-                f"We do not currently support checking {self.telescope}-specific backend software stderr for issues - feel free to "
-                "contact the developer team and request this feature.",
+                f"We do not currently support checking {self.telescope}-specific backend software stderr for issues - "
+                "feel free to contact the developer team and request this feature.",
                 stacklevel=2,
             )
 
         return tel_errs_msgs, parsed_tel_warns, other_err_lines
 
     def raise_errors(self) -> None:
-        """
-        Method to raise the errors parsed from std_err string.
-        """
+        """Method to raise the errors parsed from std_err string."""
         for error in self._gen_error:
             raise ProductGenerationError(error)
 
@@ -993,9 +997,11 @@ class BaseAggregateProduct:
     :param str telescope: The telescope that this product is derived from. Default is None.
     """
 
-    def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str, telescope: str | None = None):
+    def __init__(
+        self, file_paths: list, prod_type: str, obs_id: str, instrument: str, telescope: str | None = None
+    ) -> None:
         """
-        The init method for the BaseAggregateProduct class
+        The init method for the BaseAggregateProduct class.
 
         :param list file_paths: A list of file paths to the constituent products of this aggregate product.
         :param str prod_type: The type of product this aggregate represents (e.g. 'image').
@@ -1009,17 +1015,17 @@ class BaseAggregateProduct:
         self._inst = instrument
         self._tele = telescope
         self._prod_type = prod_type
-        self._src_name = None
+        self._src_name: str | None = None
 
         # This was originally going to create the individual products here, but realised it was
         # easier to do in subclasses
-        self._component_products = {}
+        self._component_products: dict[Any, Any] = {}
 
         # Setting up energy limits, if they're ever required
-        self._energy_bounds = (None, None)
+        self._energy_bounds: tuple[Quantity, Quantity] | tuple[None, None] = (None, None)
 
     @property
-    def src_name(self) -> str:
+    def src_name(self) -> str | None:
         """
         Method to return the name of the object a product is associated with. The product becomes
         aware of this once it is added to a source object. This is overridden in the AnnularSpectra class.
@@ -1031,7 +1037,7 @@ class BaseAggregateProduct:
 
     # This needs a setter, as this property only becomes not-None when the product is added to a source object.
     @src_name.setter
-    def src_name(self, name: str):
+    def src_name(self, name: str) -> None:
         """
         Property setter for the src_name attribute of a product, should only really be called by a source object,
         not by a user. This is overridden in the AnnularSpectra class.
@@ -1066,7 +1072,7 @@ class BaseAggregateProduct:
         return self._inst
 
     @property
-    def telescope(self) -> str:
+    def telescope(self) -> str | None:
         """
         Property getter for the name of the telescope that this product was derived from.
 
@@ -1076,7 +1082,7 @@ class BaseAggregateProduct:
         return self._tele
 
     @property
-    def type(self) -> str:
+    def type(self) -> str | None:
         """
         Property getter for the string identifier for the type of product this object is, mostly useful for
         internal methods of source objects.
@@ -1111,7 +1117,8 @@ class BaseAggregateProduct:
     @property
     def gen_errors(self) -> list[list[str]]:
         """
-        Equivelant to the BaseProduct gen_errors property, but reports any telescope software errors stored in the component products.
+        Equivelant to the BaseProduct gen_errors property, but reports any telescope software errors stored in the
+        component products.
 
         :return: A list of telescope software errors related to component products.
         :rtype: List
@@ -1161,17 +1168,13 @@ class BaseAggregateProduct:
         """
         return len(self._component_products)
 
-    def __iter__(self):
-        """
-        Called when initiating iterating through an AggregateProduct based object. Resets the counter _n.
-        """
+    def __iter__(self) -> "BaseAggregateProduct":
+        """Called when initiating iterating through an AggregateProduct based object. Resets the counter _n."""
         self._n = 0
         return self
 
-    def __next__(self):
-        """
-        Iterates the counter _n and returns the next entry in the the component_products dictionary.
-        """
+    def __next__(self) -> BaseProduct | dict[str, Any]:
+        """Iterates the counter _n and returns the next entry in the component_products dictionary."""
         if self._n < self.__len__():
             result = self.__getitem__(self._n)
             self._n += 1
@@ -1179,7 +1182,14 @@ class BaseAggregateProduct:
         else:
             raise StopIteration
 
-    def __getitem__(self, ind):
+    def __getitem__(self, ind: int) -> BaseProduct | dict[str, Any]:
+        """
+        Returns the component product corresponding to the supplied index.
+
+        :param int ind: The index of the component product to return.
+        :return: The selected component product (or dictionary of component products).
+        :rtype: Union[BaseProduct, dict]
+        """
         return list(self._component_products.values())[ind]
 
 
@@ -1223,7 +1233,7 @@ class BaseProfile1D:
         radii: Quantity,
         values: Quantity,
         centre: Quantity,
-        source_name: str,
+        source_name: str | None,
         obs_id: str,
         inst: str,
         radii_err: Quantity | None = None,
@@ -1237,7 +1247,7 @@ class BaseProfile1D:
         telescope: str | None = None,
         spec_model: str | None = None,
         fit_conf: str | None = None,
-    ):
+    ) -> None:
         """
         The init of the superclass 1D profile product. Unlikely to ever be declared by a user, but the base
         of all other 1D profiles in XGA - contains many useful functions.
@@ -1271,13 +1281,13 @@ class BaseProfile1D:
             spectra to measure the results that were then used to create this profile. Only relevant to profiles that
             are generated from annular spectra, default is None.
         """
-        if type(radii) != Quantity or type(values) != Quantity:
+        if type(radii) is not Quantity or type(values) is not Quantity:
             raise TypeError("Both the radii and values passed into this object definition must be astropy quantities.")
-        elif radii_err is not None and type(radii_err) != Quantity:
+        elif radii_err is not None and type(radii_err) is not Quantity:
             raise TypeError("The radii_err variable must be an astropy Quantity, or None.")
         elif radii_err is not None and radii_err.unit != radii.unit:
             raise UnitConversionError("The radii_err unit must be the same as the radii unit.")
-        elif values_err is not None and type(values_err) != Quantity:
+        elif values_err is not None and type(values_err) is not Quantity:
             raise TypeError("The values_err variable must be an astropy Quantity, or None.")
         elif values_err is not None and values_err.unit != values.unit:
             raise UnitConversionError("The values_err unit must be the same as the values unit.")
@@ -1291,8 +1301,8 @@ class BaseProfile1D:
         elif (radii_err is not None and radii_err.ndim != 1) or (values_err is not None and values_err.ndim != 1):
             raise ValueError(
                 "The radii_err and values_err arrays must be one-dimensional. The shape of "
-                f"radii_err is {radii_err.shape} and the shape of values_err is "
-                f"{values_err.shape}"
+                f"radii_err is {radii_err.shape} and the shape of values_err is "  # type: ignore[union-attr]  # TODO: Fix in #1653
+                f"{values_err.shape}"  # type: ignore[union-attr]  # TODO: Fix in #1653
             )
         # Making sure the arrays have the same number of entries
         elif radii.shape != values.shape:
@@ -1305,8 +1315,8 @@ class BaseProfile1D:
         ):
             raise ValueError(
                 "radii_err must be the same shape as radii, and values_err must be the same shape "
-                f"as values. The shape of radii_err is {radii_err.shape} where radii is {radii.shape}, and the shape of "
-                f"values_err is {values_err.shape} where values is {values.shape}"
+                f"as values. The shape of radii_err is {radii_err.shape} where radii is {radii.shape}, and the shape "  # type: ignore[union-attr]  # TODO: Fix in #1653
+                f"of values_err is {values_err.shape} where values is {values.shape}"  # type: ignore[union-attr]  # TODO: Fix in #1653
             )
 
         # I'm actually going to enforce that the central coordinates passed when declaring a profile must
@@ -1324,7 +1334,12 @@ class BaseProfile1D:
                 "radii in degrees to 'deg_radii', this profile needs knowledge of the radii in degrees"
                 " to construct a storage key."
             )
-        elif not radii.unit.is_equivalent("deg") and set_storage_key is None and len(deg_radii) != len(radii):
+        elif (
+            not radii.unit.is_equivalent("deg")
+            and set_storage_key is None
+            and deg_radii is not None
+            and len(deg_radii) != len(radii)
+        ):
             raise ValueError(
                 "'deg_radii' is a different length to 'radii', they should be equivalent "
                 "quantities, simply in different units."
@@ -1375,7 +1390,7 @@ class BaseProfile1D:
             if self._radii[0].value == 0:
                 bounds[0] = self._radii[0]
                 bounds[1] = bounds[1] + self._radii_err[0]
-            self._rad_ann_bounds = bounds
+            self._rad_ann_bounds: Quantity | None = bounds
         else:
             self._rad_ann_bounds = None
 
@@ -1394,8 +1409,8 @@ class BaseProfile1D:
         self._nice_fit_methods = {"curve_fit": "Curve Fit", "mcmc": "MCMC", "odr": "ODR"}
 
         # Here is where information about fitted models is stored (and any failed fit attempts)
-        self._good_model_fits = {m: {} for m in self._fit_methods}
-        self._bad_model_fits = {m: {} for m in self._fit_methods}
+        self._good_model_fits: dict[str, dict[str, BaseModel1D]] = {m: {} for m in self._fit_methods}
+        self._bad_model_fits: dict[str, dict[str, BaseModel1D]] = {m: {} for m in self._fit_methods}
 
         # Some types of profiles will support a background value (like surface brightness), which will
         #  need to be incorporated into the fit and plotting.
@@ -1403,7 +1418,7 @@ class BaseProfile1D:
 
         # Need to be able to store upper and lower energy bounds for those profiles that
         #  have them (like brightness profiles for instance)
-        self._energy_bounds = (None, None)
+        self._energy_bounds: tuple[Quantity, Quantity] | tuple[None, None] = (None, None)
 
         # Checking if associated_set_id is supplied, so is set_storage_key, and vice versa
         if not all([associated_set_id is None, set_storage_key is None]) and not all(
@@ -1447,7 +1462,7 @@ class BaseProfile1D:
             #  check if we were given a fit configuration key as well - if we were, we'll include it in the
             #  storage key. We don't check if both self._spec_fit_conf and self._spec_model are None here because
             #  we've already ensured that both variables have been set, or not set.
-            if self._spec_fit_conf is not None:
+            if self._spec_fit_conf is not None and self._spec_model is not None:
                 # TODO I NEED TO ENSURE THAT THE SPEC FIT CONF PASSED TO THESE PROFILES IS THE STRING VERSION, NOT
                 #  THE DICTIONARY VERSION. TROUBLE IS I WROTE ALL OF THIS STUFF DEALING WITH DIFFERENT CONFIGURATIONS
                 #  OF THE SAME MODEL SO LONG AGO NOW THAT I HAVE FORGOTTEN HOW
@@ -1478,7 +1493,7 @@ class BaseProfile1D:
         else:
             self._outer_rad = radii[-1]
 
-        self._save_path = None
+        self._save_path: str | None = None
         # We store the input for the 'auto_save' argument - this exists so that the auto-saving after successful
         #  model fits etc. can be turned off, as it isn't necessarily going to work for profiles that were defined
         #  outside of an XGA source analysis. All profiles created by XGA processes running through XGA sources will
@@ -1488,9 +1503,9 @@ class BaseProfile1D:
         # This attribute is null by default, and can only be set through a property - if set then (when profiles
         #  are combined into an BaseAggregateProfile1D for the purposes of plotting) the value will be used as the
         #  label for the profile, rather than just the name
-        self._custom_agg_label = None
+        self._custom_agg_label: str | None = None
 
-    def _model_allegiance(self, model: BaseModel1D):
+    def _model_allegiance(self, model: BaseModel1D) -> None:
         """
         This internal method with a silly name just checks whether a model instance has already been associated
         with a profile other than this one, or if it has any association with a profile. If there is an association
@@ -1579,13 +1594,18 @@ class BaseProfile1D:
         success = True
         warning_str = ""
 
-        for prior in model.par_priors:
+        prior_list = []
+        for p_ind, prior in enumerate(model.par_priors):
             if prior["type"] != "uniform":
                 raise NotImplementedError(
-                    "Non-uniform priors for profile fitting are not currently supported - please contact the developers if you need this feature."
+                    "Non-uniform priors for profile fitting are not currently supported - please contact the "
+                    "developers if you need this feature."
                 )
+            # Ensure the prior bounds are stored as an Astropy Quantity before unit conversion
+            elif not isinstance(prior["prior"], Quantity):
+                raise TypeError("The 'prior' entry in each prior dictionary must be an Astropy Quantity.")
+            prior_list.append(prior["prior"].to(model.par_units[p_ind]).value)
 
-        prior_list = [p["prior"].to(model.par_units[p_ind]).value for p_ind, p in enumerate(model.par_priors)]
         prior_arr = np.array(prior_list)
 
         # We can run a curve_fit fit to try and get start values for the model parameters, and if that fails
@@ -1601,7 +1621,7 @@ class BaseProfile1D:
         else:
             # This finds maximum likelihood parameter values for the model+data
             max_like_res = minimize(
-                lambda *args: -log_likelihood(*args, model.model),
+                lambda *args: -log_likelihood(*args, model.model),  # type: ignore[call-arg]
                 model.unitless_start_pars,
                 args=(rads, y_data, y_errs),
             )
@@ -1697,7 +1717,7 @@ class BaseProfile1D:
                 auto_corr = np.mean(sampler.get_autocorr_time())
                 # Find the nearest hundred above the mean auto-correlation time, then multiply by two for
                 #  burn-in region
-                cut_off = int(np.ceil(auto_corr / 100) * 100) * 2
+                cut_off: int | None = int(np.ceil(auto_corr / 100) * 100) * 2
                 success = True
             except ValueError as bugger:
                 model.fit_warning = str(bugger)
@@ -1763,7 +1783,7 @@ class BaseProfile1D:
     def nlls_fit(self, model: BaseModel1D, num_samples: int, show_warn: bool) -> tuple[BaseModel1D, bool]:
         """
         A function to fit an XGA model instance to the data in this profile using the non-linear least squares
-        curve_fit routine from scipy, this should be called through .fit() for full functionality
+        curve_fit routine from scipy, this should be called through .fit() for full functionality.
 
         :param BaseModel1D model: An instance of the model to be fit to this profile.
         :param int num_samples: The number of random samples to be drawn and stored in the model
@@ -1800,7 +1820,11 @@ class BaseProfile1D:
         lower_bounds = []
         upper_bounds = []
         for prior_ind, prior in enumerate(model.par_priors):
-            if prior["type"] == "uniform":
+            # Explicitly reject non-Quantity prior bounds rather than silently falling through to unbounded
+            #  [-np.inf, np.inf] parameter limits
+            if not isinstance(prior["prior"], Quantity):
+                raise TypeError("The 'prior' entry in each prior dictionary must be an Astropy Quantity.")
+            elif prior["type"] == "uniform":
                 conv_prior = prior["prior"].to(model.par_units[prior_ind]).value
                 lower_bounds.append(conv_prior[0])
                 upper_bounds.append(conv_prior[1])
@@ -1860,19 +1884,20 @@ class BaseProfile1D:
             ]
             model.par_dists = par_dists
 
-        # Now we put the values BACK into quantities
-        fit_par = [Quantity(p, model.par_units[p_ind]) for p_ind, p in enumerate(fit_par)]
-        fit_par_err = [Quantity(p, model.par_units[p_ind]) for p_ind, p in enumerate(fit_par_err)]
+        # Now we put the values BACK into quantities (using new variable names to make Mypy happy, as it doesn't
+        #  like np.ndarray variables being reassigned with lists of Quantities)
+        fit_par_quants = [Quantity(p, model.par_units[p_ind]) for p_ind, p in enumerate(fit_par)]
+        fit_par_err_quants = [Quantity(p, model.par_units[p_ind]) for p_ind, p in enumerate(fit_par_err)]
 
         # And pass them into the model
-        model.model_pars = fit_par
-        model.model_par_errs = fit_par_err
+        model.model_pars = fit_par_quants
+        model.model_par_errs = fit_par_err_quants
 
         if not success:
             model.fit_warning = warning_str
 
         if show_warn and warning_str != "":
-            warn(warning_str)
+            warn(warning_str, stacklevel=2)
 
         # Tell the model whether we think the fit was successful or not
         model.success = success
@@ -1883,7 +1908,7 @@ class BaseProfile1D:
         # And then the model gets sent back
         return model, success
 
-    def _odr_fit(self, model: BaseModel1D, show_warn: bool):
+    def _odr_fit(self, model: BaseModel1D, show_warn: bool) -> tuple[BaseModel1D, bool]:
         # TODO MAKE THIS A NON-INTERNAL METHOD WHEN ITS WRITTEN
         # TODO REMEMBER TO USE THE FIT RADII PROPERTY
         # Tell the model whether we think the fit was successful or not
@@ -1952,6 +1977,7 @@ class BaseProfile1D:
         else:
             allowed = ""
 
+        # Using a separate variable name for the BaseModel1D instance to make Mypy happy
         if self._prof_type == "base":
             raise XGAFitError(
                 "A BaseProfile1D object currently cannot have a model fitted to it, as there is no physical context."
@@ -1961,7 +1987,7 @@ class BaseProfile1D:
                 f"{model} is not available for this type of profile, please use one of the following models {allowed}"
             )
         elif isinstance(model, str):
-            model = PROF_TYPE_MODELS[self._prof_type][model](self.radii_unit, self.values_unit)
+            model_instance: BaseModel1D = PROF_TYPE_MODELS[self._prof_type][model](self.radii_unit, self.values_unit)
         elif isinstance(model, BaseModel1D) and model.name not in PROF_TYPE_MODELS[self._prof_type]:
             raise XGAInvalidModelError(
                 f"{model} is not available for this type of profile, please use one of the following models {allowed}"
@@ -1972,6 +1998,10 @@ class BaseProfile1D:
                 f"with the data. This profile has an radius unit of {self.radii_unit.to_string()} and a value unit of "
                 f"{self.values_unit.to_string()}"
             )
+        elif isinstance(model, BaseModel1D):
+            model_instance = model
+        else:
+            raise TypeError("The model argument must be either a string model name or a BaseModel1D instance.")
 
         # I don't think I'm going to allow any fits without value uncertainties - just seems daft
         if self._values_err is None:
@@ -1984,17 +2014,17 @@ class BaseProfile1D:
 
         # Check whether a good fit result already exists for this model. We use the storage_key property that
         #  XGA model objects generate from their name and their start parameters
-        if not force_refit and model.name in self._good_model_fits[method]:
+        if not force_refit and model_instance.name in self._good_model_fits[method]:
             warn(
-                f"{model.name} already has a successful fit result for this profile using {method}, with those start "
-                "parameters",
+                f"{model_instance.name} already has a successful fit result for this profile using {method}, "
+                "with those start parameters",
                 stacklevel=2,
             )
             already_done = True
-        elif model.name in self._bad_model_fits[method]:
+        elif model_instance.name in self._bad_model_fits[method]:
             warn(
-                f"{model.name} already has a failed fit result for this profile using {method} with those start "
-                "parameters",
+                f"{model_instance.name} already has a failed fit result for this profile using {method} "
+                "with those start parameters",
                 stacklevel=2,
             )
             already_done = False
@@ -2003,24 +2033,26 @@ class BaseProfile1D:
 
         # Running the requested fitting method
         if not already_done and method == "mcmc":
-            model, success = self.emcee_fit(model, num_steps, num_walkers, progress_bar, show_warn, num_samples)
+            model_instance, success = self.emcee_fit(
+                model_instance, num_steps, num_walkers, progress_bar, show_warn, num_samples
+            )
         elif not already_done and method == "curve_fit":
-            model, success = self.nlls_fit(model, num_samples, show_warn)
+            model_instance, success = self.nlls_fit(model_instance, num_samples, show_warn)
         elif not already_done and method == "odr":
-            model, success = self._odr_fit(model, show_warn)
+            model_instance, success = self._odr_fit(model_instance, show_warn)
         else:
-            model = self.get_model_fit(model.name, method)
+            model_instance = self.get_model_fit(model_instance.name, method)
 
         # Storing the model in the internal dictionaries depending on whether the fit was successful or not
         if not already_done and success:
-            self._good_model_fits[method][model.name] = model
+            self._good_model_fits[method][model_instance.name] = model_instance
         elif not already_done and not success:
-            self._bad_model_fits[method][model.name] = model
+            self._bad_model_fits[method][model_instance.name] = model_instance
 
         if self.auto_save:
             # This method means that a change has happened to the model, so it should be re-saved
             self.save()
-        return model
+        return model_instance
 
     def allowed_models(self, table_format: str = "fancy_grid") -> None:
         """
@@ -2033,7 +2065,7 @@ class BaseProfile1D:
         """
         # Base profile don't have any type of model associated with them, so just making an empty list
         if self._prof_type == "base":
-            warn("There are no implemented models for this profile type")
+            warn("There are no implemented models for this profile type", stacklevel=2)
         else:
             allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
 
@@ -2099,11 +2131,13 @@ class BaseProfile1D:
 
         # Verify that an explicitly requested model is supported for this type of 1D profile
         if model is not None and model not in PROF_TYPE_MODELS[self._prof_type]:
-            allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
+            # Separate allowed_mods variable to make Mypy happy, as it doesn't like str allowed being reassigned with
+            #  a list
+            allowed_mods = list(PROF_TYPE_MODELS[self._prof_type].keys())
             prof_name = self._y_axis_name.lower()
             raise XGAInvalidModelError(
                 f"{model} is not a valid model for a {prof_name} profile, please choose from one of these; "
-                f"{', '.join(allowed)}"
+                f"{', '.join(allowed_mods)}"
             )
 
         # When neither model nor method is specified, auto-resolve if there is exactly one successful (or, failing
@@ -2172,6 +2206,8 @@ class BaseProfile1D:
             else:
                 raise ModelNotAssociatedError(f"{model} is valid for this profile, but hasn't been fit yet.")
 
+        if model is None or method is None:
+            raise XGADeveloperError("Model and fit method failed to resolve during check.")
         return model, method
 
     def get_model_fit(self, model: str | None = None, method: str | None = None) -> BaseModel1D:
@@ -2303,6 +2339,8 @@ class BaseProfile1D:
         # Retrieve the validated MCMC model fit instance (auto-resolving the model name if left as None and only a
         #  single model was fit with MCMC)
         model_obj = self.get_model_fit(model, "mcmc")
+        if model_obj.emcee_sampler is None:
+            raise XGAFitError("No emcee sampler is associated with this MCMC model fit.")
 
         # Extract the sampler chains, discarding either the auto-correlation burn-in cut-off (discard=True), a
         #  user-specified number of steps (discard is an int), or no steps (discard=False)
@@ -2480,8 +2518,8 @@ class BaseProfile1D:
         auto_legend: bool = True,
         joined_points: bool = False,
         axis_formatters: dict | None = None,
-    ):
-        """
+    ) -> tuple[Axes, Axes | None]:
+        r"""
         A get method for an axes (or multiple axes) showing this profile and model fits. The idea of this get method
         is that, whilst it is used by the view() method, it can also be called by external methods that wish to use
         the profile plot in concert with other views.
@@ -2601,10 +2639,10 @@ class BaseProfile1D:
         # Setting some aesthetic parameters for the main plotting axis
         main_ax.tick_params(axis="both", direction="in", which="both", top=True, right=True)
 
-        if self.type == "brightness_profile" and self.psf_corrected:
-            leg_label = self.src_name + " PSF Corrected"
+        if self.type == "brightness_profile" and getattr(self, "psf_corrected", False):
+            leg_label = (self.src_name or "") + " PSF Corrected"
         else:
-            leg_label = self.src_name
+            leg_label = self.src_name or ""
 
         # This subtracts the background if the user wants a background subtracted plot
         plot_y_vals = self.values.copy()
@@ -2676,15 +2714,19 @@ class BaseProfile1D:
             #  standard colour cycle if they only gave one colour for multiple models, accept the list of colours for
             #  a set of models, or throw an error that they didn't pass a long enough list of colours
             if isinstance(model_colour, str) and num_to_plot == 1:
-                model_colour = [model_colour]
+                mod_colours: list[str | None] = [model_colour]
             elif isinstance(model_colour, str) and num_to_plot != 1:
-                model_colour = [None] * num_to_plot
+                mod_colours = [None] * num_to_plot
             elif isinstance(model_colour, list) and len(model_colour) != num_to_plot:
                 raise ValueError(
                     "If the 'model_colour' argument is a list, it must have one entry per model-method "
-                    f"combination. The passed list has {len(model_colour)} entries, and there are {num_to_plot} model-method "
-                    "combinations."
+                    f"combination. The passed list has {len(model_colour)} entries, and there are {num_to_plot} "
+                    "model-method combinations."
                 )
+            elif isinstance(model_colour, list):
+                mod_colours = list(model_colour)
+            else:
+                mod_colours = [None] * num_to_plot
 
             # We use the slightly-no-longer-useful fit_radii property (it is only useful if any of the radii values
             #  are at zero, which used to be the case for most of the profiles generated by XGA). In the case where
@@ -2696,7 +2738,10 @@ class BaseProfile1D:
             else:
                 lo_rad = self.fit_radii.min()
                 hi_rad = self.fit_radii.max()
-            mod_rads = np.linspace(lo_rad, hi_rad, 500)
+            # np.linspace and np.nanpercentile on Quantity inputs preserve units and return Quantity at runtime via
+            #  Astropy's NEP-18 __array_function__ dispatch, though NumPy's type stubs annotate them as NDArray;
+            #  cast() informs Mypy without redundant runtime Quantity wrapping
+            mod_rads = cast(Quantity, np.linspace(lo_rad, hi_rad, 500))
 
             mod_col_ind = 0
             for method in self._good_model_fits:
@@ -2704,17 +2749,17 @@ class BaseProfile1D:
                     model_obj = self._good_model_fits[method][model]
                     mod_reals = model_obj.get_realisations(mod_rads)
                     # mean_model = np.mean(mod_reals, axis=1)
-                    median_model = np.nanpercentile(mod_reals, 50, axis=1)
+                    median_model = cast(Quantity, np.nanpercentile(mod_reals, 50, axis=1))
 
-                    upper_model = np.nanpercentile(mod_reals, 84.1, axis=1)
-                    lower_model = np.nanpercentile(mod_reals, 15.9, axis=1)
+                    upper_model = cast(Quantity, np.nanpercentile(mod_reals, 84.1, axis=1))
+                    lower_model = cast(Quantity, np.nanpercentile(mod_reals, 15.9, axis=1))
 
                     mod_lab = model_obj.publication_name + f" - {self._nice_fit_methods[method]}"
                     cur_line = main_ax.plot(
                         mod_rads.value / x_norm.value,
                         median_model.value / y_norm,
                         label=mod_lab,
-                        color=model_colour[mod_col_ind],
+                        color=mod_colours[mod_col_ind],
                     )
                     cur_color = cur_line[0].get_color()
 
@@ -2802,12 +2847,13 @@ class BaseProfile1D:
             res_ax.set_ylabel("Model - Data", fontsize=13)
 
         # Adds a title to this figure, changes depending on whether model fits are plotted as well
-        if models and custom_title is None and len(self.good_model_fits) == 1:
-            title_str = f"{self._y_axis_name} Profile - with model"
-        elif models and custom_title is None and len(self.good_model_fits) > 1:
-            title_str = f"{self._y_axis_name} Profile - with models"
-        elif not models and custom_title is None:
-            title_str = f"{self._y_axis_name} Profile"
+        if custom_title is None:
+            if models and len(self.good_model_fits) == 1:
+                title_str = f"{self._y_axis_name} Profile - with model"
+            elif models and len(self.good_model_fits) > 1:
+                title_str = f"{self._y_axis_name} Profile - with models"
+            else:
+                title_str = f"{self._y_axis_name} Profile"
         else:
             # If the user doesn't like my title, they can supply their own
             title_str = custom_title
@@ -2910,7 +2956,7 @@ class BaseProfile1D:
 
     def view(
         self,
-        figsize=(10, 7),
+        figsize: tuple = (10, 7),
         xscale: str = "log",
         yscale: str = "log",
         xlim: tuple | None = None,
@@ -2933,7 +2979,7 @@ class BaseProfile1D:
         joined_points: bool = False,
         axis_formatters: dict | None = None,
     ) -> None:
-        """
+        r"""
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals. The models are plotted by generating random model realisations from the parameter
         distributions, then plotting the median values, with 1sigma confidence limits.
@@ -3026,7 +3072,7 @@ class BaseProfile1D:
     def save_view(
         self,
         save_path: str,
-        figsize=(10, 7),
+        figsize: tuple = (10, 7),
         xscale: str = "log",
         yscale: str = "log",
         xlim: tuple | None = None,
@@ -3049,7 +3095,7 @@ class BaseProfile1D:
         joined_points: bool = False,
         axis_formatters: dict | None = None,
     ) -> None:
-        """
+        r"""
         A method that allows us to save a view of the current profile, as well as any models that have been
         fitted to it, and their residuals. The models are plotted by generating random model realisations from
         the parameter distributions, then plotting the median values, with 1sigma confidence limits.
@@ -3156,17 +3202,18 @@ class BaseProfile1D:
             this method will use the save_path attribute of the profile.
         """
         #  Checks to see if the user has supplied their own custom save path.
-        if save_path is None and self.save_path is not None:
-            save_path = self.save_path
-        elif save_path is None and self.save_path is None:
-            raise TypeError("Base profiles cannot be saved")
+        if save_path is None:
+            if self.save_path is not None:
+                save_path = self.save_path
+            else:
+                raise TypeError("Base profiles cannot be saved")
 
         # Pickles and saves this profile instance.
         with open(save_path, "wb") as picklo:
             pickle.dump(self, picklo)
 
     @property
-    def save_path(self) -> str:
+    def save_path(self) -> str | None:
         """
         Property getter that assembles the default XGA save path of this profile. The file name contains
         limited information; the type of profile, the source name, and a random integer.
@@ -3198,7 +3245,7 @@ class BaseProfile1D:
         return self._auto_save
 
     @auto_save.setter
-    def auto_save(self, new_val: bool):
+    def auto_save(self, new_val: bool) -> None:
         """
         Whether the profile will automatically save itself at any point (such as after successful model fits).
 
@@ -3356,7 +3403,7 @@ class BaseProfile1D:
         return self._prof_type + "_profile"
 
     @property
-    def src_name(self) -> str:
+    def src_name(self) -> str | None:
         """
         Getter for the name attribute of this profile, what source object it was derived from.
 
@@ -3366,10 +3413,8 @@ class BaseProfile1D:
         return self._src_name
 
     @src_name.setter
-    def src_name(self, new_name):
-        """
-        Setter for the name attribute of this profile, what source object it was derived from.
-        """
+    def src_name(self, new_name: str) -> None:
+        """Setter for the name attribute of this profile, what source object it was derived from."""
         self._src_name = new_name
         if self.auto_save:
             # This method means that a change has happened to the model, so it should be re-saved
@@ -3401,7 +3446,7 @@ class BaseProfile1D:
         return self._inst
 
     @property
-    def telescope(self) -> str:
+    def telescope(self) -> str | None:
         """
         Property getter for the name of the telescope that this profile was derived from.
 
@@ -3414,7 +3459,7 @@ class BaseProfile1D:
     def energy_bounds(self) -> tuple[Quantity, Quantity] | tuple[None, None]:
         """
         Getter method for the energy_bounds property, which returns the rest frame energy band that this
-        profile was generated from
+        profile was generated from.
 
         :return: Tuple containing the lower and upper energy limits as Astropy quantities.
         :rtype: Union[Tuple[Quantity, Quantity], Tuple[None, None]]
@@ -3422,7 +3467,7 @@ class BaseProfile1D:
         return self._energy_bounds
 
     @property
-    def set_ident(self) -> int:
+    def set_ident(self) -> int | None:
         """
         If this profile was generated from an annular spectrum, this will contain the set_id of that annular spectrum.
 
@@ -3433,7 +3478,7 @@ class BaseProfile1D:
         return self._set_id
 
     @property
-    def spec_fit_conf(self) -> str:
+    def spec_fit_conf(self) -> str | None:
         """
         If this profile was generated from an annular spectrum, this property provides the fit-configuration key of
         the spectral fits that provided the properties used to build it.
@@ -3445,7 +3490,7 @@ class BaseProfile1D:
         return self._spec_fit_conf
 
     @property
-    def spec_model(self) -> str:
+    def spec_model(self) -> str | None:
         """
         If this profile was generated from an annular spectrum, this property provides the name of the model
         that was fit to the spectra in order to measure the properties used to build it.
@@ -3466,7 +3511,7 @@ class BaseProfile1D:
         return self._y_axis_name
 
     @y_axis_label.setter
-    def y_axis_label(self, new_name: str):
+    def y_axis_label(self, new_name: str) -> None:
         """
         This allows the user to set a new y axis label for any plots generated by a profile object.
 
@@ -3480,7 +3525,7 @@ class BaseProfile1D:
             self.save()
 
     @property
-    def associated_set_storage_key(self) -> str:
+    def associated_set_storage_key(self) -> str | None:
         """
         This property provides the storage key of the associated AnnularSpectra object, if the profile was generated
         from an AnnularSpectra. If it was not then a None value is returned.
@@ -3534,7 +3579,7 @@ class BaseProfile1D:
         return self._x_norm
 
     @x_norm.setter
-    def x_norm(self, new_val: Quantity):
+    def x_norm(self, new_val: Quantity) -> None:
         """
         The setter for the normalisation value for x-axis data passed on the definition of the this profile object.
         :param Quantity new_val: The new value for the normalisation of x-axis data.
@@ -3555,7 +3600,7 @@ class BaseProfile1D:
         return self._y_norm
 
     @y_norm.setter
-    def y_norm(self, new_val: Quantity):
+    def y_norm(self, new_val: Quantity) -> None:
         """
         The setter for the normalisation value for y-axis data passed on the definition of the this profile object.
         :param Quantity new_val: The new value for the normalisation of y-axis data.
@@ -3576,7 +3621,7 @@ class BaseProfile1D:
         return self._fit_methods
 
     @property
-    def nice_fit_names(self) -> list[str]:
+    def nice_fit_names(self) -> dict[str, str]:
         """
         Returns nicer looking names for the supported fit options of XGA profiles.
 
@@ -3596,7 +3641,7 @@ class BaseProfile1D:
         return self._outer_rad
 
     @property
-    def custom_aggregate_label(self) -> str:
+    def custom_aggregate_label(self) -> str | None:
         """
         This property is a label that should be used in place of the source name associated with this profile when
         plotting multiple profiles on one axis through an aggregate profile instance.
@@ -3607,7 +3652,7 @@ class BaseProfile1D:
         return self._custom_agg_label
 
     @custom_aggregate_label.setter
-    def custom_aggregate_label(self, new_val: str):
+    def custom_aggregate_label(self, new_val: str | None) -> None:
         """
         Setter for the custom_aggregate_label property.
 
@@ -3628,9 +3673,20 @@ class BaseProfile1D:
         """
         return len(self._radii)
 
-    def __add__(self, other):
+    def __add__(
+        self, other: "BaseProfile1D | BaseAggregateProfile1D | list[BaseProfile1D]"
+    ) -> "BaseAggregateProfile1D":
+        """
+        Combines this 1D profile with another 1D profile, an aggregate 1D profile, or a list of 1D profiles to
+        produce a BaseAggregateProfile1D object.
+
+        :param Union[BaseProfile1D, BaseAggregateProfile1D, List[BaseProfile1D]] other: The profile(s) to combine
+            with this profile.
+        :return: An aggregate 1D profile containing the combined profiles.
+        :rtype: BaseAggregateProfile1D
+        """
         to_combine = [self]
-        if type(other) == list:
+        if isinstance(other, list):
             to_combine += other
         elif isinstance(other, BaseProfile1D):
             to_combine.append(other)
@@ -3651,11 +3707,12 @@ class BaseAggregateProfile1D:
     :param list profiles: A list of profile objects (of the same type) to include in this aggregate profile.
     """
 
-    def __init__(self, profiles: list[BaseProfile1D]):
+    def __init__(self, profiles: list[BaseProfile1D]) -> None:
         """
         The init for the BaseAggregateProfile1D class.
 
-        :param List[BaseProfile1D] profiles: A list of profile objects (of the same type) to include in this aggregate profile.
+        :param List[BaseProfile1D] profiles: A list of profile objects (of the same type) to include in this
+            aggregate profile.
         """
         # This checks that all profiles have the same x units - we used to explicitly check for Python instance
         #  type, but actually we do want profiles to be plottable on the same axis if they have the same units
@@ -3770,7 +3827,7 @@ class BaseAggregateProfile1D:
         return self._x_norms
 
     @x_norms.setter
-    def x_norms(self, new_vals: list[Quantity]):
+    def x_norms(self, new_vals: list[Quantity]) -> None:
         """
         Setter for the collated x normalisation values for the constituent profiles of this aggregate profile.
 
@@ -3793,7 +3850,7 @@ class BaseAggregateProfile1D:
         return self._y_norms
 
     @y_norms.setter
-    def y_norms(self, new_vals: list[Quantity]):
+    def y_norms(self, new_vals: list[Quantity]) -> None:
         """
         Setter for the collated y normalisation values for the constituent profiles of this aggregate profile.
 
@@ -3829,7 +3886,7 @@ class BaseAggregateProfile1D:
         show_residual_ax: bool = True,
         joined_points: bool = False,
     ) -> tuple[Axes, Axes | None]:
-        """
+        r"""
         This method populates a matplotlib figure and axes with all the profiles that make up this aggregate
         profile, plotted on the same figure.
 
@@ -3973,12 +4030,17 @@ class BaseAggregateProfile1D:
 
         # Cycles through the component profiles of this aggregate profile, plotting them all
         for p_ind, p in enumerate(self._profiles):
+            src_prefix = p.src_name or ""
             if p.obs_id != "combined":
-                p_name = p.src_name + f" {p.telescope}-{p.obs_id}-{p.instrument.upper()}"
+                p_name = src_prefix + f" {p.telescope}-{p.obs_id}-{p.instrument.upper()}"
             else:
-                p_name = p.src_name + f" {p.telescope}"
+                p_name = src_prefix + f" {p.telescope}"
 
-            if p.type == "brightness_profile" and p.psf_corrected and p.custom_aggregate_label is None:
+            if (
+                p.type == "brightness_profile"
+                and getattr(p, "psf_corrected", False)
+                and p.custom_aggregate_label is None
+            ):
                 leg_label = p_name + " PSF Corrected"
             elif p.custom_aggregate_label is None:
                 leg_label = p_name
@@ -4057,12 +4119,15 @@ class BaseAggregateProfile1D:
                         else:
                             lo_rad = p.fit_radii.min()
                             hi_rad = p.fit_radii.max()
-                        mod_rads = np.linspace(lo_rad, hi_rad, 500)
+                        # np.linspace and np.nanpercentile on Quantity inputs preserve units and return Quantity at
+                        #  runtime via Astropy's NEP-18 __array_function__ dispatch, though NumPy's type stubs
+                        #  annotate them as NDArray; cast() informs Mypy without redundant runtime Quantity wrapping
+                        mod_rads = cast(Quantity, np.linspace(lo_rad, hi_rad, 500))
                         mod_reals = model_obj.get_realisations(mod_rads)
-                        median_model = np.nanpercentile(mod_reals, 50, axis=1)
+                        median_model = cast(Quantity, np.nanpercentile(mod_reals, 50, axis=1))
 
-                        upper_model = np.nanpercentile(mod_reals, 84.1, axis=1)
-                        lower_model = np.nanpercentile(mod_reals, 15.9, axis=1)
+                        upper_model = cast(Quantity, np.nanpercentile(mod_reals, 84.1, axis=1))
+                        lower_model = cast(Quantity, np.nanpercentile(mod_reals, 15.9, axis=1))
 
                         colour = line[0].get_color()
 
@@ -4252,7 +4317,7 @@ class BaseAggregateProfile1D:
         show_residual_ax: bool = True,
         joined_points: bool = False,
     ) -> None:
-        """
+        r"""
         A method that allows us to see all the profiles that make up this aggregate profile, plotted
         on the same figure.
 
@@ -4357,7 +4422,7 @@ class BaseAggregateProfile1D:
         joined_points: bool = False,
         dpi: int = 300,
     ) -> None:
-        """
+        r"""
         This method generates a figure containing all the profiles that make up this aggregate profile, plotted
         on the same figure, and saves it to the specified path.
 
@@ -4445,9 +4510,20 @@ class BaseAggregateProfile1D:
         # Clearing the current figure and closing all open figures
         plt.close("all")
 
-    def __add__(self, other):
+    def __add__(
+        self, other: "BaseProfile1D | BaseAggregateProfile1D | list[BaseProfile1D]"
+    ) -> "BaseAggregateProfile1D":
+        """
+        Combines this aggregate 1D profile with another 1D profile, an aggregate 1D profile, or a list of 1D
+        profiles to produce a new BaseAggregateProfile1D object.
+
+        :param Union[BaseProfile1D, BaseAggregateProfile1D, List[BaseProfile1D]] other: The profile(s) to combine
+            with this aggregate profile.
+        :return: An aggregate 1D profile containing the combined profiles.
+        :rtype: BaseAggregateProfile1D
+        """
         to_combine = self.profiles
-        if type(other) == list:
+        if isinstance(other, list):
             to_combine += other
         elif isinstance(other, BaseProfile1D):
             to_combine.append(other)

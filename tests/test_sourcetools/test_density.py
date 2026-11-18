@@ -1,23 +1,31 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:54 PM. Copyright (c) The Contributors.
 
+"""Tests for XGA gas density profile generation functions in xga.sourcetools.density."""
+
 import unittest
 
 from xga.products.profile import GasDensity3D
 from xga.sourcetools.density import inv_abel_fitted_model
+
 from .. import get_test_source
 
 
 class TestDensityFuncs(unittest.TestCase):
+    """Tests for 3D gas density profile measurement functions."""
+
     @classmethod
-    def setUpClass(cls):
-        cls.src = get_test_source('all')
+    def setUpClass(cls) -> None:
+        """Initialise the shared multi-mission test GalaxyCluster source."""
+        cls.src = get_test_source("all")
 
-    def test_inv_abel_fitted_model(self):
-        res = inv_abel_fitted_model(self.src, 'beta', use_peak=False, psf_corr=False, stacked_spectra=True)
+    def test_inv_abel_fitted_model(self) -> None:
+        """Tests that inv_abel_fitted_model generates 3D gas density profiles for XMM and eRASS data."""
+        res = inv_abel_fitted_model(self.src, "beta", use_peak=False, psf_corr=False, stacked_spectra=True)
 
-        assert type(res['erass'][0]) == GasDensity3D
-        assert type(res['xmm'][0]) == GasDensity3D
+        assert isinstance(res["erass"][0], GasDensity3D)
+        assert isinstance(res["xmm"][0], GasDensity3D)
+
 
 #    def test_dens_setup(self):
 #        res = _dens_setup(self.src, 'angr',Quantity(0.5, 'keV'), Quantity(2, 'keV'), stacked_spectra=True)

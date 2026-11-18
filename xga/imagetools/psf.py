@@ -1,9 +1,10 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 2:06 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 
 """XGA submodule that implements methods of correcting for and modeling PSF effects."""
 
 import os
+from collections.abc import Sequence
 from multiprocessing.dummy import Pool
 from warnings import warn
 
@@ -17,13 +18,13 @@ from xga import NUM_CORES, OUTPUT
 
 from ..exceptions import NoProductAvailableError, NotAssociatedError
 from ..generate.sas import emosaic, evselect_image, psfgen
-from ..products import Image, PSFGrid
+from ..products import Image
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 
 
 def rl_psf(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | Sequence[BaseSource],
     iterations: int = 15,
     psf_model: str = "ELLBETA",
     lo_en: Quantity = Quantity(0.5, "keV"),
@@ -125,8 +126,10 @@ def rl_psf(
 
     # If just one source is passed in, make it a list of one, makes behaviour more consistent
     #  throughout this function.
-    if not isinstance(sources, (list, BaseSample)):
+    if isinstance(sources, BaseSource):
         sources = [sources]
+    elif not isinstance(sources, (list, BaseSample)):
+        sources = list(sources)
 
     # Only those sources that don't already have the individual PSF corrected images should be run
     sub_sources = []
@@ -138,6 +141,8 @@ def rl_psf(
 
         # All the image objects of the specified energy range (so every combination of ObsID and instrument)
         match_images = source.get_images(lo_en=lo_en, hi_en=hi_en, telescope="xmm")
+        if isinstance(match_images, Image):
+            match_images = [match_images]
 
         try:
             # Check to see if all individual PSF corrected images are present
@@ -151,6 +156,8 @@ def rl_psf(
                 psf_algo="rl",
                 telescope="xmm",
             )
+            if isinstance(psf_corr_prod, Image):
+                psf_corr_prod = [psf_corr_prod]
         except NoProductAvailableError:
             psf_corr_prod = []
 
@@ -166,17 +173,21 @@ def rl_psf(
     # Should have cleaned it so that only those sources that need it will have PSFs generated
     psfgen(sub_sources, bins, psf_model, num_cores=num_cores)
 
+    def err_callback(err: BaseException) -> None:
+        raise err
+
     corr_prog_message = "PSF Correcting Observations - Currently {}"
     with tqdm(
         desc=corr_prog_message.format(""), total=len(sub_sources), disable=len(sub_sources) == 0
     ) as corr_progress:
         for source in sub_sources:
-            source: BaseSource
             # Updates the source name in the message every iteration
             corr_progress.set_description(corr_prog_message.format(source.name))
 
             # All the image objects of the specified energy range (so every combination of ObsID and instrument)
             match_images = source.get_images(lo_en=lo_en, hi_en=hi_en, telescope="xmm")
+            if isinstance(match_images, Image):
+                match_images = [match_images]
 
             # Just warns the user that some of the images may not be valid
             for matched in match_images:
@@ -197,7 +208,7 @@ def rl_psf(
 
                 # Extra key we need to search for the PSFGrid we need, then fetch it.
                 psf_key = "_".join([psf_model, str(bins)])
-                psf_grid: PSFGrid = source.get_products("psf", obs_id, inst, psf_key, telescope="xmm")[0]
+                psf_grid = source.get_products("psf", obs_id, inst, psf_key, telescope="xmm")[0]
 
                 # This uses a built in method of the PSF class to re-sample the PSF(s) to the same
                 #  scale as our image
@@ -213,21 +224,18 @@ def rl_psf(
                 # Nasty nested list to store each step for each PSF in
                 # The starting array full of 0.5 values is what is used in the skimage implementation
                 storage = [[np.full(full_im_data.shape, 0.5)] for i in range(len(psf_grid))]
+
+                # This is what is triggered when each rl_step call is done
+                def callback(results_in: tuple[np.ndarray, int], cur_storage: list = storage) -> None:
+                    # Reading out results
+                    proc_chunk, stor_ind = results_in
+                    # Storing the results in the storage listss
+                    cur_storage[stor_ind].append(proc_chunk)
+
                 # Iterating over the steps
                 for _i in range(iterations):
                     # Sets up a multiprocessing pool
                     with Pool(num_cores) as pool:
-                        # This is what is triggered when each rl_step call is done
-                        def callback(results_in):
-                            nonlocal storage
-                            # Reading out results
-                            proc_chunk, stor_ind = results_in
-                            # Storing the results in the storage listss
-                            storage[stor_ind].append(proc_chunk)
-
-                        def err_callback(err):
-                            raise err
-
                         # Starts a deconvolution function for each spatial PSF, adding them to the
                         #  multiprocessing pool
                         for psf_ind, _psf in enumerate(psf_grid):
@@ -279,7 +287,8 @@ def rl_psf(
                     f"{obs_id}_{inst}_{bins}bin_{iterations}iter_{psf_model}mod_rlalgo_{lo_en.value}-"
                     f"{hi_en.value}keVpsfcorr_datacube.fits"
                 )
-                # Define this one because emosaic can't deal with fits datacubes, and thats what I use to combine images.
+                # Define this one because emosaic can't deal with fits datacubes, and thats what I use to
+                #  combine images.
                 im_name = (
                     f"{obs_id}_{inst}_{bins}bin_{iterations}iter_{psf_model}mod_rlalgo_{lo_en.value}-"
                     f"{hi_en.value}keVpsfcorr_img.fits"

@@ -1,8 +1,8 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 3:56 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 """This module defines XGA source classes representing specific extended astrophysical sources (e.g. GalaxyCluster)."""
 
-from typing import overload
+from typing import Literal, overload
 from warnings import simplefilter, warn
 
 import numpy as np
@@ -14,7 +14,7 @@ from regions import Region
 from xga import COMBINED_INSTS, DEFAULT_COSMO
 from xga.exceptions import MultipleMatchError, NoProductAvailableError, NoRegionsError, XGADeveloperError
 from xga.imagetools.profile import radial_brightness
-from xga.products.base import BaseProfile1D
+from xga.products.base import BaseAggregateProfile1D, BaseProfile1D
 from xga.products.phot import RateMap
 from xga.products.profile import (
     APECNormalisation1D,
@@ -485,6 +485,18 @@ class GalaxyCluster(ExtendedSource):
         self._r2500 = new_value_kpc
         self._radii["r2500"] = new_value_deg
 
+    @property
+    def redshift(self) -> float:
+        """
+        Simple getter for the redshift of the galaxy cluster.
+
+        :return: Redshift as a float.
+        :rtype: float
+        """
+        if self._redshift is None:
+            raise XGADeveloperError("GalaxyCluster redshift should never be None.")
+        return self._redshift
+
     # Property getters for other observables I've allowed to be passed in.
     @property
     def weak_lensing_mass(self) -> Quantity:
@@ -643,6 +655,95 @@ class GalaxyCluster(ExtendedSource):
 
         return matched_prods
 
+    # @overload signatures allow Mypy to narrow the return type of get_results to dict[str, np.ndarray | Quantity]
+    #  when par is None, Quantity when par is specified with with_units=True, and np.ndarray when par is specified
+    #  with with_units=False
+    @overload
+    def get_results(
+        self,
+        outer_radius: str | Quantity,
+        telescope: str,
+        model: str | None = "constant*tbabs*apec",
+        inner_radius: str | Quantity = Quantity(0, "arcsec"),
+        par: None = None,
+        group_spec: bool = True,
+        min_counts: int = 5,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        stacked_spectra: bool = False,
+        fit_conf: str | dict | None = None,
+        with_units: bool = False,
+    ) -> dict[str, np.ndarray | Quantity]: ...
+
+    @overload
+    def get_results(
+        self,
+        outer_radius: str | Quantity,
+        telescope: str,
+        model: str | None = "constant*tbabs*apec",
+        inner_radius: str | Quantity = Quantity(0, "arcsec"),
+        par: str = ...,
+        group_spec: bool = True,
+        min_counts: int = 5,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        stacked_spectra: bool = False,
+        fit_conf: str | dict | None = None,
+        *,
+        with_units: Literal[True],
+    ) -> Quantity: ...
+
+    @overload
+    def get_results(
+        self,
+        outer_radius: str | Quantity,
+        telescope: str,
+        model: str | None,
+        inner_radius: str | Quantity,
+        par: str,
+        group_spec: bool,
+        min_counts: int,
+        min_sn: float | None,
+        over_sample: float | None,
+        stacked_spectra: bool,
+        fit_conf: str | dict | None,
+        with_units: Literal[True],
+    ) -> Quantity: ...
+
+    @overload
+    def get_results(
+        self,
+        outer_radius: str | Quantity,
+        telescope: str,
+        model: str | None = "constant*tbabs*apec",
+        inner_radius: str | Quantity = Quantity(0, "arcsec"),
+        par: str = ...,
+        group_spec: bool = True,
+        min_counts: int = 5,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        stacked_spectra: bool = False,
+        fit_conf: str | dict | None = None,
+        with_units: Literal[False] = False,
+    ) -> np.ndarray: ...
+
+    @overload
+    def get_results(
+        self,
+        outer_radius: str | Quantity,
+        telescope: str,
+        model: str | None = "constant*tbabs*apec",
+        inner_radius: str | Quantity = Quantity(0, "arcsec"),
+        par: str | None = None,
+        group_spec: bool = True,
+        min_counts: int = 5,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        stacked_spectra: bool = False,
+        fit_conf: str | dict | None = None,
+        with_units: bool = False,
+    ) -> dict | np.ndarray | Quantity: ...
+
     def get_results(
         self,
         outer_radius: str | Quantity,
@@ -714,6 +815,8 @@ class GalaxyCluster(ExtendedSource):
             with_units,
         )
 
+    # @overload signatures allow Mypy to distinguish between returning a dict[str, Quantity] of all energy-band
+    #  luminosities (when lo_en or hi_en is None) and a single Quantity (when both lo_en and hi_en are supplied)
     @overload
     def get_luminosities(
         self,
@@ -1126,6 +1229,40 @@ class GalaxyCluster(ExtendedSource):
             return filt_matched_prods[0]
         else:
             return filt_matched_prods
+
+    # @overload signatures allow Mypy to infer that get_apec_norm_profiles returns a single APECNormalisation1D
+    #  (rather than APECNormalisation1D | list[APECNormalisation1D]) when annuli_bound_radii is explicitly provided
+    @overload
+    def get_apec_norm_profiles(
+        self,
+        annuli_bound_radii: Quantity,
+        group_spec: bool = True,
+        min_counts: int | None = 5,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        set_id: int | None = None,
+        obs_id: str = "combined",
+        inst: str = "combined",
+        telescope: str | None = None,
+        spec_model: str | None = None,
+        spec_fit_conf: str | dict | None = None,
+    ) -> APECNormalisation1D: ...
+
+    @overload
+    def get_apec_norm_profiles(
+        self,
+        annuli_bound_radii: Quantity | None = None,
+        group_spec: bool = True,
+        min_counts: int | None = 5,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        set_id: int | None = None,
+        obs_id: str = "combined",
+        inst: str = "combined",
+        telescope: str | None = None,
+        spec_model: str | None = None,
+        spec_fit_conf: str | dict | None = None,
+    ) -> APECNormalisation1D | list[APECNormalisation1D]: ...
 
     def get_apec_norm_profiles(
         self,
@@ -1541,7 +1678,7 @@ class GalaxyCluster(ExtendedSource):
         back_sub: bool = True,
         lo_en: Quantity = Quantity(0.5, "keV"),
         hi_en: Quantity = Quantity(2.0, "keV"),
-    ) -> tuple[SurfaceBrightness1D, dict[str, Quantity]]:
+    ) -> tuple[SurfaceBrightness1D | BaseAggregateProfile1D, dict[str, Quantity]]:
         """
         A method that generates brightness profile objects for this galaxy cluster. Interloper
         sources are excluded, and any fits performed to pre-existing brightness profiles which are being
@@ -1642,6 +1779,7 @@ class GalaxyCluster(ExtendedSource):
         rad = self.get_radius(reg_type)
 
         # This fetches any profiles that might have already been generated to our required specifications
+        sb_profile: SurfaceBrightness1D | BaseAggregateProfile1D
         try:
             sb_profile = self.get_1d_brightness_profile(
                 rad, pix_step=pix_step, min_snr=min_snr, lo_en=lo_en, hi_en=hi_en, telescope=telescope

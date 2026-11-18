@@ -1,9 +1,15 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 1:49 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+"""
+The xga.generate.esass.spec module implements wrapper functions for eSASS tools that generate spectroscopic data
+products (i.e. spectra, background spectra, RMFs, and ARFs). As these functions wrap eSASS tools specifically, they
+are only compatible with source/sample instances that have eROSITA observations associated.
+"""
 
 import os
 from copy import copy, deepcopy
 from random import randint
+from typing import Any, cast
 from warnings import warn
 
 import numpy as np
@@ -28,14 +34,14 @@ def _spec_cmds(
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
+    min_sn: float | None = None,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
     combine_tm: bool = True,
     combine_obs: bool = True,
     force_gen: bool = False,
-    telescope: str = None,
-):
+    telescope: str | None = None,
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     An internal function to generate all the commands necessary to produce a srctool spectrum, but is not
     decorated by the esass_call function, so the commands aren't immediately run. This means it can be used for
@@ -68,11 +74,11 @@ def _spec_cmds(
     :param bool combine_obs: Setting this to False will generate an spectrum for each associated observation,
         instead of for one combined observation.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
-    :param str telescope: The telescope to make spectral generation commands for (either 'erass', 'erosita', or None). If None, then all available
-        eROSITA telescopes will be used.
+    :param str telescope: The telescope to make spectral generation commands for (either 'erass', 'erosita', or
+        None). If None, then all available eROSITA telescopes will be used.
     """
 
-    def _make_spec_cmd_info(cur_evt_list: EventList):
+    def _make_spec_cmd_info(cur_evt_list: EventList) -> tuple[list[str], list[str], list[dict[str, Any]]]:
         """
         Internal function to get prepare the commands required to generate spectra
         from eROSITA observations. This functions acts on a single event list at a time.
@@ -152,6 +158,7 @@ def _spec_cmds(
             # eROSITA observations have the potential to be in pointed or survey/scan modes - we change the time step
             #  based on that. We suspect that the time step is almost irrelevant for pointed mode observations, as
             #  the pointing of the spacecraft won't be changing appreciably
+            t_step: int | float
             if cur_evt_list.header["OBS_MODE"] == "POINTING":
                 t_step = t_step_point
             elif cur_evt_list.header["OBS_MODE"] in ["SURVEY", "SCAN"]:
@@ -278,6 +285,7 @@ def _spec_cmds(
             b_arf = b_spec.replace("_backspec.fits", "_back.arf")
 
             # Defining the grouping keywords
+            group_scale: int | float | str
             if group_spec and min_counts is not None:
                 group_type = "min"
                 group_scale = min_counts
@@ -479,19 +487,19 @@ def _spec_cmds(
             "There are no eROSITA data associated with the source/sample, as such eROSITA spectra cannot be generated."
         )
 
-    # This function supports passing both individual sources and sets of sources
-    if isinstance(sources, BaseSource):
-        sources = [sources]
+    # This function supports passing both individual sources and sets of sources - using a separate variable
+    #  name to make Mypy happy, as it doesn't like BaseSource | BaseSample being reassigned with a list
+    src_list = [sources] if isinstance(sources, BaseSource) else sources
 
     # In this case the user wants to combine separate sky tiles, so we have to make
     #  sure that combined event lists exist for each source
     if combine_obs:
         # This requires combined event lists - this function will generate them
-        evtool_combine_evts(sources, num_cores)
+        evtool_combine_evts(src_list, num_cores)
 
     # TODO edit region_setup to be telescope agnostic
-    sources, inner_radii, outer_radii = region_setup(
-        sources, outer_radius, inner_radius, disable_progress, obs_id="", num_cores=num_cores
+    _, inner_radii, outer_radii = region_setup(
+        src_list, outer_radius, inner_radius, disable_progress, obs_id="", num_cores=num_cores
     )
 
     # Making sure this value is the expected type
@@ -522,13 +530,13 @@ def _spec_cmds(
 
     # eSASS's srctool operates quite differently for extended sources and point sources. We are going to want a
     #  detector map for extended sources to weight the ARF calculation, so here we check the source type
-    if isinstance(sources[0], (ExtendedSource, GalaxyCluster)):
+    if isinstance(src_list[0], (ExtendedSource, GalaxyCluster)):
         # Set up a boolean value to tell us later on if this is an extended source
         extended_src = True
         # Sets the extent model type to MAP, which means we'll be using an image to encode the emission extent
         ext_type = "MAP"
         # Ensures that the images we intend to use as extent maps have actually been generated
-        evtool_image(sources, EROSITA_EXTMAP_LO_EN, EROSITA_EXTMAP_HI_EN, combine_obs=combine_obs, num_cores=num_cores)
+        evtool_image(src_list, EROSITA_EXTMAP_LO_EN, EROSITA_EXTMAP_HI_EN, combine_obs=combine_obs, num_cores=num_cores)
     else:
         # Set up a boolean value to tell us later on if this is a point source
         extended_src = False
@@ -605,11 +613,11 @@ def _spec_cmds(
     sources_paths = []
     sources_extras = []
     sources_types = []
-    for s_ind, source in enumerate(sources):
-        source: BaseSource
-        cmds = []
-        final_paths = []
-        extra_info = []
+    source: BaseSource
+    for s_ind, source in enumerate(src_list):
+        cmds: list[str] = []
+        final_paths: list[str] = []
+        extra_info: list[dict[str, Any]] = []
 
         # By this point we know that at least one of the sources has eROSITA data
         #  associated (we checked that at the beginning of this function).
@@ -672,11 +680,9 @@ def _spec_cmds(
             # Now we start to cycle through event lists (or just the one list if there
             #  is only one skytile/observation associated with the source).
             if not use_combine_obs:
-                # Cycle through the event lists for each sky tile
-                for evt_list in source.get_products("events", telescope=er_miss):
-                    # Mainly for code-completion purposes in IDE
-                    evt_list: EventList
-
+                # Cycle through the event lists for each sky tile - using typing.cast to keep evt_list typed
+                #  as EventList for Mypy until a dedicated get_event_lists method is added
+                for evt_list in cast(list[EventList], source.get_products("events", telescope=er_miss)):
                     # This internal function uses the evtlist to prepare spec
                     #  commands, final paths, and extra info
                     out_cmd, out_fin_paths, out_ex_info = _make_spec_cmd_info(evt_list)
@@ -689,10 +695,9 @@ def _spec_cmds(
                     extra_info += out_ex_info
             else:
                 # In this case, the sky tiles are to be combined, so we grab
-                #  the combined event list
-                evt_list = source.get_products("combined_events", telescope=er_miss)[0]
-                # Mainly for code-completion purposes in IDE
-                evt_list: EventList
+                #  the combined event list - using typing.cast to keep evt_list typed as EventList for Mypy
+                #  until a dedicated get_event_lists method is added
+                evt_list = cast(EventList, source.get_products("combined_events", telescope=er_miss)[0])
 
                 # This function then uses the evtlist to prepare spec commands, final
                 #  paths, and extra info
@@ -820,13 +825,13 @@ def srctool_spectrum(
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
+    min_sn: float | None = None,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
     combine_tm: bool = True,
     combine_obs: bool = True,
     force_gen: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A wrapper for all the eSASS and Heasoft processes necessary to generate an eROSITA spectrum that can be analysed
     in XSPEC. Every observation associated with this source, and every instrument associated with that
@@ -882,16 +887,16 @@ def srctool_spectrum(
 #  spectrum generation functions with particular arguments
 @esass_call
 def esass_spectrum_set(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     radii: list[Quantity] | Quantity,
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
+    min_sn: float | None = None,
     num_cores: int = NUM_CORES,
     force_regen: bool = False,
     disable_progress: bool = False,
     combine_tm: bool = False,
-):
+) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     This function can be used to produce 'sets' of XGA Spectrum objects, generated in concentric circular
     annuli, specifically using data from the eROSITA telescope.
@@ -1024,7 +1029,7 @@ def esass_spectrum_set(
         # This is where the commands/extra information get concatenated from the different annuli
         src_cmds = np.array([])
         src_paths = np.array([])
-        src_out_types = []
+        src_out_types: Any = []
         src_extras = np.array([])
 
         # By this point we know that at least one of the sources has eROSITA data associated (we checked that at the
@@ -1070,7 +1075,7 @@ def esass_spectrum_set(
             set_id = randint(0, 100_000_000)
 
             try:
-                exists = source.get_annular_spectra(radii[s_ind], group_spec, min_counts, min_sn, telescope=er_miss)
+                source.get_annular_spectra(radii[s_ind], group_spec, min_counts, min_sn, telescope=er_miss)
                 # If it already exists though we don't need to bother generating
                 generate_spec = False
             except NoProductAvailableError:
@@ -1127,8 +1132,9 @@ def esass_spectrum_set(
                             split_r = copy(interim_extras[p_ind]["rmf_path"]).split("/")
                             # split_br = copy(interim_extras[p_ind]['b_rmf_path']).split('/')
                             new_rmf = split_r[-1].replace(".rmf", f"_ident{set_id}_{r_ind}") + ".rmf"
-                            # new_b_rmf = split_br[-1].replace('_back.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
-                            #             + "_back.rmf"
+                            # new_b_rmf = split_br[-1].replace(
+                            #     '_back.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)
+                            # ) + "_back.rmf"
 
                             # Replacing the names in the eSASS commands
                             cur_cmd = cur_cmd.replace(split_r[-1], new_rmf)

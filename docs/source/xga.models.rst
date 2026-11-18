@@ -80,6 +80,3 @@ models.temperature module
    :members:
    :undoc-members:
    :show-inheritance:
-
-
-

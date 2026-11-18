@@ -8,6 +8,3 @@ Advanced Tutorials
     Gas Density Profiles <notebooks/advanced_tutorials/cluster_gas.ipynb>
     Annular Spectra of Extended Sources <notebooks/advanced_tutorials/annular_spectra.ipynb>
     Temperature and Hydrostatic Mass Profiles of Clusters <notebooks/advanced_tutorials/hydrostatic_mass.ipynb>
-
-
-

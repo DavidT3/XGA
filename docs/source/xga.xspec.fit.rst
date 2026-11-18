@@ -19,4 +19,3 @@ xspec.fit.profile module
    :members:
    :undoc-members:
    :show-inheritance:
-

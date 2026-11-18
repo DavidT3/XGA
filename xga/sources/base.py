@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/11/26, 4:33 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/16/26, 12:58 PM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
@@ -316,6 +316,8 @@ class BaseSource:
             # If we are declaring a NullSource, then the RA and Dec are going to be NaN - and we want to use the
             #  entire census of the telescopes specified by the user
             matches, excluded = census_match(telescope, sel_null_obs)
+        if not isinstance(matches, dict) or not isinstance(excluded, dict):
+            raise XGADeveloperError("Single-coordinate match must return dictionaries.")
 
         from ..utils import BLACKLIST
 
@@ -3210,6 +3212,8 @@ class BaseSource:
         # This is the array that the mask gets built in - initially all ones and as we move through the regions we
         #  start to set the bits that need to be excluded to zero
         mask = np.ones(mask_image.shape)
+        if mask_image.telescope is None:
+            raise XGADeveloperError("Mask image has no associated telescope.")
         inter_regs = self.interloper_regions[mask_image.telescope]
 
         # If a region inclusion distance has not been set, then we create a mask of all True so that all regions
@@ -3312,9 +3316,9 @@ class BaseSource:
         hi_en: Quantity | None = None,
         psf_corr: bool = False,
         psf_model: str | None = "ELLBETA",
-        psf_bins: int = 4,
-        psf_algo: str = "rl",
-        psf_iter: int = 15,
+        psf_bins: int | None = 4,
+        psf_algo: str | None = "rl",
+        psf_iter: int | None = 15,
         telescope: str | None = None,
     ) -> Image | ExpMap | RateMap | list[Image] | list[ExpMap] | list[RateMap]:
         """
@@ -3713,6 +3717,8 @@ class BaseSource:
             #  to full fit configuration keys
             new_matched_prods = []
             for p in filt_matched_prods:
+                if p.spec_model is None:
+                    continue
                 try:
                     cur_gen_fit_conf = fit_conf_from_function(PROF_FIT_FUNC_MODEL_NAMES[p.spec_model], spec_fit_conf)
                     if cur_gen_fit_conf == p.spec_fit_conf:
@@ -3763,6 +3769,7 @@ class BaseSource:
         :rtype: Union[LightCurve, List[LightCurve], AggregateLightCurve, List[AggregateLightCurve]]
         """
         # We check the validity of the user inputs, before trying to retrieve any products
+        inn_rad_num: Quantity | None = None
         if isinstance(inner_radius, Quantity):
             inn_rad_num = self.convert_radius(inner_radius, "deg")
         elif isinstance(inner_radius, str):
@@ -3770,6 +3777,7 @@ class BaseSource:
         elif inner_radius is not None:
             raise TypeError("You may only pass a quantity, a string, or None as 'inner_radius'")
 
+        out_rad_num: Quantity | None = None
         if isinstance(outer_radius, Quantity):
             out_rad_num = self.convert_radius(outer_radius, "deg")
         elif isinstance(outer_radius, str):
@@ -3786,10 +3794,9 @@ class BaseSource:
             raise UnitConversionError("The 'lo_en' and 'hi_en' arguments must be convertible to keV.")
 
         # Set the search key to use for get_products
-        if obs_id == "combined":
-            search_key = "combined_lightcurve"
-        else:
-            search_key = "lightcurve"
+        search_key: Literal["combined_lightcurve", "lightcurve"] = (
+            "combined_lightcurve" if obs_id == "combined" else "lightcurve"
+        )
 
         # Grabbing every single lightcurve that matches ObsID, instrument, and telescope passed by the
         #  user (None by default) - we'll then sweep through whatever list is returned and narrow them down
@@ -3812,13 +3819,13 @@ class BaseSource:
         # Checking for matching radii first - this will likely whittle down the LCs best of all. We have
         #  had matching problems sometimes because of float precision (the last digit flips and is no longer
         #  an exact match to the other radius)
-        if inner_radius is not None:
+        if inn_rad_num is not None:
             filt_matched_prods = [
                 m_prod
                 for m_prod in filt_matched_prods
                 if np.isclose(inn_rad_num, m_prod.inner_rad, rtol=0, atol=RAD_MATCH_PRECISION)
             ]
-        if outer_radius is not None:
+        if out_rad_num is not None:
             filt_matched_prods = [
                 m_prod
                 for m_prod in filt_matched_prods
@@ -4444,6 +4451,8 @@ class BaseSource:
                         info_key = extra_key
                     # Adding each component product to the inventory
                     for comp_po in po.all_spectra:
+                        if comp_po.path is None:
+                            raise XGADeveloperError("The component spectrum path cannot be None.")
                         if comp_po.obs_id == "combined":
                             inven = pd.read_csv(OUTPUT + f"{tel}/combined/inventory.csv", dtype=str)
 
@@ -4557,6 +4566,129 @@ class BaseSource:
                     inven.drop_duplicates(subset=None, keep="first", inplace=True)
                     inven.to_csv(OUTPUT + f"{tel}/profiles/{self.name}/inventory.csv", index=False)
 
+    # @overload signatures map literal product type strings (e.g. 'events', 'image', 'spectrum') to their concrete
+    #  XGA product list types when just_obj=True, and to nested metadata lists (list[list[Any]]) when just_obj=False
+    @overload
+    def get_products(
+        self,
+        p_type: Literal["events", "combined_events"],
+        obs_id: str | None = None,
+        inst: str | None = None,
+        extra_key: str | None = None,
+        just_obj: Literal[True] = True,
+        telescope: str | None = None,
+    ) -> list[EventList]: ...
+
+    @overload
+    def get_products(
+        self,
+        p_type: Literal["image", "combined_image"],
+        obs_id: str | None = None,
+        inst: str | None = None,
+        extra_key: str | None = None,
+        just_obj: Literal[True] = True,
+        telescope: str | None = None,
+    ) -> list[Image]: ...
+
+    @overload
+    def get_products(
+        self,
+        p_type: Literal["expmap", "combined_expmap"],
+        obs_id: str | None = None,
+        inst: str | None = None,
+        extra_key: str | None = None,
+        just_obj: Literal[True] = True,
+        telescope: str | None = None,
+    ) -> list[ExpMap]: ...
+
+    @overload
+    def get_products(
+        self,
+        p_type: Literal["ratemap", "combined_ratemap"],
+        obs_id: str | None = None,
+        inst: str | None = None,
+        extra_key: str | None = None,
+        just_obj: Literal[True] = True,
+        telescope: str | None = None,
+    ) -> list[RateMap]: ...
+
+    @overload
+    def get_products(
+        self,
+        p_type: Literal["psf"],
+        obs_id: str | None = None,
+        inst: str | None = None,
+        extra_key: str | None = None,
+        just_obj: Literal[True] = True,
+        telescope: str | None = None,
+    ) -> list[PSFGrid]: ...
+
+    @overload
+    def get_products(
+        self,
+        p_type: Literal["spectrum", "combined_spectrum"],
+        obs_id: str | None = None,
+        inst: str | None = None,
+        extra_key: str | None = None,
+        just_obj: Literal[True] = True,
+        telescope: str | None = None,
+    ) -> list[Spectrum]: ...
+
+    @overload
+    def get_products(
+        self,
+        p_type: Literal["annular_spectra", "combined_annular_spectra"],
+        obs_id: str | None = None,
+        inst: str | None = None,
+        extra_key: str | None = None,
+        just_obj: Literal[True] = True,
+        telescope: str | None = None,
+    ) -> list[AnnularSpectra]: ...
+
+    @overload
+    def get_products(
+        self,
+        p_type: Literal["lightcurve"],
+        obs_id: str | None = None,
+        inst: str | None = None,
+        extra_key: str | None = None,
+        just_obj: Literal[True] = True,
+        telescope: str | None = None,
+    ) -> list[LightCurve]: ...
+
+    @overload
+    def get_products(
+        self,
+        p_type: Literal["combined_lightcurve"],
+        obs_id: str | None = None,
+        inst: str | None = None,
+        extra_key: str | None = None,
+        just_obj: Literal[True] = True,
+        telescope: str | None = None,
+    ) -> list[AggregateLightCurve]: ...
+
+    @overload
+    def get_products(
+        self,
+        p_type: Literal["badpix", "attitude", "maskfile"],
+        obs_id: str | None = None,
+        inst: str | None = None,
+        extra_key: str | None = None,
+        just_obj: Literal[True] = True,
+        telescope: str | None = None,
+    ) -> list[BaseProduct]: ...
+
+    @overload
+    def get_products(
+        self,
+        p_type: Literal["combined_brightness_profile"],
+        obs_id: str | None = None,
+        inst: str | None = None,
+        extra_key: str | None = None,
+        just_obj: Literal[True] = True,
+        telescope: str | None = None,
+    ) -> list[Any]: ...
+
     @overload
     def get_products(
         self,
@@ -4572,12 +4704,24 @@ class BaseSource:
     def get_products(
         self,
         p_type: str,
+        obs_id: str | None,
+        inst: str | None,
+        extra_key: str | None,
+        just_obj: Literal[False],
+        telescope: str | None = None,
+    ) -> list[list[Any]]: ...
+
+    @overload
+    def get_products(
+        self,
+        p_type: str,
         obs_id: str | None = None,
         inst: str | None = None,
         extra_key: str | None = None,
-        just_obj: Literal[False] = False,
+        *,
+        just_obj: Literal[False],
         telescope: str | None = None,
-    ) -> list[list[str | BaseProduct | BaseProfile1D | BaseAggregateProduct]]: ...
+    ) -> list[list[Any]]: ...
 
     def get_products(
         self,
@@ -4675,6 +4819,38 @@ class BaseSource:
     # And here I'm adding a bunch of get methods that should mean the user never has to use get_products, for
     #  individual product types. It will also mean that they will never have to figure out extra keys themselves
     #  and I can make lists of 1 product return just as the product without being a breaking change
+    # @overload signatures allow Mypy to infer that get_images returns a single Image (rather than Image | list[Image])
+    #  when obs_id, inst, lo_en, and hi_en are all explicitly provided
+    @overload
+    def get_images(
+        self,
+        obs_id: str,
+        inst: str,
+        lo_en: Quantity,
+        hi_en: Quantity,
+        psf_corr: bool = False,
+        psf_model: str | None = "ELLBETA",
+        psf_bins: int = 4,
+        psf_algo: str = "rl",
+        psf_iter: int = 15,
+        telescope: str | None = None,
+    ) -> Image: ...
+
+    @overload
+    def get_images(
+        self,
+        obs_id: str | None = None,
+        inst: str | None = None,
+        lo_en: Quantity | None = None,
+        hi_en: Quantity | None = None,
+        psf_corr: bool = False,
+        psf_model: str | None = "ELLBETA",
+        psf_bins: int = 4,
+        psf_algo: str = "rl",
+        psf_iter: int = 15,
+        telescope: str | None = None,
+    ) -> Image | list[Image]: ...
+
     def get_images(
         self,
         obs_id: str | None = None,
@@ -4732,6 +4908,28 @@ class BaseSource:
 
         return filt_init_matches[0] if len(filt_init_matches) == 1 else filt_init_matches
 
+    # @overload signatures allow Mypy to infer that get_expmaps returns a single ExpMap (rather than
+    #  ExpMap | list[ExpMap]) when obs_id, inst, lo_en, and hi_en are all explicitly provided
+    @overload
+    def get_expmaps(
+        self,
+        obs_id: str,
+        inst: str,
+        lo_en: Quantity,
+        hi_en: Quantity,
+        telescope: str | None = None,
+    ) -> ExpMap: ...
+
+    @overload
+    def get_expmaps(
+        self,
+        obs_id: str | None = None,
+        inst: str | None = None,
+        lo_en: Quantity | None = None,
+        hi_en: Quantity | None = None,
+        telescope: str | None = None,
+    ) -> ExpMap | list[ExpMap]: ...
+
     def get_expmaps(
         self,
         obs_id: str | None = None,
@@ -4774,6 +4972,40 @@ class BaseSource:
 
         return filt_init_matches[0] if len(filt_init_matches) == 1 else filt_init_matches
 
+    # @overload signatures allow Mypy to infer that get_ratemaps returns a single RateMap (rather than
+    #  RateMap | list[RateMap]) when lo_en and hi_en are both explicitly provided as Quantity objects
+    @overload
+    def get_ratemaps(
+        self,
+        obs_id: str | None,
+        inst: str | None,
+        lo_en: Quantity,
+        hi_en: Quantity,
+        psf_corr: bool = False,
+        psf_model: str | None = "ELLBETA",
+        psf_bins: int | None = 4,
+        psf_algo: str | None = "rl",
+        psf_iter: int | None = 15,
+        telescope: str | None = None,
+    ) -> RateMap: ...
+
+    @overload
+    def get_ratemaps(
+        self,
+        obs_id: str | None = None,
+        inst: str | None = None,
+        *,
+        lo_en: Quantity,
+        hi_en: Quantity,
+        psf_corr: bool = False,
+        psf_model: str | None = "ELLBETA",
+        psf_bins: int | None = 4,
+        psf_algo: str | None = "rl",
+        psf_iter: int | None = 15,
+        telescope: str | None = None,
+    ) -> RateMap: ...
+
+    @overload
     def get_ratemaps(
         self,
         obs_id: str | None = None,
@@ -4782,9 +5014,23 @@ class BaseSource:
         hi_en: Quantity | None = None,
         psf_corr: bool = False,
         psf_model: str | None = "ELLBETA",
-        psf_bins: int = 4,
-        psf_algo: str = "rl",
-        psf_iter: int = 15,
+        psf_bins: int | None = 4,
+        psf_algo: str | None = "rl",
+        psf_iter: int | None = 15,
+        telescope: str | None = None,
+    ) -> RateMap | list[RateMap]: ...
+
+    def get_ratemaps(
+        self,
+        obs_id: str | None = None,
+        inst: str | None = None,
+        lo_en: Quantity | None = None,
+        hi_en: Quantity | None = None,
+        psf_corr: bool = False,
+        psf_model: str | None = "ELLBETA",
+        psf_bins: int | None = 4,
+        psf_algo: str | None = "rl",
+        psf_iter: int | None = 15,
         telescope: str | None = None,
     ) -> RateMap | list[RateMap]:
         """
@@ -4831,6 +5077,38 @@ class BaseSource:
             )
 
         return filt_init_matches[0] if len(filt_init_matches) == 1 else filt_init_matches
+
+    # @overload signatures allow Mypy to infer that get_combined_images returns a single Image (rather than
+    #  Image | list[Image]) when lo_en and hi_en are explicitly provided
+    @overload
+    def get_combined_images(
+        self,
+        lo_en: Quantity,
+        hi_en: Quantity,
+        psf_corr: bool = False,
+        psf_model: str | None = "ELLBETA",
+        psf_bins: int = 4,
+        psf_algo: str = "rl",
+        psf_iter: int = 15,
+        telescope: str | None = None,
+        obs_id: str = "combined",
+        inst: str = "combined",
+    ) -> Image: ...
+
+    @overload
+    def get_combined_images(
+        self,
+        lo_en: Quantity | None = None,
+        hi_en: Quantity | None = None,
+        psf_corr: bool = False,
+        psf_model: str | None = "ELLBETA",
+        psf_bins: int = 4,
+        psf_algo: str = "rl",
+        psf_iter: int = 15,
+        telescope: str | None = None,
+        obs_id: str = "combined",
+        inst: str = "combined",
+    ) -> Image | list[Image]: ...
 
     def get_combined_images(
         self,
@@ -4917,15 +5195,47 @@ class BaseSource:
         """
         return self.get_expmaps(obs_id=obs_id, inst=inst, lo_en=lo_en, hi_en=hi_en, telescope=telescope)
 
+    # @overload signatures allow Mypy to infer that get_combined_ratemaps returns a single RateMap (rather than
+    #  RateMap | list[RateMap]) when lo_en and hi_en are explicitly provided
+    @overload
+    def get_combined_ratemaps(
+        self,
+        lo_en: Quantity,
+        hi_en: Quantity,
+        psf_corr: bool = False,
+        psf_model: str | None = "ELLBETA",
+        psf_bins: int | None = 4,
+        psf_algo: str | None = "rl",
+        psf_iter: int | None = 15,
+        telescope: str | None = None,
+        obs_id: str = "combined",
+        inst: str = "combined",
+    ) -> RateMap: ...
+
+    @overload
     def get_combined_ratemaps(
         self,
         lo_en: Quantity | None = None,
         hi_en: Quantity | None = None,
         psf_corr: bool = False,
         psf_model: str | None = "ELLBETA",
-        psf_bins: int = 4,
-        psf_algo: str = "rl",
-        psf_iter: int = 15,
+        psf_bins: int | None = 4,
+        psf_algo: str | None = "rl",
+        psf_iter: int | None = 15,
+        telescope: str | None = None,
+        obs_id: str = "combined",
+        inst: str = "combined",
+    ) -> RateMap | list[RateMap]: ...
+
+    def get_combined_ratemaps(
+        self,
+        lo_en: Quantity | None = None,
+        hi_en: Quantity | None = None,
+        psf_corr: bool = False,
+        psf_model: str | None = "ELLBETA",
+        psf_bins: int | None = 4,
+        psf_algo: str | None = "rl",
+        psf_iter: int | None = 15,
         telescope: str | None = None,
         obs_id: str = "combined",
         inst: str = "combined",
@@ -4966,6 +5276,36 @@ class BaseSource:
             psf_iter=psf_iter,
             telescope=telescope,
         )
+
+    # @overload signatures allow Mypy to infer that get_spectra returns a single Spectrum (rather than
+    #  Spectrum | list[Spectrum]) when outer_radius, obs_id, and inst are all explicitly provided
+    @overload
+    def get_spectra(
+        self,
+        outer_radius: str | Quantity,
+        obs_id: str,
+        inst: str,
+        inner_radius: str | Quantity = Quantity(0, "arcsec"),
+        group_spec: bool = True,
+        min_counts: int | None = 5,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        telescope: str | None = None,
+    ) -> Spectrum: ...
+
+    @overload
+    def get_spectra(
+        self,
+        outer_radius: str | Quantity,
+        obs_id: str | None = None,
+        inst: str | None = None,
+        inner_radius: str | Quantity = Quantity(0, "arcsec"),
+        group_spec: bool = True,
+        min_counts: int | None = 5,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        telescope: str | None = None,
+    ) -> Spectrum | list[Spectrum]: ...
 
     def get_spectra(
         self,
@@ -5021,6 +5361,34 @@ class BaseSource:
 
         return matched_prods
 
+    # @overload signatures allow Mypy to infer that get_combined_spectra returns a single Spectrum (rather than
+    #  Spectrum | list[Spectrum]) when outer_radius and inst are explicitly provided
+    @overload
+    def get_combined_spectra(
+        self,
+        outer_radius: str | Quantity,
+        inst: str,
+        inner_radius: str | Quantity = Quantity(0, "arcsec"),
+        group_spec: bool = True,
+        min_counts: int | None = 5,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        telescope: str | None = None,
+    ) -> Spectrum: ...
+
+    @overload
+    def get_combined_spectra(
+        self,
+        outer_radius: str | Quantity,
+        inst: str | None = None,
+        inner_radius: str | Quantity = Quantity(0, "arcsec"),
+        group_spec: bool = True,
+        min_counts: int | None = 5,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        telescope: str | None = None,
+    ) -> Spectrum | list[Spectrum]: ...
+
     def get_combined_spectra(
         self,
         outer_radius: str | Quantity,
@@ -5073,6 +5441,45 @@ class BaseSource:
         )
 
         return matched_prods
+
+    # @overload signatures allow Mypy to infer that get_annular_spectra returns a single AnnularSpectra (rather than
+    #  AnnularSpectra | list[AnnularSpectra]) when either radii or set_id is explicitly provided
+    @overload
+    def get_annular_spectra(
+        self,
+        radii: Quantity,
+        group_spec: bool = True,
+        min_counts: int | None = 5,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        set_id: int | None = None,
+        telescope: str | None = None,
+    ) -> AnnularSpectra: ...
+
+    @overload
+    def get_annular_spectra(
+        self,
+        radii: None = None,
+        group_spec: bool = True,
+        min_counts: int | None = 5,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        *,
+        set_id: int,
+        telescope: str | None = None,
+    ) -> AnnularSpectra: ...
+
+    @overload
+    def get_annular_spectra(
+        self,
+        radii: Quantity | None = None,
+        group_spec: bool = True,
+        min_counts: int | None = 5,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        set_id: int | None = None,
+        telescope: str | None = None,
+    ) -> AnnularSpectra | list[AnnularSpectra]: ...
 
     def get_annular_spectra(
         self,
@@ -5350,6 +5757,36 @@ class BaseSource:
             spec_fit_conf=spec_fit_conf,
         )
 
+    # @overload signatures allow Mypy to infer that get_lightcurves returns a single LightCurve (rather than
+    #  LightCurve | list[LightCurve]) when outer_radius, obs_id, and inst are all explicitly provided
+    @overload
+    def get_lightcurves(
+        self,
+        outer_radius: str | Quantity,
+        obs_id: str,
+        inst: str,
+        inner_radius: str | Quantity | None = None,
+        lo_en: Quantity | None = None,
+        hi_en: Quantity | None = None,
+        time_bin_size: Quantity | None = None,
+        pattern: dict | str | None = "default",
+        telescope: str | None = None,
+    ) -> LightCurve: ...
+
+    @overload
+    def get_lightcurves(
+        self,
+        outer_radius: str | Quantity | None = None,
+        obs_id: str | None = None,
+        inst: str | None = None,
+        inner_radius: str | Quantity | None = None,
+        lo_en: Quantity | None = None,
+        hi_en: Quantity | None = None,
+        time_bin_size: Quantity | None = None,
+        pattern: dict | str | None = "default",
+        telescope: str | None = None,
+    ) -> LightCurve | list[LightCurve]: ...
+
     def get_lightcurves(
         self,
         outer_radius: str | Quantity | None = None,
@@ -5408,13 +5845,15 @@ class BaseSource:
         if pattern is None:
             patt_search: str | dict = "_pattern"
         elif isinstance(pattern, str) and telescope is not None:
-            pattern = {
+            # Using a separate variable name for the default pattern dictionary to make Mypy happy
+            default_patterns = {
                 "xmm": {"pn": "<=4", "mos": "<=12"},
                 "erosita": {"tm": "15", "combined": "15"},
                 "erass": {"tm": "15", "combined": "15"},
             }
             patt_search = {
-                inst: "_pattern" + check_pattern(patt, telescope)[1] for inst, patt in pattern[telescope].items()
+                inst: "_pattern" + check_pattern(patt, telescope)[1]
+                for inst, patt in default_patterns[telescope].items()
             }
         elif isinstance(pattern, dict):
             if (
@@ -5469,6 +5908,34 @@ class BaseSource:
             return matched_prods[0]
         else:
             return matched_prods
+
+    # @overload signatures allow Mypy to infer that get_combined_lightcurves returns a single LightCurve (rather than
+    #  LightCurve | list[LightCurve]) when outer_radius is explicitly provided
+    @overload
+    def get_combined_lightcurves(
+        self,
+        outer_radius: str | Quantity,
+        inner_radius: str | Quantity | None = None,
+        lo_en: Quantity | None = None,
+        hi_en: Quantity | None = None,
+        time_bin_size: Quantity | None = None,
+        pattern: dict | str = "default",
+        telescope: str | None = None,
+        inst: str = "combined",
+    ) -> LightCurve: ...
+
+    @overload
+    def get_combined_lightcurves(
+        self,
+        outer_radius: str | Quantity | None = None,
+        inner_radius: str | Quantity | None = None,
+        lo_en: Quantity | None = None,
+        hi_en: Quantity | None = None,
+        time_bin_size: Quantity | None = None,
+        pattern: dict | str = "default",
+        telescope: str | None = None,
+        inst: str = "combined",
+    ) -> LightCurve | list[LightCurve]: ...
 
     def get_combined_lightcurves(
         self,
@@ -5650,7 +6117,11 @@ class BaseSource:
         return filt_att_files[0].path
 
     def source_back_regions(
-        self, reg_type: str, telescope: str, obs_id: str | None = None, central_coord: Quantity | None = None
+        self,
+        reg_type: str,
+        telescope: str,
+        obs_id: str | None = None,
+        central_coord: Quantity | SkyCoord | None = None,
     ) -> tuple[SkyRegion, SkyRegion]:
         """
         A method to retrieve source region and background region objects for a given source type with a
@@ -5667,9 +6138,9 @@ class BaseSource:
         if central_coord is None:
             central_coord = self._default_coord
 
-        if type(central_coord) is Quantity:
+        if isinstance(central_coord, Quantity):
             centre = SkyCoord(*central_coord.to("deg"))
-        elif type(central_coord) is SkyCoord:
+        elif isinstance(central_coord, SkyCoord):
             centre = central_coord
         else:
             raise TypeError("The 'central_coord' argument must be of type Quantity or SkyCoord.")
@@ -5797,7 +6268,11 @@ class BaseSource:
             return flat_ret_reg
 
     def get_source_mask(
-        self, reg_type: str, telescope: str, obs_id: str | None = None, central_coord: Quantity | None = None
+        self,
+        reg_type: str,
+        telescope: str,
+        obs_id: str | None = None,
+        central_coord: Quantity | SkyCoord | None = None,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Method to retrieve source and background masks for the given region type.
@@ -5843,9 +6318,9 @@ class BaseSource:
 
         # If the masks are None, then they are set to an array of zeros
         if mask is None:
-            mask = np.zeros(mask_image.shape)
+            mask = np.zeros(mask_image.shape)  # type: ignore[union-attr]  # TODO: Fix in #1653
         if back_mask is None:
-            back_mask = np.zeros(mask_image.shape)
+            back_mask = np.zeros(mask_image.shape)  # type: ignore[union-attr]  # TODO: Fix in #1653
 
         return mask, back_mask
 
@@ -5962,7 +6437,11 @@ class BaseSource:
         return mask
 
     def get_mask(
-        self, reg_type: str, telescope: str, obs_id: str | None = None, central_coord: Quantity | None = None
+        self,
+        reg_type: str,
+        telescope: str,
+        obs_id: str | None = None,
+        central_coord: Quantity | SkyCoord | None = None,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Method to retrieve source and background masks for the given region type, WITH INTERLOPERS REMOVED.
@@ -6115,13 +6594,13 @@ class BaseSource:
                 )
 
         # Parsing the ObsID and instrument options, see if they want to use a specific ratemap
-        if all([obs_id is None, inst is None]):
+        if obs_id is None and inst is None:
             # Here the user hasn't set ObsID or instrument, so we use the combined data
             rt = self.get_combined_ratemaps(
                 lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, telescope=telescope
             )
 
-        elif all([obs_id is not None, inst is not None]):
+        elif obs_id is not None and inst is not None:
             # Both ObsID and instrument have been set by the user
             rt = self.get_ratemaps(
                 obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, telescope=telescope
@@ -6649,6 +7128,95 @@ class BaseSource:
         # Then we add the failed fit configuration to the storage structure
         self._failed_fits[telescope][spec_storage_key][model].append(fit_conf)
 
+    # @overload signatures allow Mypy to narrow the return type of get_results to dict[str, np.ndarray | Quantity]
+    #  when par is None, Quantity when par is specified with with_units=True, and np.ndarray when par is specified
+    #  with with_units=False
+    @overload
+    def get_results(
+        self,
+        outer_radius: str | Quantity,
+        telescope: str,
+        model: str | None = None,
+        inner_radius: str | Quantity = Quantity(0, "arcsec"),
+        par: None = None,
+        group_spec: bool = True,
+        min_counts: int = 5,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        stacked_spectra: bool = False,
+        fit_conf: str | dict | None = None,
+        with_units: bool = False,
+    ) -> dict[str, np.ndarray | Quantity]: ...
+
+    @overload
+    def get_results(
+        self,
+        outer_radius: str | Quantity,
+        telescope: str,
+        model: str | None = None,
+        inner_radius: str | Quantity = Quantity(0, "arcsec"),
+        par: str = ...,
+        group_spec: bool = True,
+        min_counts: int = 5,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        stacked_spectra: bool = False,
+        fit_conf: str | dict | None = None,
+        *,
+        with_units: Literal[True],
+    ) -> Quantity: ...
+
+    @overload
+    def get_results(
+        self,
+        outer_radius: str | Quantity,
+        telescope: str,
+        model: str | None,
+        inner_radius: str | Quantity,
+        par: str,
+        group_spec: bool,
+        min_counts: int,
+        min_sn: float | None,
+        over_sample: float | None,
+        stacked_spectra: bool,
+        fit_conf: str | dict | None,
+        with_units: Literal[True],
+    ) -> Quantity: ...
+
+    @overload
+    def get_results(
+        self,
+        outer_radius: str | Quantity,
+        telescope: str,
+        model: str | None = None,
+        inner_radius: str | Quantity = Quantity(0, "arcsec"),
+        par: str = ...,
+        group_spec: bool = True,
+        min_counts: int = 5,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        stacked_spectra: bool = False,
+        fit_conf: str | dict | None = None,
+        with_units: Literal[False] = False,
+    ) -> np.ndarray: ...
+
+    @overload
+    def get_results(
+        self,
+        outer_radius: str | Quantity,
+        telescope: str,
+        model: str | None = None,
+        inner_radius: str | Quantity = Quantity(0, "arcsec"),
+        par: str | None = None,
+        group_spec: bool = True,
+        min_counts: int = 5,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        stacked_spectra: bool = False,
+        fit_conf: str | dict | None = None,
+        with_units: bool = False,
+    ) -> dict | np.ndarray | Quantity: ...
+
     def get_results(
         self,
         outer_radius: str | Quantity,
@@ -7132,6 +7700,8 @@ class BaseSource:
 
         return self._dof[telescope][storage_key][model][fit_conf]  # type: ignore[no-any-return]
 
+    # @overload signatures allow Mypy to distinguish between returning a dict[str, Quantity] of all energy-band
+    #  luminosities (when lo_en or hi_en is None) and a single Quantity (when both lo_en and hi_en are supplied)
     @overload
     def get_luminosities(
         self,
@@ -7427,21 +7997,21 @@ class BaseSource:
             related to that telescope.
         """
         # Users can pass just a telescope string, but we then need to convert it to the form
-        #  that the rest of the function requires
+        #  that the rest of the function requires. Using a separate variable name to make Mypy happy
+        final_to_remove: dict[str, dict[str, list[str]]] = {}
         if isinstance(to_remove, str):
             # I check that this is a valid telescope - and here I just throw an error if not because it isn't like
             #  there are anymore to check that might be okay
             if to_remove in self.telescopes:
-                to_remove = {to_remove: deepcopy(self.instruments[to_remove])}
+                final_to_remove = {to_remove: deepcopy(self.instruments[to_remove])}
             else:
                 raise NotAssociatedError(f"{to_remove} is not a telescope associated with {self.name}.")
         # Here is where they have just passed a list of telescopes, and we need to fill in the blanks with
         #  the ObsIDs instruments currently loaded for those ObsIDs
         elif isinstance(to_remove, list):
-            to_remove = {}
             for tel in to_remove:
                 if tel in self.telescopes:
-                    to_remove[tel] = deepcopy(self.instruments[tel])
+                    final_to_remove[tel] = deepcopy(self.instruments[tel])
                 else:
                     warn_text = f"{tel} is not a telescope associated with {self.name} and is being skipped."
                     if not self._samp_member:
@@ -7452,8 +8022,6 @@ class BaseSource:
         # In this instance the value is a dictionary, and I have created a disgusting nested set of if statements
         #  and for loops to ensure that the user hasn't passed anything daft
         elif isinstance(to_remove, dict):
-            # I will be constructing the to remove dictionary as I go along
-            final_to_remove: dict = {}
             # Iterating through the top level keys (telescopes) and values (could be string ObsIDs, lists of string,
             #  ObsIDs, or dictionaries with ObsIDs as keys and single string instruments or lists of strings as values
             for tel, val in to_remove.items():
@@ -7557,37 +8125,37 @@ class BaseSource:
                             if len(final_inst_list) != 0:
                                 final_to_remove[tel][v_oi] = final_inst_list
 
-            # We finally actually set the to_remove variable
-            to_remove = deepcopy(final_to_remove)
+            # Keep a clean copy of the constructed dictionary
+            final_to_remove = deepcopy(final_to_remove)
 
         # Sets the attribute that tells us whether any data has been removed
         if not self._disassociated:
             self._disassociated = True
 
         # We want to store knowledge of what data has been removed, if there hasn't been anything taken away yet
-        #  then we can just set it equal to the to_remove dictionary
+        #  then we can just set it equal to the final_to_remove dictionary
         if len(self._disassociated_obs) == 0:
-            self._disassociated_obs = to_remove
+            self._disassociated_obs = final_to_remove
         # Otherwise we have to add the data to the existing dictionary structure
         else:
-            for tel in to_remove:
-                # In this case we can just set the entry for that telescope to the current contents of to_remove for
-                #  the current telescope
+            for tel in final_to_remove:
+                # In this case we can just set the entry for that telescope to the current contents of final_to_remove
+                #  for the current telescope
                 if tel not in self._disassociated_obs:
-                    self._disassociated_obs[tel] = to_remove[tel]
+                    self._disassociated_obs[tel] = final_to_remove[tel]
                 # Otherwise we have to be a little more careful as you can't just add dictionaries together
                 else:
                     # Cycling through the ObsIDs for the current telescope
-                    for o in to_remove[tel]:
+                    for o in final_to_remove[tel]:
                         # If this ObsID isn't in the disassociated dictionary yet, we can just set that entry to
-                        #  the to_remove entry
+                        #  the final_to_remove entry
                         if o not in self._disassociated_obs[tel]:
-                            self._disassociated_obs[tel] = to_remove[tel][o]
+                            self._disassociated_obs[tel] = final_to_remove[tel][o]
                         # However if there is an entry for this ObsID we need to add the lists together
                         else:
-                            self._disassociated_obs[tel][o] += to_remove[tel][o]
+                            self._disassociated_obs[tel][o] += final_to_remove[tel][o]
 
-        for tel in to_remove:
+        for tel in final_to_remove:
             # If we're disassociating certain observations, odds on the combined products are no longer valid
             if "combined" in self._products[tel]:
                 del self._products[tel]["combined"]
@@ -7609,8 +8177,8 @@ class BaseSource:
             #  (which are based on all ObsID's regions for a particular telescope), and the reset of the interloper
             #  masks based on those regions
             whole_obsid_dis = False
-            for o in to_remove[tel]:
-                for i in to_remove[tel][o]:
+            for o in final_to_remove[tel]:
+                for i in final_to_remove[tel][o]:
                     # Because of irritating missions like eROSITA where the event lists are distributed pre-combined
                     #  I have this flag which identifies those missions, we can't necessarily delete
                     #  instrument-specific products, though they MIGHT be there
