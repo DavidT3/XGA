@@ -161,14 +161,10 @@ no_implicit_optional = true
 [[tool.mypy.overrides]]
 module = [
     "astropy.*",
-    "numpy.*",
-    "pandas.*",
-    "scipy.*",
     "fitsio.*",
     "matplotlib.*",
     "mpl_toolkits.*",
     "regions.*",
-    "tqdm.*",
     "abel.*",
     "emcee.*",
     "getdist.*",

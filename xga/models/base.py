@@ -572,7 +572,12 @@ class BaseModel1D(metaclass=ABCMeta):
             integral_res = (
                 4
                 * np.pi
-                * quad(integrand, inner_radius.value, outer_radius.value, args=[p.value for p in self._model_pars])[0]
+                * quad(
+                    integrand,
+                    inner_radius.value,
+                    outer_radius.value,
+                    args=([p.value for p in self._model_pars],),
+                )[0]
             )
         elif use_par_dist and len(self._par_dists[0]) != 0 and not already_run:
             # Runs the volume integral for the parameter distributions (assuming there are any) of this model
@@ -591,7 +596,9 @@ class BaseModel1D(metaclass=ABCMeta):
                 else:
                     inn_rad = inner_radius.value
                 integral_res[par_ind] = (
-                    4 * np.pi * quad(integrand, inn_rad, out_rad, args=[par_d[par_ind] for par_d in unitless_dists])[0]
+                    4
+                    * np.pi
+                    * quad(integrand, inn_rad, out_rad, args=([par_d[par_ind] for par_d in unitless_dists],))[0]
                 )
         elif use_par_dist and len(self._par_dists[0]) == 0 and not already_run:
             raise XGAFitError(
