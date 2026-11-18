@@ -143,7 +143,8 @@ def single_temp_apec_profile(
         # We can recreate the fit_conf key that will have been assigned to the preceding non-cross-arf fit here, which
         #  will make it rather easier to retrieve the fit results we need to use as starting values later on
         rel_args = FIT_FUNC_ARGS["single_temp_apec_profile"]
-        in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+        cur_locals = locals()
+        in_fit_conf = {kn: cur_locals[kn] for kn in rel_args if rel_args[kn]}
         in_fit_conf["use_cross_arf"] = False
         prefit_fit_conf = _gen_fit_conf(in_fit_conf)
 
@@ -205,7 +206,8 @@ def single_temp_apec_profile(
     #  values for different sources, so we don't need to put this in the loop. Still, we will pass back  a list of
     #  fit configuration keys because the xspec call decorator will expect a list with one entry per source that
     #  is having a fit run
-    in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+    cur_locals = locals()
+    in_fit_conf = {kn: cur_locals[kn] for kn in rel_args if rel_args[kn]}
     fit_conf = _gen_fit_conf(in_fit_conf)
 
     script_paths = []

@@ -267,7 +267,8 @@ def single_temp_apec(
 
             # We generate the fit configuration key here, on a source by source basis, as the start temperature is
             #  allowed to be different for every source
-            in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+            cur_locals = locals()
+            in_fit_conf = {kn: cur_locals[kn] for kn in rel_args if rel_args[kn]}
             fit_conf = _gen_fit_conf(in_fit_conf)
 
             # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed
@@ -554,7 +555,8 @@ def single_temp_mekal(
 
             # We generate the fit configuration key here, on a source by source basis, as the start temperature is
             #  allowed to be different for every source
-            in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+            cur_locals = locals()
+            in_fit_conf = {kn: cur_locals[kn] for kn in rel_args if rel_args[kn]}
             fit_conf = _gen_fit_conf(in_fit_conf)
 
             # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed
@@ -745,7 +747,8 @@ def multi_temp_dem_apec(
     #  values for different sources, so we don't need to put this in the loop. Still, we will pass back  a list of
     #  fit configuration keys because the xspec call decorator will expect a list with one entry per source that
     #  is having a fit run
-    in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+    cur_locals = locals()
+    in_fit_conf = {kn: cur_locals[kn] for kn in rel_args if rel_args[kn]}
     fit_conf = _gen_fit_conf(in_fit_conf)
 
     script_paths = []
@@ -986,7 +989,8 @@ def power_law(
     #  values for different sources, so we don't need to put this in the loop. Still, we will pass back  a list of
     #  fit configuration keys because the xspec call decorator will expect a list with one entry per source that
     #  is having a fit run
-    in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+    cur_locals = locals()
+    in_fit_conf = {kn: cur_locals[kn] for kn in rel_args if rel_args[kn]}
     fit_conf = _gen_fit_conf(in_fit_conf)
 
     script_paths = []
@@ -1314,7 +1318,8 @@ def blackbody(
 
             # We generate the fit configuration key here, on a source by source basis, as the start temperature is
             #  allowed to be different for every source
-            in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+            cur_locals = locals()
+            in_fit_conf = {kn: cur_locals[kn] for kn in rel_args if rel_args[kn]}
             fit_conf = _gen_fit_conf(in_fit_conf)
 
             # If the fit has already been performed, we do not wish to perform it again
@@ -1660,7 +1665,8 @@ def double_temp_apec(
 
             # We generate the fit configuration key here, on a source by source basis, as the start temperature
             #  is allowed to be different for every source
-            in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+            cur_locals = locals()
+            in_fit_conf = {kn: cur_locals[kn] for kn in rel_args if rel_args[kn]}
             fit_conf = _gen_fit_conf(in_fit_conf)
 
             # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed
