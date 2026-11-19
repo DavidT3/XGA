@@ -24,7 +24,7 @@ def single_temp_apec_profile(
     sources: BaseSource | BaseSample | list[BaseSource],
     radii: Quantity | list[Quantity] | dict[str, Quantity] | dict[str, list[Quantity]],
     start_temp: Quantity = Quantity(3.0, "keV"),
-    start_met: float = 0.3,
+    start_met: float | Quantity = 0.3,
     lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
     freeze_nh: bool = True,
     freeze_met: bool = True,
@@ -219,7 +219,7 @@ def single_temp_apec_profile(
         sources = [sources]
 
     og_start_temp = start_temp.copy()
-    og_start_met = start_met
+    og_start_met = start_met.copy()
 
     deg_rad: dict[str, dict[str, Any]] = {}
     for src_ind, source in enumerate(sources):
@@ -233,7 +233,7 @@ def single_temp_apec_profile(
             # Resetting the start values of temperature and metallicity as they can get overwritten in the cross-arf
             #  setup, and it is important each source starts from the same values to act as defaults
             start_temp = og_start_temp.copy()
-            start_met = og_start_met
+            start_met = og_start_met.copy()
 
             # TODO This is unsustainable, but hopefully every telescope will soon (ish) have a stacking method
             # if stacked_spectra and tel == 'erosita':

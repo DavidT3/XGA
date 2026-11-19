@@ -896,7 +896,7 @@ def min_cnt_proj_temp_prof(
                 )
                 cnt_rnk, cnts = cnt_rnk_dict[tel], cnts_dict[tel]
                 # Obviously the median counts will not necessarily line up with any particular ObsID-instrument, but we
-                #  can use the method feature of numpy percentile to find the nearest existing counts to the
+                #  can use the interpolation feature of numpy percentile to find the nearest existing counts to the
                 #  median counts.
                 med_obs_ind = np.argwhere(cnts == np.nanpercentile(cnts, 50, method="nearest"))[0]
                 # This pulls out the ObsID and instrument that we have chosen to base the annular bins on.

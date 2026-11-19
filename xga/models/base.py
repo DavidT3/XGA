@@ -336,7 +336,9 @@ class BaseModel1D(metaclass=ABCMeta):
         else:
             dx = dx.to(self._x_unit)
 
-        # The finite-difference point count ('order' argument of derivative) must be odd and >= n + 1
+        # The finite-difference point count ('order' argument of derivative) must be odd and >= n + 1, where n is
+        #  the derivative order. Adding 1 + (order % 2) rounds order + 1 up to the smallest valid odd stencil size
+        #  (e.g. 3 points for 1st/2nd derivatives, 5 points for 3rd/4th derivatives).
         num_points = order + 1 + (order % 2)
         der_val = Quantity(
             derivative(
@@ -389,6 +391,9 @@ class BaseModel1D(metaclass=ABCMeta):
 
         # If the user just wants to use the current values of the model parameters then this is what happens
         if not use_par_dist:
+            # BaseModel1D.__call__ evaluates self.model(x[..., None], *self._model_pars) so 1D x arrays broadcast
+            #  against parameter distributions; when use_par_dist=False, that leaves a trailing length-1 axis
+            #  (shape (N, 1)), so .squeeze() is required to flatten mod_vals to 1D for np.concatenate and pyabel
             mod_vals = self(x).value.squeeze()
             if method == "direct" and force_change:
                 to_trans = np.concatenate([mod_vals, np.array([0.0])])

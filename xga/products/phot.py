@@ -4416,7 +4416,10 @@ class PSFGrid(BaseAggregateProduct):
         :rtype:
         """
         if self._grid_loc is None:
+            # Set up an empty 3D degree Quantity array with one (RA, Dec) pair per grid bin
             self._grid_loc = Quantity(np.zeros((self._nbins, self._nbins, 2)), "deg")
+            # Component PSFs are keyed by "y_x" grid indices in self._component_products, and each PSF's .ra_dec
+            #  property reads the central (CRVAL1, CRVAL2) coordinates at which that PSF was generated
             for pos_key, psf_prod in self._component_products.items():
                 pos = [int(p) for p in pos_key.split("_")]
                 self._grid_loc[pos[0], pos[1], :] = psf_prod.ra_dec
