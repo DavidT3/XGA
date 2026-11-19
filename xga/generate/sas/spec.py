@@ -1180,7 +1180,7 @@ def cross_arf(
                 src_paths = np.concatenate([src_paths, [OUTPUT + "xmm/" + f"{obs_id}/" + c_arf_name]])
                 # Go through and concatenate things to the source lists defined above
                 src_cmds = np.concatenate([src_cmds, [cmd]])
-                src_out_types += ["cross arfs"] * len(src_cmds)
+                src_out_types.append("cross arfs")
                 src_extras = np.concatenate([src_extras, [extra_info]])
 
         # This adds the current sources final commands to the 'all sources' lists
