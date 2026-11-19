@@ -219,7 +219,7 @@ def single_temp_apec_profile(
         sources = [sources]
 
     og_start_temp = start_temp.copy()
-    og_start_met = start_met.copy()  # type: ignore[attr-defined]  # See issue #1653
+    og_start_met = start_met
 
     deg_rad: dict[str, dict[str, Any]] = {}
     for src_ind, source in enumerate(sources):
@@ -233,7 +233,7 @@ def single_temp_apec_profile(
             # Resetting the start values of temperature and metallicity as they can get overwritten in the cross-arf
             #  setup, and it is important each source starts from the same values to act as defaults
             start_temp = og_start_temp.copy()
-            start_met = og_start_met.copy()
+            start_met = og_start_met
 
             # TODO This is unsustainable, but hopefully every telescope will soon (ish) have a stacking method
             # if stacked_spectra and tel == 'erosita':
@@ -403,7 +403,8 @@ def single_temp_apec_profile(
                 #  look at those particular variable names when creating the fit configuration storage key
                 start_temp = Quantity(ca_start_temp)
                 start_norm = Quantity(ca_start_norm)
-                start_met = Quantity(ca_start_met)
+                ca_start_met_quant = Quantity(ca_start_met)
+                start_met = ca_start_met_quant
 
                 # The start constants will always be one
                 start_con = [1] * len(ann_spec.annulus_ids)
@@ -418,7 +419,7 @@ def single_temp_apec_profile(
                     c="{" + " ".join([str(c) for c in start_con]) + "}",
                     nh="{" + " ".join([str(nh) for nh in start_nh]) + "}",
                     t="{" + " ".join([str(t) for t in start_temp.value]) + "}",
-                    a="{" + " ".join([str(a) for a in start_met.value]) + "}",  # type: ignore[attr-defined]  # See issue #1653
+                    a="{" + " ".join([str(a) for a in ca_start_met_quant.value]) + "}",
                     z="{" + " ".join([str(z) for z in start_z]) + "}",
                     n="{" + " ".join([str(n) for n in start_norm.value]) + "}",
                 )

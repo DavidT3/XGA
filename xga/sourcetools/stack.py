@@ -135,9 +135,10 @@ def _create_stack(
         single_temp_apec(sources, scale_radius, abund_table=abund_table, telescope=telescope)
         temp_temps = []
         for src in sources:
+            cur_tel = src.telescopes[0] if telescope is None else telescope
             try:
                 # A temporary temperature variable
-                temp_temp = src.get_temperature(scale_radius, model="constant*tbabs*apec", telescope=telescope)[0]  # type: ignore[arg-type]  # TODO: Fix in #1653
+                temp_temp = src.get_temperature(scale_radius, model="constant*tbabs*apec", telescope=cur_tel)[0]
             except (ModelNotAssociatedError, ParameterNotAssociatedError):
                 warn(f"{src.name}'s temperature fit is not valid, defaulting to a temperature of 3 keV", stacklevel=2)
                 temp_temp = Quantity(3, "keV")
@@ -151,8 +152,9 @@ def _create_stack(
     combined_factors = []
     # Now to generate a combined conversion factor from count rate to luminosity
     for source in sources:
+        cur_tel = source.telescopes[0] if telescope is None else telescope
         combined_factors.append(
-            source.combined_lum_conv_factor(scale_radius, lo_en=lo_en, hi_en=hi_en, telescope=telescope).value  # type: ignore[arg-type]  # TODO: Fix in #1653
+            source.combined_lum_conv_factor(scale_radius, lo_en=lo_en, hi_en=hi_en, telescope=cur_tel).value
         )
 
     # Check for NaN values in the brightness profiles we've retrieved - very bad if they exist
@@ -298,13 +300,14 @@ def stacked_radial_brightness(
     sb = np.zeros((len(sources), len(radii)))
 
     for source_ind, source in enumerate(sources):
+        cur_tel = source.telescopes[0] if telescope is None else telescope
         # Retrieving the relevant ratemap object, as well as masks
         rt = source.get_combined_ratemaps(
-            lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, telescope=telescope
+            lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, telescope=cur_tel
         )
         # We obviously want to remove point sources from the profiles we make, so get the mask that removes
         #  interlopers
-        int_mask = source.get_interloper_mask(telescope=telescope)  # type: ignore[arg-type]  # TODO: Fix in #1653
+        int_mask = source.get_interloper_mask(telescope=cur_tel)
 
         # Tells the source object to give us the requested scale radius in units of kpc
         rad = source.get_radius(scale_radius, kpc)
@@ -1018,25 +1021,24 @@ def view_radial_model_stack(
     if show_images:
         for name_ind, name in enumerate(results[5]):
             cur_src = sources[name]
+            cur_tel = cur_src.telescopes[0] if telescope is None else telescope
             if not psf_corr:
                 storage_key = f"bound_{lo_en.value}-{hi_en.value}"
             else:
                 storage_key = f"bound_{lo_en.value}-{hi_en.value}_{psf_model}_{psf_bins}_{psf_algo}{psf_iter}"
 
-            rt = cur_src.get_products("combined_ratemap", extra_key=storage_key, telescope=telescope)[0]
+            rt = cur_src.get_products("combined_ratemap", extra_key=storage_key, telescope=cur_tel)[0]
 
             # The user can choose to use the original user passed coordinates, or the X-ray centroid
             if use_peak:
                 pix_peak = rt.coord_conv(cur_src.peak, pix)
             else:
                 pix_peak = rt.coord_conv(cur_src.ra_dec, pix)
-            inter_mask = cur_src.get_interloper_mask(telescope=telescope)  # type: ignore[arg-type]  # TODO: Fix in #1653
+            inter_mask = cur_src.get_interloper_mask(telescope=cur_tel)
             rad = cur_src.get_radius(scale_radius, kpc)
 
-            prof_prods = cur_src.get_products("combined_brightness_profile", telescope=telescope)
-            matching_profs = [
-                p for p in list(prof_prods[0].values()) if p.check_match(rt, pix_peak, pix_step, min_snr, rad)
-            ]
+            prof_prods = cur_src.get_products("combined_brightness_profile", telescope=cur_tel)
+            matching_profs = [p for p in prof_prods if p.check_match(rt, pix_peak, pix_step, min_snr, rad)]
             pr = matching_profs[0]
             fig, ax_arr = plt.subplots(ncols=3, figsize=(figsize[0], figsize[0] * 0.32))
 

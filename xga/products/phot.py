@@ -257,10 +257,8 @@ class Image(BaseProduct):
             if any([len(e) != 2 for e in obs_inst_combs]):
                 raise ValueError("Entries in the obs_inst_combs list must be lists structured as [ObsID, Inst]")
             # And if it passes that we check that the instrument values are one of the allowed list
-            elif any([e[1] not in ALLOWED_INST[telescope].values() for e in obs_inst_combs]):  # type: ignore[attr-defined, index]  # See issue #1653
-                raise ValueError(
-                    f"The allowed instruments for {telescope} are: {', '.join(ALLOWED_INST[telescope].values())}"  # type: ignore[attr-defined, index]  # See issue #1653
-                )
+            elif self._tele is not None and any([e[1] not in ALLOWED_INST[self._tele] for e in obs_inst_combs]):
+                raise ValueError(f"The allowed instruments for {self._tele} are: {', '.join(ALLOWED_INST[self._tele])}")
 
         # This attribute stores the combinations of ObsID and instrument that make up combined images, if the
         #  current image is combined. This used to be instantiated in the init, but it is now lazy-loaded by
@@ -4418,8 +4416,10 @@ class PSFGrid(BaseAggregateProduct):
         :rtype:
         """
         if self._grid_loc is None:
-            for pos in self._component_products:
-                self._grid_loc[pos[0], pos[1], :] = self._component_products.ra_dec  # type: ignore[attr-defined, index]  # See issue #1653
+            self._grid_loc = Quantity(np.zeros((self._nbins, self._nbins, 2)), "deg")
+            for pos_key, psf_prod in self._component_products.items():
+                pos = [int(p) for p in pos_key.split("_")]
+                self._grid_loc[pos[0], pos[1], :] = psf_prod.ra_dec
         return self._grid_loc
 
     def unload_data(self) -> None:

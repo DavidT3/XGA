@@ -4023,11 +4023,13 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         # Grabs the relevant spectra using the annular ident
         rel_spec = self.get_spectra(ann_ident)
+        if isinstance(rel_spec, Spectrum):
+            rel_spec = [rel_spec]
 
         # Create figure object
         plt.figure(figsize=figsize)
         ax = plt.gca()
-        for sp in rel_spec:  # type: ignore[union-attr]  # TODO: Fix in #1653
+        for sp in rel_spec:
             ax = sp.get_view(
                 ax,
                 lo_lim,
@@ -4433,7 +4435,7 @@ class AnnularSpectra(BaseAggregateProduct):
         if self.proper_radii is not None and self.proper_annulus_centres is not None:
             y_lims = [self.proper_annulus_centres.value[0], self.proper_radii.value[-1]]
         else:
-            y_lims = [self.annulus_centres.value[0], self.proper_radii.value[-1]]  # type: ignore[union-attr]  # TODO: Fix in #1653
+            y_lims = [self.annulus_centres.value[0], self.radii.value[-1]]
         ax.set_ylim3d(y_lims)
 
         # plt.tight_layout()
@@ -4562,7 +4564,7 @@ class AnnularSpectra(BaseAggregateProduct):
         if self.proper_radii is not None and self.proper_annulus_centres is not None:
             y_lims = [self.proper_annulus_centres.value[0], self.proper_radii.value[-1]]
         else:
-            y_lims = [self.annulus_centres.value[0], self.proper_radii.value[-1]]  # type: ignore[union-attr]  # TODO: Fix in #1653
+            y_lims = [self.annulus_centres.value[0], self.radii.value[-1]]
         ax.set_ylim3d(y_lims)
 
         # Sets up the legend so that matching data point and models are on the same line in the legend

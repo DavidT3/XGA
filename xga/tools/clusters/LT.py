@@ -321,7 +321,7 @@ def luminosity_temperature_pipeline(
         elif temp_lum_rel.outer_aperture != o_dens:
             raise ValueError(
                 "The outer aperture used to construct the relation passed as the 'temp_lum_rel' "
-                f"argument ({temp_lum_rel.outer_aperture.to_string()}), does not match the target overdensity "  # type: ignore[union-attr]  # TODO: Fix in #1653
+                f"argument ({temp_lum_rel.outer_aperture}), does not match the target overdensity "
                 f"({o_dens})."
             )
         elif temp_lum_rel.core_radius_fraction != rad_temp_rel.core_radius_fraction:

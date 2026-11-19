@@ -6318,9 +6318,9 @@ class BaseSource:
 
         # If the masks are None, then they are set to an array of zeros
         if mask is None:
-            mask = np.zeros(mask_image.shape)  # type: ignore[union-attr]  # TODO: Fix in #1653
+            mask = np.zeros(mask_image.shape)
         if back_mask is None:
-            back_mask = np.zeros(mask_image.shape)  # type: ignore[union-attr]  # TODO: Fix in #1653
+            back_mask = np.zeros(mask_image.shape)
 
         return mask, back_mask
 
