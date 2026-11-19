@@ -24,7 +24,7 @@ def single_temp_apec_profile(
     sources: BaseSource | BaseSample | list[BaseSource],
     radii: Quantity | list[Quantity] | dict[str, Quantity] | dict[str, list[Quantity]],
     start_temp: Quantity = Quantity(3.0, "keV"),
-    start_met: float = 0.3,
+    start_met: float | Quantity = 0.3,
     lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
     freeze_nh: bool = True,
     freeze_met: bool = True,
@@ -143,7 +143,8 @@ def single_temp_apec_profile(
         # We can recreate the fit_conf key that will have been assigned to the preceding non-cross-arf fit here, which
         #  will make it rather easier to retrieve the fit results we need to use as starting values later on
         rel_args = FIT_FUNC_ARGS["single_temp_apec_profile"]
-        in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+        cur_locals = locals()
+        in_fit_conf = {kn: cur_locals[kn] for kn in rel_args if rel_args[kn]}
         in_fit_conf["use_cross_arf"] = False
         prefit_fit_conf = _gen_fit_conf(in_fit_conf)
 
@@ -205,7 +206,8 @@ def single_temp_apec_profile(
     #  values for different sources, so we don't need to put this in the loop. Still, we will pass back  a list of
     #  fit configuration keys because the xspec call decorator will expect a list with one entry per source that
     #  is having a fit run
-    in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+    cur_locals = locals()
+    in_fit_conf = {kn: cur_locals[kn] for kn in rel_args if rel_args[kn]}
     fit_conf = _gen_fit_conf(in_fit_conf)
 
     script_paths = []
@@ -217,7 +219,7 @@ def single_temp_apec_profile(
         sources = [sources]
 
     og_start_temp = start_temp.copy()
-    og_start_met = start_met.copy()  # type: ignore[attr-defined]  # See issue #1653
+    og_start_met = start_met.copy()
 
     deg_rad: dict[str, dict[str, Any]] = {}
     for src_ind, source in enumerate(sources):
@@ -401,7 +403,8 @@ def single_temp_apec_profile(
                 #  look at those particular variable names when creating the fit configuration storage key
                 start_temp = Quantity(ca_start_temp)
                 start_norm = Quantity(ca_start_norm)
-                start_met = Quantity(ca_start_met)
+                ca_start_met_quant = Quantity(ca_start_met)
+                start_met = ca_start_met_quant
 
                 # The start constants will always be one
                 start_con = [1] * len(ann_spec.annulus_ids)
@@ -416,7 +419,7 @@ def single_temp_apec_profile(
                     c="{" + " ".join([str(c) for c in start_con]) + "}",
                     nh="{" + " ".join([str(nh) for nh in start_nh]) + "}",
                     t="{" + " ".join([str(t) for t in start_temp.value]) + "}",
-                    a="{" + " ".join([str(a) for a in start_met.value]) + "}",  # type: ignore[attr-defined]  # See issue #1653
+                    a="{" + " ".join([str(a) for a in ca_start_met_quant.value]) + "}",
                     z="{" + " ".join([str(z) for z in start_z]) + "}",
                     n="{" + " ".join([str(n) for n in start_norm.value]) + "}",
                 )

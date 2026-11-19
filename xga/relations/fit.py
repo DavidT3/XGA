@@ -61,12 +61,12 @@ def _fit_initialise(
     # Not involved in the fitting process, but comes through here so that the sources dropped due to NaN values
     #  also have the values dropped in these variables
     elif point_names is not None and len(point_names) != len(x_values):
-        ValueError(
+        raise ValueError(
             f"The 'point_names' argument is a different length ({len(point_names)}) to the input data "
             f"({len(x_values)})."
         )
     elif third_dim is not None and len(third_dim) != len(x_values):
-        ValueError(
+        raise ValueError(
             f"The 'third_dim' argument is a different length ({len(third_dim)}) to the input data ({len(x_values)})."
         )
     elif y_errs.unit != y_values.unit:

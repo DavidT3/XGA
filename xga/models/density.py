@@ -618,7 +618,7 @@ class VikhlininDensity1D(BaseModel1D):
             {"prior": Quantity([0, 1], r2500), "type": "uniform"},
         ]
         norm_priors = [
-            {"prior": Quantity([[1e12, 1e16]], "Msun/Mpc^3"), "type": "uniform"},
+            {"prior": Quantity([1e12, 1e16], "Msun/Mpc^3"), "type": "uniform"},
             {"prior": Quantity([0, 10], "1/cm^3"), "type": "uniform"},
         ]
 

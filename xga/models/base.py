@@ -336,8 +336,18 @@ class BaseModel1D(metaclass=ABCMeta):
         else:
             dx = dx.to(self._x_unit)
 
+        # The finite-difference point count ('order' argument of derivative) must be odd and >= n + 1, where n is
+        #  the derivative order. Adding 1 + (order % 2) rounds order + 1 up to the smallest valid odd stencil size
+        #  (e.g. 3 points for 1st/2nd derivatives, 5 points for 3rd/4th derivatives).
+        num_points = order + 1 + (order % 2)
         der_val = Quantity(
-            derivative(lambda r: self(Quantity(r, self._x_unit), use_par_dist).value, x.value, dx.value, n=order),
+            derivative(
+                lambda r: self(Quantity(r, self._x_unit), use_par_dist).value,
+                x.value,
+                dx.value,
+                n=order,
+                order=num_points,
+            ),
             self._y_unit / np.power(self._x_unit, order),
         )
         return der_val
@@ -381,26 +391,30 @@ class BaseModel1D(metaclass=ABCMeta):
 
         # If the user just wants to use the current values of the model parameters then this is what happens
         if not use_par_dist:
+            # BaseModel1D.__call__ evaluates self.model(x[..., None], *self._model_pars) so 1D x arrays broadcast
+            #  against parameter distributions; when use_par_dist=False, that leaves a trailing length-1 axis
+            #  (shape (N, 1)), so .squeeze() is required to flatten mod_vals to 1D for np.concatenate and pyabel
+            mod_vals = self(x).value.squeeze()
             if method == "direct" and force_change:
-                to_trans = np.concatenate([self(x).value, np.array([0.0])])
+                to_trans = np.concatenate([mod_vals, np.array([0.0])])
                 temp_dr = (x[-1] - x[-2]).value
                 mod_rad = np.concatenate([x.value, np.array([x.value[-1] + temp_dr])])
                 transform_res = direct_transform(to_trans, r=mod_rad, backend="python", verbose=False)[:-1]
             elif method == "direct" and not force_change:
-                to_trans = np.concatenate([self(x).value, np.array([0.0])])
-                transform_res = direct_transform(to_trans, dr=dr, backend="python", verbose=False)
+                to_trans = np.concatenate([mod_vals, np.array([0.0])])
+                transform_res = direct_transform(to_trans, dr=dr, backend="python", verbose=False)[:-1]
             elif method == "basex":
-                transform_res = basex_transform(self(x).value, dr=dr, verbose=False)
+                transform_res = basex_transform(mod_vals, dr=dr, verbose=False)
             elif method == "hansenlaw":
-                transform_res = hansenlaw_transform(self(x).value, dr=dr, verbose=False)
+                transform_res = hansenlaw_transform(mod_vals, dr=dr, verbose=False)
             elif method == "onion_bordas":
-                transform_res = onion_bordas_transform(self(x).value, dr=dr, verbose=False)
+                transform_res = onion_bordas_transform(mod_vals, dr=dr, verbose=False)
             elif method == "onion_peeling":
-                transform_res = onion_peeling_transform(self(x).value, dr=dr, verbose=False)
+                transform_res = onion_peeling_transform(mod_vals, dr=dr, verbose=False)
             elif method == "two_point":
-                transform_res = two_point_transform(self(x).value, dr=dr, verbose=False)
+                transform_res = two_point_transform(mod_vals, dr=dr, verbose=False)
             elif method == "three_point":
-                transform_res = three_point_transform(self(x).value, dr=dr, verbose=False)
+                transform_res = three_point_transform(mod_vals, dr=dr, verbose=False)
             else:
                 raise ValueError(f"{method} is not a recognised inverse abel transform type")
 
@@ -744,7 +758,7 @@ class BaseModel1D(metaclass=ABCMeta):
         :param tuple figsize: The desired dimensions of the figure.
         """
         # Check if there are parameter distributions associated with this model
-        if len(self._par_dists[0] != 0):
+        if len(self._par_dists[0]) != 0:
             # Set up the figure
             plt.figure(figsize=figsize)
             ax = plt.gca()
@@ -778,7 +792,7 @@ class BaseModel1D(metaclass=ABCMeta):
         :param str colour: Set the colour of the histogram.
         """
         # Check if there are parameter distributions associated with this model
-        if len(self._par_dists[0] != 0):
+        if len(self._par_dists[0]) != 0:
             # Set up the figure
             figsize = (6, 5 * self.num_pars)
             fig, ax_arr = plt.subplots(ncols=1, nrows=self.num_pars, figsize=figsize)
@@ -1047,8 +1061,7 @@ class BaseModel1D(metaclass=ABCMeta):
                 )
             # Check that the type of prior is currently supported
             if prior["type"] not in self._prior_types:
-                # TODO: Fix in #1643 — set allowed properly using ALLOWED_PRIORS
-                allowed = ", "
+                allowed = ", ".join(self._prior_types)
                 raise ValueError(
                     "Priors of type {t} are not supported, currently supported types are; {a}".format(
                         t=prior["type"], a=allowed

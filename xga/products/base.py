@@ -514,7 +514,7 @@ class BaseProduct:
             return self.radec_wcs.wcs.radesys
         else:
             raise AttributeError(
-                f"XGA {self._prod_type} ({self.__name__} class) does not have an 'radec_sky_wcs' "  # type: ignore[attr-defined]  # See issue #1653
+                f"XGA {self._prod_type} ({self.__class__.__name__} class) does not have an 'radec_sky_wcs' "
                 f"or 'radec_wcs' property to retrieve the RA-DEC system from."
             )
 
@@ -535,7 +535,7 @@ class BaseProduct:
             return self.radec_wcs.wcs.equinox
         else:
             raise AttributeError(
-                f"XGA {self._prod_type} ({self.__name__} class) does not have an 'radec_sky_wcs' "  # type: ignore[attr-defined]  # See issue #1653
+                f"XGA {self._prod_type} ({self.__class__.__name__} class) does not have an 'radec_sky_wcs' "
                 f"or 'radec_wcs' property to retrieve the RA-DEC equinox from."
             )
 
@@ -1299,10 +1299,11 @@ class BaseProfile1D:
                 f"and the shape of values is {values.shape}"
             )
         elif (radii_err is not None and radii_err.ndim != 1) or (values_err is not None and values_err.ndim != 1):
+            r_err_shape = radii_err.shape if radii_err is not None else None
+            v_err_shape = values_err.shape if values_err is not None else None
             raise ValueError(
                 "The radii_err and values_err arrays must be one-dimensional. The shape of "
-                f"radii_err is {radii_err.shape} and the shape of values_err is "  # type: ignore[union-attr]  # TODO: Fix in #1653
-                f"{values_err.shape}"  # type: ignore[union-attr]  # TODO: Fix in #1653
+                f"radii_err is {r_err_shape} and the shape of values_err is {v_err_shape}"
             )
         # Making sure the arrays have the same number of entries
         elif radii.shape != values.shape:
@@ -1313,10 +1314,12 @@ class BaseProfile1D:
         elif (radii_err is not None and radii_err.shape != radii.shape) or (
             values_err is not None and values_err.shape != values.shape
         ):
+            r_err_shape = radii_err.shape if radii_err is not None else None
+            v_err_shape = values_err.shape if values_err is not None else None
             raise ValueError(
                 "radii_err must be the same shape as radii, and values_err must be the same shape "
-                f"as values. The shape of radii_err is {radii_err.shape} where radii is {radii.shape}, and the shape "  # type: ignore[union-attr]  # TODO: Fix in #1653
-                f"of values_err is {values_err.shape} where values is {values.shape}"  # type: ignore[union-attr]  # TODO: Fix in #1653
+                f"as values. The shape of radii_err is {r_err_shape} where radii is {radii.shape}, and the shape "
+                f"of values_err is {v_err_shape} where values is {values.shape}"
             )
 
         # I'm actually going to enforce that the central coordinates passed when declaring a profile must

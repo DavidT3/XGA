@@ -226,6 +226,8 @@ def luminosity_temperature_pipeline(
             )
         )
 
+    # Copy the input DataFrame before any potential name normalisation so we do not mutate the caller's DataFrame
+    sample_data = sample_data.copy()
     if (sample_data["name"].str.contains(" ") | sample_data["name"].str.contains("_")).any():
         warn(
             "One or more cluster name has been modified. Empty spaces (' ') are removed, and underscores ('_') are "
@@ -321,7 +323,7 @@ def luminosity_temperature_pipeline(
         elif temp_lum_rel.outer_aperture != o_dens:
             raise ValueError(
                 "The outer aperture used to construct the relation passed as the 'temp_lum_rel' "
-                f"argument ({temp_lum_rel.outer_aperture.to_string()}), does not match the target overdensity "  # type: ignore[union-attr]  # TODO: Fix in #1653
+                f"argument ({temp_lum_rel.outer_aperture}), does not match the target overdensity "
                 f"({o_dens})."
             )
         elif temp_lum_rel.core_radius_fraction != rad_temp_rel.core_radius_fraction:
@@ -330,7 +332,7 @@ def luminosity_temperature_pipeline(
                 f"argument ({temp_lum_rel.core_radius_fraction}), does not match that of the passed temperature-radius "
                 f"relation ({rad_temp_rel.core_radius_fraction})."
             )
-        elif rad_temp_rel.telescope != telescope:
+        elif temp_lum_rel.telescope != telescope:
             raise ValueError(
                 f"The relation passed for the 'temp_lum_rel' argument was made for the {temp_lum_rel.telescope} "
                 f"telescope, but this pipeline is running for the {telescope} telescope (specified by the 'telescope' "

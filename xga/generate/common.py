@@ -546,7 +546,7 @@ def _interloper_esass_string(reg: EllipseSkyRegion) -> str:
     else:
         # The rotation angle from the region object is in degrees already
         shape_str = "-ellipse {cx} {cy} {w}d {h}d {rot}"
-        shape_str = shape_str.format(cx=cen[0].value, cy=cen[1].value, w=w, h=h, rot=reg.angle.value)
+        shape_str = shape_str.format(cx=cen[0].value, cy=cen[1].value, w=(w / 2), h=(h / 2), rot=reg.angle.value)
 
     return shape_str
 
@@ -625,7 +625,7 @@ def get_annular_esass_region(
 
     # And just to make sure the central coordinates are in degrees
     # TODO do a conversion instead of raising an error
-    if central_coord[0].unit != deg and central_coord[1].unit != deg:
+    if central_coord[0].unit != deg or central_coord[1].unit != deg:
         raise ValueError("Need to convert central coordinates into degrees.")
 
     # If the user doesn't pass any regions, then we have to find them ourselves. I decided to allow this
@@ -653,7 +653,7 @@ def get_annular_esass_region(
         )
 
     elif not inner_radius.isscalar and inner_radius[0].value != 0:
-        esass_source_area = "ellipse {cx} {cy} {wi} {hi} {wo} {ho} {rot}"
+        esass_source_area = "ellipse {cx} {cy} {wi}d {hi}d {wo}d {ho}d {rot}"
         esass_source_area = esass_source_area.format(
             cx=central_coord[0].value,
             cy=central_coord[1].value,
@@ -665,7 +665,7 @@ def get_annular_esass_region(
         )
 
     elif not inner_radius.isscalar and inner_radius[0].value == 0:
-        esass_source_area = "ellipse {cx} {cy} {w} {h} {rot}"
+        esass_source_area = "ellipse {cx} {cy} {w}d {h}d {rot}"
         esass_source_area = esass_source_area.format(
             cx=central_coord[0].value,
             cy=central_coord[1].value,
