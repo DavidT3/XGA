@@ -28,7 +28,7 @@ and {term}`eROSITA`).
 %%%%% Card 1: Installation & Configuration (Full Width) %%%%%
 ::::{card}
 :header: **Install & Configure**
-:url: #explore-xga
+:url: setup/index.md
 
 :::{div}
 :class: placeholder-text card-tint-steel
