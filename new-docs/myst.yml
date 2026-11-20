@@ -77,6 +77,8 @@ project:
   license: BSD-3-Clause
   bibliography:
     - references.bib
+  exclude:
+    - README.md
   toc:
     - file: index.md
     - file: setup/index.md
