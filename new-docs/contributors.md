@@ -66,4 +66,4 @@ authors:
       - Department of Physics and Astronomy, University of Sussex, Brighton, UK
 ---
 
-The creators and contributors to **X-ray: Generate and Analyse (XGA)** are listed above along with their institutional affiliations. Hover over or click on any author's name to view their contributor details and [NISO CRediT](https://credit.niso.org/) roles.
+The creators of and contributors to **X-ray: Generate and Analyse (XGA)** are listed above along with their institutional affiliations. Click on any author's name to view their contributor details and [NISO CRediT](https://credit.niso.org/) roles.
