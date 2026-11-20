@@ -82,7 +82,7 @@ project:
     - file: api/index.md
     - file: glossary.md
     - file: contributors.md
-
+  edit_url: null
 site:
   template: book-theme
   title: "XGA Documentation"
@@ -92,6 +92,5 @@ site:
     favicon: _static/quick_xga_logo.png
     style: _static/custom.css
     hide_authors: false
-    edit_url: null
   parts:
     primary_sidebar_footer: primary-sidebar-footer.md
