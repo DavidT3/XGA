@@ -9,7 +9,7 @@ site:
 
 ## XGA's First Run After Configuration
 
-The first time you access any configuration-dependent part of XGA, it will create an 'observation census', where it will search through all the observations it can find (based on your entries in the configuration file), check that there are events lists present, and record the pointing RA and DEC [(along with which instruments are usable, excluding observations taken with banned filters like `CalClosed`/`Closed` or banned observation modes like XMM `SLEW`)]{.edited-text}. *This can take a while*, but will only take that long on the first run. This process is fully parallelized and will utilize your available CPU cores to speed up the filesystem [(or remote S3/HTTPS header)]{.edited-text} I/O.
+The first time you access any configuration-dependent part of XGA, it will create an 'observation census', where it will search through all the observations it can find (based on your entries in the configuration file), check that there are events lists present, and record the pointing RA and DEC <span class="edited-text">(along with which instruments are usable, excluding observations taken with banned filters like `CalClosed`/`Closed` or banned observation modes like XMM `SLEW`)</span>. *This can take a while*, but will only take that long on the first run. This process is fully parallelized and will utilize your available CPU cores to speed up the filesystem <span class="edited-text">(or remote S3/HTTPS header)</span> I/O.
 
 The module will check the census against your observation directory and see if it needs to be updated on every run.
 
@@ -45,14 +45,14 @@ print(xga.CENSUS["xmm"].head())
 
 ---
 
-## Census Management (`rebuild_census`)
+## Census Management <span class="edited-text">(`rebuild_census`)</span>
 
-XGA provides the `rebuild_census()` function for manual management of the observation census. This is useful if you have deleted data from your disk [or added new observations mid-session]{.edited-text} or want to force a fresh scan of your archives.
+XGA provides the `rebuild_census()` function for manual management of the observation census. This is useful if you have deleted data from your disk <span class="edited-text">or added new observations mid-session</span> or want to force a fresh scan of your archives.
 
 * **Standard Update**: Calling `rebuild_census()` without arguments is equivalent to the update check performed at startup.
 * **Full Rebuild**: `rebuild_census(full_rebuild=True)` deletes the existing census and parses every FITS header from scratch.
 * **Cleanup**: `rebuild_census(clean_dead=True)` checks the current census against the filesystem and removes entries for {term}`ObsID`s that no longer exist.
-* [**Target Specific Telescopes**: Pass `telescope='xmm'` or `telescope=['xmm', 'chandra']` to only rebuild the census for specific missions.]{.edited-text}
+* <span class="edited-text">**Target Specific Telescopes**: Pass `telescope='xmm'` or `telescope=['xmm', 'chandra']` to only rebuild the census for specific missions.</span>
 
 ```python
 import xga
@@ -63,13 +63,13 @@ xga.rebuild_census(clean_dead=True)
 
 ---
 
-## Blacklisting ObsIDs & Instruments
+## Blacklisting ObsIDs <span class="edited-text">& Instruments</span>
 
-If you don't wish your analyses to include certain {term}`ObsID`s [(or specific instruments of an ObsID)]{.edited-text}, then you can 'blacklist' them and remove them from all consideration; you simply need to add the ObsID to [`<telescope>/<telescope>_blacklist.csv` (for example `~/.config/xga/xmm/xmm_blacklist.csv`),]{.edited-text} which is located in a mission subfolder of the configuration directory. If you need to know where these files are located, import [`BLACKLIST_FILES` (or `CONFIG_PATH`) from `xga.utils`]{.edited-text}.
+If you don't wish your analyses to include certain {term}`ObsID`s <span class="edited-text">(or specific instruments of an ObsID)</span>, then you can 'blacklist' them and remove them from all consideration; you simply need to add the ObsID to <span class="edited-text">`<telescope>/<telescope>_blacklist.csv` (for example `~/.config/xga/xmm/xmm_blacklist.csv`),</span> which is located in a mission subfolder of the configuration directory. If you need to know where these files are located, import <span class="edited-text">`BLACKLIST_FILES` (or `CONFIG_PATH`) from `xga.utils`</span>.
 
 It is possible that you might want to do this so that ObsIDs with significant problems (flaring, for instance), don't contribute to and spoil your current analysis.
 
-:::{div}
+:::::{div}
 :class: placeholder-text
 ### Per-Instrument Blacklist Format
 
@@ -101,4 +101,4 @@ ObsID,EXCLUDE_TM1,EXCLUDE_TM2,EXCLUDE_TM3,EXCLUDE_TM4,EXCLUDE_TM5,EXCLUDE_TM6,EX
 :::
 
 ::::
-:::
+:::::

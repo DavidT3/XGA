@@ -1,6 +1,6 @@
 /*
  * This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
- * Last modified by David J Turner (djturner@umbc.edu) 11/20/26, 1:22 PM. Copyright (c) The Contributors.
+ * Last modified by David J Turner (djturner@umbc.edu) 11/20/26, 2:48 PM. Copyright (c) The Contributors.
  */
 
 /* Custom stylesheet for XGA MyST / Jupyter Book 2 documentation */
@@ -13,6 +13,22 @@
 .edited-text,
 .edited-text * {
   color: #9333ea !important;
+}
+
+/* Color GUI headers (tab bar labels, dropdown headers, admonition titles) red when only the GUI container/title is AI-generated */
+.placeholder-tabs .myst-tab-set-row,
+.placeholder-tabs .myst-tab-set-row * {
+  color: #dc2626 !important;
+}
+
+.placeholder-dropdown > details.myst-dropdown > summary,
+.placeholder-dropdown > details.myst-dropdown > summary * {
+  color: #dc2626 !important;
+}
+
+.placeholder-admonition > aside.myst-admonition > .myst-admonition-header,
+.placeholder-admonition > aside.myst-admonition > .myst-admonition-header * {
+  color: #dc2626 !important;
 }
 
 /* Rich jewel/earthy scientific card palette (inspired by Paul Tol Muted + Teal/Goldenrod) */

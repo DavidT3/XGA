@@ -7,73 +7,67 @@ site:
 
 # Prerequisites: Data & Region Files
 
-## Data Required for Using XGA Sources & Samples
+## Data Required for Using <span class="edited-text">XGA Sources & Samples</span>
 
-**This is very important** — Currently, to make use of [XGA's `Source` and `Sample` classes]{.edited-text}, you **must** have access to **at least one** of: cleaned {term}`XMM-Newton`, [{term}`Chandra`,]{.edited-text} or {term}`eROSITA` [({term}`eRASS` or pointed/CalPV)]{.edited-text} event lists. For acquiring and cleaning X-ray data, the Python module [{term}`DAXA` (`daxa`)](https://github.com/DavidT3/DAXA) is recommended.
+**This is very important** — Currently, to make use of <span class="edited-text">XGA's `Source` and `Sample` classes</span>, you **must** have access to **at least one** of: cleaned {term}`XMM-Newton`, {term}`Chandra`<span class="edited-text">,</span> or {term}`eROSITA` <span class="edited-text">(</span>{term}`eRASS` <span class="edited-text">or pointed/CalPV)</span> event lists. For acquiring and cleaning X-ray data, the Python module [{term}`DAXA` (`daxa`)](https://github.com/DavidT3/DAXA) is recommended.
 
-:::{div}
+:::::{div}
 :class: placeholder-text
 ```{note} Standalone XGA Product Classes Do Not Require Archive Setup
 If you only want to load and analyse specific FITS files (such as an existing spectrum, image, exposure map, or event list) using `xga.products`, you do **not** need a full observation archive directory structure. The requirements below apply when using XGA's automated `Source` and `Sample` classes.
 ```
 
 Depending on which X-ray mission(s) you are analysing, XGA expects each {term}`ObsID` directory inside your configured `root_<telescope>_dir` to contain specific reduced files (and optionally pre-generated images and exposure maps):
-:::
 
-:::::{tab-set}
+::::{tab-set}
 
-::::{tab-item} XMM-Newton (`xmm`)
-:::{div}
-:class: placeholder-text
+:::{tab-item} XMM-Newton (`xmm`)
 **Required per ObsID:**
 * **Cleaned event lists**: Separate cleaned event lists for each available EPIC instrument (`clean_pn_evts`, `clean_mos1_evts`, `clean_mos2_evts`).
 * **Attitude file**: The spacecraft attitude history file (`attitude_file`, e.g., `P{obs_id}OBX000ATTTSR0000.FIT`).
 
 **Optional per ObsID:**
-* Pre-generated images (`pn_image`, `mos1_image`, `mos2_image`) and exposure maps (`pn_expmap`, `mos1_expmap`, `mos2_expmap`) in energy bands specified by `lo_en` and `hi_en`. (If omitted, XGA can generate them on demand using {term}`SAS`.)
+* Pre-generated images (`pn_image`, `mos1_image`, `mos2_image`) and exposure maps (`pn_expmap`, `mos1_expmap`, `mos2_expmap`) in energy bands specified by `lo_en` and `hi_en`. (If omitted, XGA can generate them on demand using {term}`SAS`; see [External Mission Software](external_software.md).)
 * A DS9 region file (`region_file`).
 :::
-::::
 
-::::{tab-item} Chandra (`chandra`)
-:::{div}
-:class: placeholder-text
+:::{tab-item} Chandra (`chandra`)
 **Required per ObsID:**
 * **Cleaned event list**: Cleaned ACIS event list (`clean_acis_evts`).
 * **Aspect solution file**: Spacecraft attitude/aspect solution (`attitude_file`).
 * **Bad pixel & mask files**: Observation-specific ACIS bad pixel file (`acis_badpix_file`) and mask file (`acis_mask_file`).
 
 **Optional per ObsID:**
-* Pre-generated ACIS images (`acis_image`) and exposure maps (`acis_expmap`) in energy bands specified by `lo_en` and `hi_en`. (If omitted, XGA can generate them on demand using {term}`CIAO`.)
+* Pre-generated ACIS images (`acis_image`) and exposure maps (`acis_expmap`) in energy bands specified by `lo_en` and `hi_en`. (If omitted, XGA can generate them on demand using {term}`CIAO`; see [External Mission Software](external_software.md).)
 * A DS9 region file (`region_file`).
 :::
-::::
 
-::::{tab-item} eROSITA & eRASS (`erosita` / `erass`)
-:::{div}
-:class: placeholder-text
+:::{tab-item} eROSITA & eRASS (`erosita` / `erass`)
 XGA supports both pointed/CalPV eROSITA observations (`erosita`) and all-sky survey tiles (`erass`).
 
 **Required per ObsID:**
 * **Cleaned event list(s)**: Either a single combined event list across telescope modules (`clean_erosita_evts` / `clean_erass_evts`, which is standard for CalPV and eRASS releases) or separate `clean_tm1_evts`–`clean_tm7_evts` files.
 
 **Optional per ObsID:**
-* Pre-generated images (`erosita_image` / `erass_image`) and exposure maps (`erosita_expmap` / `erass_expmap`) in energy bands specified by `lo_en` and `hi_en`. (If omitted, XGA can generate them on demand using {term}`eSASS`.)
+* Pre-generated images (`erosita_image` / `erass_image`) and exposure maps (`erosita_expmap` / `erass_expmap`) in energy bands specified by `lo_en` and `hi_en`. (If omitted, XGA can generate them on demand using {term}`eSASS`; see [External Mission Software](external_software.md).)
 * A DS9 region file (`region_file`).
 :::
-::::
 
+::::
 :::::
 
 ---
 
 ## Region Files
 
-It will be beneficial if you have region files available, as it will allow XGA to remove interloper sources. If you wish to use existing region files, then they must be in a DS9 compatible format, **point sources** must be **red** and **extended sources** must be **green** [(or one of the additional XCS extended-source colour classifications listed below)]{.edited-text}.
+It will be beneficial if you have region files available, as it will allow XGA to remove interloper sources. If you wish to use existing region files, then they must be in a DS9 compatible format, **point sources** must be **red** and **extended sources** must be **green** <span class="edited-text">(or one of the additional XCS extended-source colour classifications listed below)</span>.
 
+:::{div}
+:class: placeholder-admonition
 ```{warning} XMM-Newton Region File WCS Requirement
 **Disclaimer:** If region files are supplied for XMM data, XGA also expects at least one image per instrument per observation, for WCS information.
 ```
+:::
 
 :::{div}
 :class: placeholder-text

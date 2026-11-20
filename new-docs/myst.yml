@@ -82,6 +82,7 @@ project:
     - file: setup/index.md
       children:
         - file: setup/installation.md
+        - file: setup/external_software.md
         - file: setup/data_and_regions.md
         - file: setup/configuration.md
         - file: setup/census_and_blacklist.md

@@ -7,18 +7,21 @@ site:
 
 # Configuring XGA
 
-Before XGA [sources and samples]{.edited-text} can be used you must fill out a configuration file (completed examples can be found [at the bottom of this page](#example-configuration-files) and in the repository [here](https://github.com/DavidT3/XGA/blob/master/docs/example_config/xga.cfg)).
+Before XGA <span class="edited-text">sources and samples</span> can be used you must fill out a configuration file (completed examples can be found [at the bottom of this page](#example-configuration-files) and in the repository [here](https://github.com/DavidT3/XGA/blob/master/docs/example_config/xga.cfg)).
 
-This section aims to be as general as possible, but is biased by how our research group generates and stores our data products [(and by the directory structure produced by {term}`DAXA`)]{.edited-text}. If you are an X-ray astronomer who wishes to use this module, but it seems to be incompatible with your setup, please get in touch or raise an issue.
+This section aims to be as general as possible, but is biased by how our research group generates and stores our data products <span class="edited-text">(and by the directory structure produced by</span> {term}`DAXA`<span class="edited-text">)</span>. If you are an X-ray astronomer who wishes to use this module, but it seems to be incompatible with your setup, please get in touch or raise an issue.
 
 ---
 
+:::{div}
+:class: placeholder-text
 ## Step-by-Step Configuration Guide
+:::
 
 Follow these steps to fill out the configuration file:
 
-1. **Trigger initial configuration file creation**:
-   [Import XGA and access any configuration-dependent attribute (such as `xga.CONFIG_FILE`), or instantiate a source,]{.edited-text} to generate the initial, incomplete, configuration file.
+1. <span class="placeholder-text">**Trigger initial configuration file creation**:</span>
+   <span class="edited-text">Import XGA and access any configuration-dependent attribute (such as `xga.CONFIG_FILE`), or instantiate a source,</span> to generate the initial, incomplete, configuration file.
    * **Note**: XGA uses a **lazy loading** architecture. Importing the module does not perform any filesystem checks or software discovery immediately. These only occur when a configuration variable or data-dependent function is first accessed.
 
    :::{div}
@@ -31,45 +34,45 @@ Follow these steps to fill out the configuration file:
    ```
    :::
 
-2. **Open `xga.cfg`**:
-   Navigate to `~/.config/xga` [(or `$XDG_CONFIG_HOME/xga` if `XDG_CONFIG_HOME` is set)]{.edited-text} and open `xga.cfg` in a text editor. The `.config` directory is usually hidden, so it is probably easier to navigate via the terminal.
+2. <span class="placeholder-text">**Open `xga.cfg`**:</span>
+   Navigate to `~/.config/xga` <span class="edited-text">(or `$XDG_CONFIG_HOME/xga` if `XDG_CONFIG_HOME` is set)</span> and open `xga.cfg` in a text editor. The `.config` directory is usually hidden, so it is probably easier to navigate via the terminal.
    * **Note**: The location of the configuration directory can be overridden by setting the `XGA_CONFIG_DIR` environment variable. If set, XGA will look for its configuration and store its census files in exactly that directory. Because of XGA's lazy loading, you can even set this environment variable **after** importing XGA in a session.
-   * **Note**: If you need to switch configuration directories [or override the output directory]{.edited-text} mid-session, you can use the `reinitialise_xga()` function [(see [Custom Config Locations & Runtime Re-initialisation](#custom-config-locations-runtime-re-initialisation) below for details)]{.edited-text}.
+   * **Note**: If you need to switch configuration directories <span class="edited-text">or override the output directory</span> mid-session, you can use the `reinitialise_xga()` function <span class="edited-text">(see [Custom Config Locations & Runtime Re-initialisation](#custom-config-locations-runtime-re-initialisation) below for details)</span>.
 
-3. **Identify required entries**:
-   Take note of the entries that currently have `/this/is/required/` at the beginning; without these entries [the corresponding telescope section]{.edited-text} will not function. [Any telescope section whose required entries are left as `/this/is/required/...` is simply marked as `USABLE[tel] = False` and ignored, while optional entries can be left with `/this/is/optional/...` if you do not have pre-generated images, exposure maps, or region files.]{.edited-text}
+3. <span class="placeholder-text">**Identify required entries**:</span>
+   Take note of the entries that currently have `/this/is/required/` at the beginning; without these entries <span class="edited-text">the corresponding telescope section</span> will not function. <span class="edited-text">Any telescope section whose required entries are left as `/this/is/required/...` is simply marked as `USABLE[tel] = False` and ignored, while optional entries can be left with `/this/is/optional/...` if you do not have pre-generated images, exposure maps, or region files.</span>
 
-4. **Set the XGA output directory (`xga_save_path`)**:
+4. <span class="placeholder-text">**Set the XGA output directory (`xga_save_path`)**:</span>
    Set the directory in which XGA will save the products and files it generates. It is advised to just set it to `xga_output`, so wherever you run a script that imports XGA it will create a folder called `xga_output` there. You could choose to use an absolute path and have a global XGA folder; however, it wouldn't make a lot of sense.
 
-5. **Set the CPU core limit (`num_cores`)**:
-   You may also set an optional parameter in the `[XGA_SETUP]` section, `'num_cores'`. [By default, new configuration files set `num_cores = auto`, which allows XGA to use up to 90% of the available CPU cores on your system.]{.edited-text} If you wish to manually limit the number of cores that XGA is allowed to use, then set this to an integer value, e.g. `num_cores = 10`. You can also set this at runtime, by importing `NUM_CORES` from `xga` and setting that to a value.
+5. <span class="placeholder-text">**Set the CPU core limit (`num_cores`)**:</span>
+   You may also set an optional parameter in the `[XGA_SETUP]` section, `'num_cores'`. <span class="edited-text">By default, new configuration files set `num_cores = auto`, which allows XGA to use up to 90% of the available CPU cores on your system.</span> If you wish to manually limit the number of cores that XGA is allowed to use, then set this to an integer value, e.g. `num_cores = 10`. You can also set this at runtime, by importing `NUM_CORES` from `xga` and setting that to a value.
 
-6. **Configure mission root directories (`root_<telescope>_dir`)**:
-   The `root_<telescope>_dir` entry ( inside `[XMM_FILES]`, `[CHANDRA_FILES]`, `[EROSITA_FILES]`, or `[ERASS_FILES]`) is the path [(or remote `s3://` / `https://` URI)]{.edited-text} of the parent folder containing all of your observation data for `<telescope>`. It is not necessary to have data for all telescopes that XGA supports.
+6. <span class="placeholder-text">**Configure mission root directories (`root_<telescope>_dir`)**:</span>
+   The `root_<telescope>_dir` entry <span class="edited-text">(inside `[XMM_FILES]`, `[CHANDRA_FILES]`, `[EROSITA_FILES]`, or `[ERASS_FILES]`)</span> is the path <span class="edited-text">(or remote `s3://` / `https://` URI)</span> of the parent folder containing all of your observation data for `<telescope>`. It is not necessary to have data for all telescopes that XGA supports.
 
-7. **Configure file naming patterns & relative paths**:
+7. <span class="placeholder-text">**Configure file naming patterns & relative paths**:</span>
    Most of the other entries tell XGA how different files are named. `clean_pn_evts`, for instance, gives the naming convention for the cleaned PN events files that XGA generates products from.
    :::{div}
    :class: placeholder-text
    * **Relative vs. Absolute Paths**: Any file path in a `[<TELESCOPE>_FILES]` section that does **not** start with a leading `/` (and does not already start with `root_<telescope>_dir`) is treated as **relative to `root_<telescope>_dir`** and automatically has `root_<telescope>_dir` prepended during initialisation. If your files (such as `region_file`) live outside `root_<telescope>_dir`, provide an **absolute** path starting with `/`.
    :::
 
-8. **String formatting templates (`{obs_id}`, `{lo_en}`, `{hi_en}`)**:
+8. <span class="placeholder-text">**String formatting templates (`{obs_id}`, `{lo_en}`, `{hi_en}`)**:</span>
    Bear in mind when filling in the file fields that XGA uses the Python string formatting convention, so **anywhere you see `{obs_id}` will be formatted with the {term}`ObsID` of interest when XGA is actually running**.
 
-9. **Pre-existing image & exposure map energy bounds (`lo_en` and `hi_en`)**:
+9. <span class="placeholder-text">**Pre-existing image & exposure map energy bounds (`lo_en` and `hi_en`)**:</span>
    The `lo_en` and `hi_en` entries can be used to tell XGA what images and exposure maps you may already have. For instance, if you already had 0.50–2.00 keV and 2.00–10.00 keV images and exposure maps, you could set `lo_en = ['0.50', '2.00']` and `hi_en = ['2.00', '10.00']`.
 
-10. **Region file paths (`region_file`)**:
+10. <span class="placeholder-text">**Region file paths (`region_file`)**:</span>
     Finally, the `region_file` entry tells XGA where region files for each observation are stored (if they exist).
 
 ---
 
 (custom-config-locations-runtime-re-initialisation)=
-## Custom Config Locations & Runtime Re-initialisation
+## <span class="placeholder-text">Custom Config Locations & Runtime Re-initialisation</span>
 
-:::{div}
+:::::{div}
 :class: placeholder-text
 XGA provides flexible ways to manage multiple configuration files (for example, switching between different projects, surveys, or test archives) without editing `~/.config/xga/xga.cfg` by hand:
 
@@ -113,11 +116,11 @@ print(xga.CENSUS.keys())
 :::
 
 ::::
-:::
+:::::
 
 ---
 
-## Remote Data Access (`s3://`, `https://`, and SFTP)
+## Remote Data Access <span class="edited-text">(`s3://`, `https://`, and SFTP)</span>
 
 :::{div}
 :class: placeholder-text
@@ -133,19 +136,25 @@ Currently, `s3://` URIs in `xga.cfg` connect anonymously (`anon=True`), which is
 ```
 :::
 
+:::::{div}
+:class: placeholder-dropdown
 ::::{dropdown} Alternative: Mounting a Remote Server via SFTP / SSHFS
-If your data lives on a private remote institutional server (accessible via SSH rather than S3/HTTPS), and you want to use XGA on a local machine, it is recommended to set up an SFTP connection and mount the server as an external volume. Then you can fill out the configuration file with local paths going through the mount folder. To mount a server, one can follow the steps detailed in this [guide](https://sftptogo.com/blog/how-to-mount-sftp-as-a-drive-on-mac/).
+If your data lives on a <span class="edited-text">private</span> remote <span class="edited-text">institutional</span> server <span class="edited-text">(accessible via SSH rather than S3/HTTPS)</span>, and you want to use XGA on a local machine, it is recommended to set up an SFTP connection and mount the server as an external volume. Then you can fill out the configuration file with local paths going through the mount folder. To mount a server, one can follow the steps detailed in this [guide](https://sftptogo.com/blog/how-to-mount-sftp-as-a-drive-on-mac/).
 ::::
+:::::
 
 ---
 
 (example-configuration-files)=
-## Example Configuration Files
+## <span class="placeholder-text">Example Configuration Files</span>
 
 :::{div}
 :class: placeholder-text
 Below are three complete examples of `xga.cfg` demonstrating a multi-mission **{term}`DAXA`-processed archive**, a **classic local directory layout**, and a **remote S3 / HTTPS archive configuration**:
 :::
+
+::::::{div}
+:class: placeholder-tabs
 
 :::::{tab-set}
 
@@ -271,3 +280,4 @@ region_file = /home/dt237/apollo_mnt/erosita_obs/regions/{obs_id}.reg
 ::::
 
 :::::
+::::::

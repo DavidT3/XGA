@@ -7,14 +7,14 @@ site:
 
 # Running XGA in Fornax Containers
 
-:::{div}
+:::::{div}
 :class: placeholder-text
 
 ```{note} Placeholder — Work in Progress (Issue #1630)
 This page is a placeholder for the upcoming guide on running XGA inside local **Fornax Docker (`fornax-hea`) containers** and will be expanded as part of [Issue #1630](https://github.com/DavidT3/XGA/issues/1630).
 ```
 
-If you want all of XGA's external mission dependencies (**HEASoft/XSPEC**, **XMM-SAS**, **Chandra CIAO**, and **eSASS**) working together without having to compile them locally or work around Conda environment conflicts between CIAO and HEASoft, you can run XGA inside the official **Fornax High-Energy (`fornax-hea`)** container image.
+If you want all of XGA's [external mission dependencies](external_software.md) (**HEASoft/XSPEC**, **XMM-SAS**, **Chandra CIAO**, and **eSASS**) working together without having to compile them locally or work around Conda environment conflicts between CIAO and HEASoft, you can run XGA inside the official **Fornax High-Energy (`fornax-hea`)** container image.
 
 ## Planned Topics for This Page
 
@@ -53,4 +53,4 @@ apptainer exec \
 
 ::::
 
-:::
+:::::
