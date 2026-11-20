@@ -1,6 +1,6 @@
 /*
  * This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
- * Last modified by David J Turner (djturner@umbc.edu) 11/20/26, 11:33 AM. Copyright (c) The Contributors.
+ * Last modified by David J Turner (djturner@umbc.edu) 11/20/26, 12:10 PM. Copyright (c) The Contributors.
  */
 
 /* Custom stylesheet for XGA MyST / Jupyter Book 2 documentation */
@@ -10,17 +10,19 @@
   color: #dc2626 !important;
 }
 
-/* Subtle Okabe-Ito colorblind-safe card tints (adapts automatically to light & dark themes) */
-.myst-card:has(.card-tint-sky)    { --card-rgb: 86, 180, 233; }
-.myst-card:has(.card-tint-teal)   { --card-rgb: 0, 158, 115; }
-.myst-card:has(.card-tint-amber)  { --card-rgb: 230, 159, 0; }
-.myst-card:has(.card-tint-mauve)  { --card-rgb: 204, 121, 167; }
-.myst-card:has(.card-tint-indigo) { --card-rgb: 99, 110, 250; }
+/* Rich jewel/earthy scientific card palette (inspired by Paul Tol Muted + Teal/Goldenrod) */
+.myst-card:has(.card-tint-steel)     { --card-rgb: 31, 78, 121; }   /* Deep Petrol / Steel Blue (#1f4e79) */
+.myst-card:has(.card-tint-teal)      { --card-rgb: 0, 120, 120; }   /* Rich Teal (#007878) */
+.myst-card:has(.card-tint-goldenrod) { --card-rgb: 184, 134, 11; }  /* Dark Goldenrod (#b8860b) */
+.myst-card:has(.card-tint-crimson)   { --card-rgb: 181, 82, 82; }   /* Muted Indian Red / Dusty Crimson (#b55252) */
+.myst-card:has(.card-tint-violet)    { --card-rgb: 106, 90, 142; }  /* Muted Slate-Violet (#6a5a8e) */
 
 .myst-card:has([class*="card-tint-"]) {
-  background-color: rgba(var(--card-rgb), 0.08);
+  background-color: rgba(var(--card-rgb), 0.06);
+  border-color: rgb(var(--card-rgb));
 }
 
 .myst-card:has([class*="card-tint-"]) > .myst-card-header {
-  background-color: rgba(var(--card-rgb), 0.12);
+  background-color: rgb(var(--card-rgb));
+  color: #ffffff;
 }

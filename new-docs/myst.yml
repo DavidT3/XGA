@@ -79,9 +79,9 @@ project:
     - references.bib
   toc:
     - file: index.md
+    - file: contributors.md
     - file: api/index.md
     - file: glossary.md
-    - file: contributors.md
   edit_url: null
 site:
   template: book-theme
