@@ -1,0 +1,17 @@
+/*
+ * This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+ * Last modified by David J Turner (djturner@umbc.edu) 11/20/26, 9:03 AM. Copyright (c) The Contributors.
+ */
+
+/* Custom stylesheet for XGA MyST / Jupyter Book 2 documentation */
+
+.myst-made-with-myst,
+.myst-primary-sidebar-footer {
+  display: none !important;
+}
+
+@media (min-width: 1024px) {
+  .xga-hero-logo {
+    margin-top: -11rem !important;
+  }
+}

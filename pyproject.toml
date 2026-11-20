@@ -53,6 +53,8 @@ docs = [
     "ipympl",
     "urllib3",
     "jinja2",
+    "mystmd",
+    "jupytext",
 ]
 
 # Every runtime dependency of XGA

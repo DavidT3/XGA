@@ -14,6 +14,7 @@ CLAUDE.md
 /xga.egg-info/
 *__pycache__*
 /docs/build
+/new-docs/_build
 *noupload*
 .DS_Store
 /xga/__pycache__

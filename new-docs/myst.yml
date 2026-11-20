@@ -1,0 +1,90 @@
+# See docs at: https://mystmd.org/guide/frontmatter
+version: 1
+project:
+  id: xga-documentation
+  title: "X-ray: Generate and Analyse (XGA)"
+  description: "Python package to easily generate and analyse X-ray astronomy data products, ideal for investigating large samples."
+  keywords:
+    - X-ray astronomy
+    - XMM-Newton
+    - Chandra
+    - eROSITA
+    - galaxy clusters
+    - astrophysics
+    - Python
+  authors:
+    - djturner
+    - jpilling
+    - rwang
+    - jhall
+  contributors:
+    - id: djturner
+      name: David J. Turner
+      orcid: 0000-0001-9658-1396
+      email: djturner@umbc.edu
+      corresponding: true
+      roles:
+        - Project administration
+        - Conceptualization
+        - Software
+    - id: jpilling
+      name: Jessica E. Pilling
+      orcid: 0000-0002-3211-928X
+      roles:
+        - Software
+    - id: rwang
+      name: Ray Wang
+      orcid: 0000-0003-2102-8646
+      roles:
+        - Software
+    - id: jhall
+      name: Joseph Hall
+      orcid: 0009-0003-7464-2348
+      roles:
+        - Software
+    - id: prooney
+      name: Phillip Rooney
+      roles:
+        - Software
+        - Validation
+    - id: mdonahue
+      name: Megan Donahue
+      orcid: 0000-0002-2808-0853
+      roles:
+        - Supervision
+        - Validation
+    - id: pgiles
+      name: Paul A. Giles
+      orcid: 0000-0003-4937-8453
+      roles:
+        - Supervision
+        - Validation
+    - id: kromer
+      name: Kathy Romer
+      orcid: 0000-0002-9328-879X
+      roles:
+        - Supervision
+        - Validation
+    - id: vkorbina
+      name: Violetta Korbina
+      roles:
+        - Validation
+  github: https://github.com/DavidT3/XGA
+  license: BSD-3-Clause
+  bibliography:
+    - references.bib
+  toc:
+    - file: index.md
+    - file: api/index.md
+    - file: glossary.md
+    - file: contributors.md
+
+site:
+  template: book-theme
+  title: "XGA Documentation"
+  options:
+    folders: true
+    logo: _static/quick_xga_logo.png
+    favicon: _static/quick_xga_logo.png
+    style: _static/custom.css
+    hide_authors: false
