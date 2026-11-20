@@ -86,3 +86,8 @@ Execute end-to-end analysis pipelines like `luminosity_temperature_pipeline` and
 ::::
 
 :::::
+
+:::{div}
+:class: placeholder-text
+If you have any questions about using XGA, encounter a bug, or would like to request a feature, please see [Getting Help & Support](support.md) or open an issue on the [XGA GitHub Issue Tracker](https://github.com/DavidT3/XGA/issues).
+:::

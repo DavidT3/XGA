@@ -91,6 +91,7 @@ project:
     - file: contributors.md
     - file: api/index.md
     - file: glossary.md
+    - file: support.md
   edit_url: null
 site:
   template: book-theme
