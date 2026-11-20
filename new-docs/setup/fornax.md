@@ -15,28 +15,34 @@ This page is a placeholder for the upcoming guide on using XGA directly on the *
 ```
 
 The **NASA Fornax** initiative provides a cloud-based Science Console with pre-configured high-energy astrophysics software environments (**HEASoft/XSPEC**, **XMM-SAS**, **Chandra CIAO**, and **eSASS**), pre-mounted calibration databases (`CALDB` and `SAS_CCFPATH`), and direct low-latency access to public HEASARC cloud data buckets.
+:::
 
 ## Planned Topics for This Page
 
-::::{grid} 1 1 2 2
+:::::{grid} 1 1 2 2
 
-:::{card}
+::::{card}
 :header: **1. Selecting the High-Energy Environments**
-Choosing the appropriate Fornax High-Energy Astrophysics (`forhea`) environment.
+:::{div}
+:class: placeholder-text
+Choosing the appropriate Fornax High-Energy Astrophysics environment.
 :::
-
-:::{card}
-:header: **2. Configuring XGA on Fornax**
-Setting up `~/.config/xga/xga.cfg` (or `XGA_CONFIG_DIR` on persistent user storage) to point either at locally reduced DAXA archives on your Fornax persistent volume or directly at open-access `s3://` buckets.
-:::
-
 ::::
 
-### Quick Preview: ....
+
+::::{card}
+:header: **2. Configuring XGA on Fornax**
+:::{div}
+:class: placeholder-text
+Setting up `~/.config/xga/xga.cfg` (or `XGA_CONFIG_DIR` on persistent user storage) to point either at locally reduced DAXA archives on your Fornax persistent volume or directly at open-access `s3://` buckets.
+:::
+::::
+
+:::::
+
+### Quick Preview: ..
 
 
 ```bash
-....
+conda
 ```
-
-:::
