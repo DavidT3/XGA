@@ -6,8 +6,8 @@ CLAUDE.md
 .pytest_cache
 *xga_output
 *daxa_output
-*census*
-*blacklist*
+*census*.csv
+*blacklist*.csv
 .idea
 .ipynb_checkpoints
 .vscode
