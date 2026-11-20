@@ -31,7 +31,7 @@ and {term}`eROSITA`).
 :url: #explore-xga
 
 :::{div}
-:class: placeholder-text
+:class: placeholder-text card-tint-sky
 Set up XGA locally or in cloud/container environments, link mission reduction software (XMM-SAS, eSASS, CIAO, and HEASoft/XSPEC), and configure local or DAXA-processed data archives.
 :::
 ::::
@@ -47,7 +47,7 @@ Set up XGA locally or in cloud/container environments, link mission reduction so
 :url: #explore-xga
 
 :::{div}
-:class: placeholder-text
+:class: placeholder-text card-tint-teal
 Load and analyse your own reduced FITS images, exposure maps, spectra, event lists, and 1D/3D profiles directly using XGA's product classes without defining XGA sources.
 :::
 ::::
@@ -58,7 +58,7 @@ Load and analyse your own reduced FITS images, exposure maps, spectra, event lis
 :url: #explore-xga
 
 :::{div}
-:class: placeholder-text
+:class: placeholder-text card-tint-amber
 Define point and extended X-ray sources or large multi-object samples to automatically discover archival ObsIDs, apply spatial masks, and generate multi-mission products in parallel.
 :::
 ::::
@@ -69,7 +69,7 @@ Define point and extended X-ray sources or large multi-object samples to automat
 :url: #explore-xga
 
 :::{div}
-:class: placeholder-text
+:class: placeholder-text card-tint-mauve
 Run parallelized XSPEC spectral fits (including `general_model_fit` and `custom_xspec_fit`), fit analytical 1D models, and measure radial profiles, deprojected densities, and hydrostatic masses.
 :::
 ::::
@@ -80,7 +80,7 @@ Run parallelized XSPEC spectral fits (including `general_model_fit` and `custom_
 :url: #explore-xga
 
 :::{div}
-:class: placeholder-text
+:class: placeholder-text card-tint-indigo
 Execute end-to-end analysis pipelines like `luminosity_temperature_pipeline` and explore step-by-step science walkthroughs for galaxy clusters and X-ray point-source populations.
 :::
 ::::
