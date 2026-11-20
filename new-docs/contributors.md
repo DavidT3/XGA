@@ -17,23 +17,27 @@ authors:
   - name: Jessica E. Pilling
     orcid: 0000-0002-3211-928X
     roles:
+      - Conceptualization
       - Software
     affiliations:
       - Universität Innsbruck, Institut für Astro- und Teilchenphysik, Technikerstr. 25/8, 6020 Innsbruck, Austria
   - name: Ray Wang
     orcid: 0000-0003-2102-8646
     roles:
+      - Conceptualization
       - Software
     affiliations:
       - Department of Physics and Astronomy, Michigan State University, Lansing, Michigan, USA
   - name: Joseph Hall
     orcid: 0009-0003-7464-2348
     roles:
+      - Conceptualization
       - Software
     affiliations:
       - H.H. Wills Physics Laboratory, University of Bristol, Tyndall Avenue, Bristol, BS8 1TL, UK
   - name: Phillip Rooney
     roles:
+      - Conceptualization
       - Software
       - Validation
     affiliations:

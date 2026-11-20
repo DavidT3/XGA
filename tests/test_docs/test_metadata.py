@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/20/26, 8:46 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/20/26, 10:56 AM. Copyright (c) The Contributors.
 """Tests ensuring documentation author/contributor metadata stays synchronized with .zenodo.json."""
 
 import json
@@ -93,15 +93,32 @@ class TestDocsMetadataConsistency(unittest.TestCase):
         contributor_ids: list[str] = []
         for zen_entry, myst_entry in zip(all_zenodo, myst_contributors, strict=True):
             expected_name = _zenodo_name_to_display(zen_entry["name"])
-            self.assertIn("id", myst_entry, f"Missing 'id' for contributor {expected_name} in myst.yml.")
-            contributor_ids.append(myst_entry["id"])
+            entry_id = myst_entry.get("id")
+            if isinstance(entry_id, str):
+                contributor_ids.append(entry_id)
 
-            self.assertEqual(myst_entry.get("name"), expected_name)
-            self.assertEqual(myst_entry.get("orcid"), zen_entry.get("orcid"))
-            self.assertTrue(
-                isinstance(myst_entry.get("roles"), list) and len(myst_entry["roles"]) > 0,
-                f"Expected non-empty CRediT 'roles' list for {expected_name} in myst.yml.",
-            )
+            with self.subTest(contributor=expected_name, field="id"):
+                self.assertIn("id", myst_entry, f"Missing 'id' for contributor '{expected_name}' in myst.yml.")
+
+            with self.subTest(contributor=expected_name, field="name"):
+                self.assertEqual(
+                    myst_entry.get("name"),
+                    expected_name,
+                    f"Mismatch in 'name' for contributor '{expected_name}' between myst.yml and .zenodo.json.",
+                )
+
+            with self.subTest(contributor=expected_name, field="orcid"):
+                self.assertEqual(
+                    myst_entry.get("orcid"),
+                    zen_entry.get("orcid"),
+                    f"Mismatch in 'orcid' for contributor '{expected_name}' between myst.yml and .zenodo.json.",
+                )
+
+            with self.subTest(contributor=expected_name, field="roles"):
+                self.assertTrue(
+                    isinstance(myst_entry.get("roles"), list) and len(myst_entry["roles"]) > 0,
+                    f"Expected non-empty CRediT 'roles' list for contributor '{expected_name}' in myst.yml.",
+                )
 
         self.assertEqual(
             len(contributor_ids),
@@ -133,14 +150,50 @@ class TestDocsMetadataConsistency(unittest.TestCase):
             expected_name = _zenodo_name_to_display(zen_entry["name"])
             expected_affiliations = [aff.strip() for aff in zen_entry["affiliation"].split(";") if aff.strip()]
 
-            self.assertEqual(md_entry.get("name"), expected_name)
-            self.assertEqual(md_entry.get("orcid"), zen_entry.get("orcid"))
-            self.assertEqual(md_entry.get("affiliations"), expected_affiliations)
+            with self.subTest(contributor=expected_name, field="name"):
+                self.assertEqual(
+                    md_entry.get("name"),
+                    expected_name,
+                    f"Mismatch in 'name' for contributor '{expected_name}' between contributors.md and .zenodo.json.",
+                )
+
+            with self.subTest(contributor=expected_name, field="orcid"):
+                self.assertEqual(
+                    md_entry.get("orcid"),
+                    zen_entry.get("orcid"),
+                    f"Mismatch in 'orcid' for contributor '{expected_name}' between contributors.md and .zenodo.json.",
+                )
+
+            with self.subTest(contributor=expected_name, field="affiliations"):
+                self.assertEqual(
+                    md_entry.get("affiliations"),
+                    expected_affiliations,
+                    f"Mismatch in 'affiliations' for contributor '{expected_name}' "
+                    "between contributors.md and .zenodo.json.",
+                )
 
             # Ensure roles, email, and corresponding flags stay synchronized between myst.yml and contributors.md
-            self.assertEqual(md_entry.get("roles"), myst_entry.get("roles"))
-            self.assertEqual(md_entry.get("email"), myst_entry.get("email"))
-            self.assertEqual(md_entry.get("corresponding"), myst_entry.get("corresponding"))
+            with self.subTest(contributor=expected_name, field="roles"):
+                self.assertEqual(
+                    md_entry.get("roles"),
+                    myst_entry.get("roles"),
+                    f"Mismatch in 'roles' for contributor '{expected_name}' between contributors.md and myst.yml.",
+                )
+
+            with self.subTest(contributor=expected_name, field="email"):
+                self.assertEqual(
+                    md_entry.get("email"),
+                    myst_entry.get("email"),
+                    f"Mismatch in 'email' for contributor '{expected_name}' between contributors.md and myst.yml.",
+                )
+
+            with self.subTest(contributor=expected_name, field="corresponding"):
+                self.assertEqual(
+                    md_entry.get("corresponding"),
+                    myst_entry.get("corresponding"),
+                    f"Mismatch in 'corresponding' for contributor '{expected_name}' "
+                    "between contributors.md and myst.yml.",
+                )
 
 
 if __name__ == "__main__":
