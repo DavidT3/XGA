@@ -1,6 +1,6 @@
 /*
  * This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
- * Last modified by David J Turner (djturner@umbc.edu) 11/20/26, 12:10 PM. Copyright (c) The Contributors.
+ * Last modified by David J Turner (djturner@umbc.edu) 11/20/26, 12:22 PM. Copyright (c) The Contributors.
  */
 
 /* Custom stylesheet for XGA MyST / Jupyter Book 2 documentation */
@@ -20,6 +20,12 @@
 .myst-card:has([class*="card-tint-"]) {
   background-color: rgba(var(--card-rgb), 0.06);
   border-color: rgb(var(--card-rgb));
+  transition: box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+a.myst-card:has([class*="card-tint-"]):hover {
+  box-shadow: 0 0 0 2px rgb(var(--card-rgb)), 0 6px 16px -2px rgba(var(--card-rgb), 0.35);
+  background-color: rgba(var(--card-rgb), 0.09);
 }
 
 .myst-card:has([class*="card-tint-"]) > .myst-card-header {
