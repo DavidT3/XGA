@@ -62,9 +62,6 @@ conda activate <YOUR ENVIRONMENT NAME GOES HERE>
 pip install xga
 ```
 
-> [!IMPORTANT]
-> For Python 3.10 and earlier, the optional dependency [contextlib-chdir](https://pypi.org/project/contextlib-chdir/) must be installed.
-
 ## Required Dependencies
 XGA depends on two non-Python pieces of software:
 * XMM's Science Analysis System (SAS) - Version 17.0.0, but other versions should be largely compatible with the
