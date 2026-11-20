@@ -6,14 +6,15 @@ CLAUDE.md
 .pytest_cache
 *xga_output
 *daxa_output
-*census*
-*blacklist*
+*census*.csv
+*blacklist*.csv
 .idea
 .ipynb_checkpoints
 .vscode
 /xga.egg-info/
 *__pycache__*
 /docs/build
+/new-docs/_build
 *noupload*
 .DS_Store
 /xga/__pycache__
