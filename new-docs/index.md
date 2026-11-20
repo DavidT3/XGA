@@ -24,7 +24,6 @@ and {term}`eROSITA`).
 (explore-xga)=
 :::::{grid} 1 1 1 1
 :label: xga-install-grid
-:class: col-page-inset-right
 
 %%%%% Card 1: Installation & Configuration (Full Width) %%%%%
 ::::{card}
@@ -41,7 +40,6 @@ Set up XGA locally or in cloud/container environments, link mission reduction so
 
 :::::{grid} 1 1 2 2
 :label: xga-discovery-grid
-:class: col-page-inset-right
 
 %%%%% Card 2: Standalone Data Products %%%%%
 ::::{card}
