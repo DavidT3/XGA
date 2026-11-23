@@ -12,7 +12,7 @@ repos:
     -   id: check-toml
 
 -   repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.0
+    rev: v0.17.6
     hooks:
       # Runs the linter and avoids ipynb files. Also, lints the pyproject toml.
       - id: ruff-check
@@ -27,7 +27,7 @@ repos:
         # args: [ --check ]
 
 -   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v2.3.0
+    rev: v2.4.1
     hooks:
     -   id: mypy
         additional_dependencies: [types-tabulate, pandas-stubs, types-tqdm, numpy, scipy-stubs]
