@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/24/26, 10:26 AM. Copyright (c) The Contributors.
 """
 The xga.generate.esass.spec module implements wrapper functions for eSASS tools that generate spectroscopic data
 products (i.e. spectra, background spectra, RMFs, and ARFs). As these functions wrap eSASS tools specifically, they
@@ -1047,26 +1047,6 @@ def esass_spectrum_set(
             # then we can continue with the rest of the sources
             continue
 
-        # This generates a random integer ID for this set of spectra
-        set_id = randint(0, 100_000_000)
-
-        # I want to be sure that this configuration doesn't already exist
-        if group_spec and min_counts is not None:
-            extra_name = f"_mincnt{min_counts}"
-        elif group_spec and min_sn is not None:
-            extra_name = f"_minsn{min_sn}"
-        else:
-            extra_name = ""
-
-        # Combines the annular radii into a string
-        ann_rad_str = "_".join(source.convert_radius(radii[s_ind], "deg").value.astype(str))
-        spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
-        spec_storage_name = spec_storage_name.format(
-            ra=source.default_coord[0].value, dec=source.default_coord[1].value, ar=ann_rad_str, gr=group_spec
-        )
-
-        spec_storage_name += extra_name
-
         for er_miss in ["erosita", "erass"]:
             if er_miss not in source.telescopes:
                 continue
@@ -1098,6 +1078,7 @@ def esass_spectrum_set(
                         combine_tm,
                         combine_obs=True,
                         telescope=er_miss,
+                        force_gen=force_regen,
                     )
 
                     # Read out some of the output into variables to be modified
