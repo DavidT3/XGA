@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/24/26, 8:55 AM. Copyright (c) The Contributors.
 """
 The xga.generate.ciao.spec module implements wrapper functions for CIAO tools that generate spectroscopic data
 products (i.e. spectra, background spectra, RMFs, and ARFs). As these functions wrap CIAO tools specifically, they
@@ -547,16 +547,17 @@ def ciao_spectrum_set(
     if one_rmf:
         innermost_rads = Quantity([r_set[0] for r_set in radii], radii[0].unit)
         outermost_rads = Quantity([r_set[-1] for r_set in radii], radii[0].unit)
-        _chandra_spec_cmds(
+        # Call spectrum generation
+        specextract_spectrum(
             sources,
             outermost_rads,
             innermost_rads,
-            group_spec,
-            min_counts,
-            min_sn,
-            over_sample,
-            num_cores,
-            disable_progress,
+            group_spec=group_spec,
+            min_counts=min_counts,
+            min_sn=min_sn,
+            over_sample=over_sample,
+            num_cores=num_cores,
+            disable_progress=disable_progress,
         )
 
     # I want to be able to generate all the individual annuli in parallel, but I need them to be associated with
@@ -593,34 +594,22 @@ def ciao_spectrum_set(
         # This generates a random integer ID for this set of spectra
         set_id = randint(0, int(1e8))
 
-        # I want to be sure that this configuration doesn't already exist
-        if group_spec and min_counts is not None:
-            extra_name = f"_mincnt{min_counts}"
-        elif group_spec and min_sn is not None:
-            extra_name = f"_minsn{min_sn}"
-        else:
-            extra_name = ""
-
-        # And if it was oversampled during generation then we need to include that as well
-        if over_sample is not None:
-            extra_name += f"_ovsamp{over_sample}"
-
-        # Combines the annular radii into a string
-        ann_rad_str = "_".join(source.convert_radius(radii[s_ind], "deg").value.astype(str))
-        spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
-        spec_storage_name = spec_storage_name.format(
-            ra=source.default_coord[0].value, dec=source.default_coord[1].value, ar=ann_rad_str, gr=group_spec
-        )
-
-        spec_storage_name += extra_name
-
-        exists = source.get_products("annular_spectrum", extra_key=spec_storage_name, telescope="chandra")
-        if len(exists) == 0:
-            # If it doesn't exist then we do need to call _chandra_spec_cmds
-            generate_spec = True
-        else:
-            # If it already exists though we don't need to bother
+        # We check to see whether we can retrieve the AnnularSpectra specified by the user from the existing
+        #  products stored in our source.
+        try:
+            source.get_annular_spectra(
+                radii=radii[s_ind],
+                group_spec=group_spec,
+                min_counts=min_counts,
+                min_sn=min_sn,
+                over_sample=over_sample,
+                telescope="chandra",
+            )
+            # If it already exists though we don't need to bother generating
             generate_spec = False
+        except NoProductAvailableError:
+            # If it doesn't exist then we do need to call the spectrum generation function
+            generate_spec = True
 
         if generate_spec or force_regen:
             # Here we run through all the requested annuli for the current source

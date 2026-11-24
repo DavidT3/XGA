@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/24/26, 8:30 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/24/26, 8:55 AM. Copyright (c) The Contributors.
 """
 The xga.generate.sas.spec module implements wrapper functions for SAS tools that generate spectroscopic data
 products (i.e. spectra, background spectra, RMFs, and ARFs). As these functions wrap SAS tools specifically, they
@@ -856,27 +856,6 @@ def spectrum_set(
 
         # This generates a random integer ID for this set of spectra
         set_id = randint(0, 100_000_000)
-
-        # I want to be sure that this configuration doesn't already exist
-        if group_spec and min_counts is not None:
-            extra_name = f"_mincnt{min_counts}"
-        elif group_spec and min_sn is not None:
-            extra_name = f"_minsn{min_sn}"
-        else:
-            extra_name = ""
-
-        # And if it was oversampled during generation then we need to include that as well
-        if over_sample is not None:
-            extra_name += f"_ovsamp{over_sample}"
-
-        # Combines the annular radii into a string
-        ann_rad_str = "_".join(source.convert_radius(radii[s_ind], "deg").value.astype(str))
-        spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
-        spec_storage_name = spec_storage_name.format(
-            ra=source.default_coord[0].value, dec=source.default_coord[1].value, ar=ann_rad_str, gr=group_spec
-        )
-
-        spec_storage_name += extra_name
 
         # We check to see whether we can retrieve the AnnularSpectra specified by the user from the existing
         #  products stored in our source.
