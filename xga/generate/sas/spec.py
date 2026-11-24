@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/24/26, 8:55 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/24/26, 9:10 AM. Copyright (c) The Contributors.
 """
 The xga.generate.sas.spec module implements wrapper functions for SAS tools that generate spectroscopic data
 products (i.e. spectra, background spectra, RMFs, and ARFs). As these functions wrap SAS tools specifically, they
@@ -1038,6 +1038,26 @@ def cross_arf(
     elif not isinstance(sources, (BaseSample, list)):
         raise TypeError("Please only pass source or sample objects for the 'sources' parameter of this function")
 
+    # I just want to make sure that nobody passes anything daft for the radii
+    if isinstance(radii, Quantity) and len(sources) != 1:
+        raise TypeError(
+            "You may only pass a Quantity for the 'radii' argument if you are only analysing "
+            f"one source. You are attempting to generate cross-ARFs for {len(sources)} sources, so please pass "
+            f"a list of {len(sources)} non-scalar Quantities."
+        )
+    elif isinstance(radii, Quantity):
+        pass
+    elif isinstance(radii, (list, np.ndarray)) and len(sources) != len(radii):
+        raise ValueError(
+            "The list of Quantities passed to the 'radii' argument must be the same length as the "
+            "number of sources that you are analysing."
+        )
+
+    # If we've made it to this point then the radii type is fine, but I want to make sure that radii is a list
+    #  of quantities - as expected by the rest of the function
+    if isinstance(radii, Quantity):
+        radii = [radii]
+
     # We want set_id to be iterable as well, so we wrap it in a list if it wasn't already a list or array
     parsed_set_id: list[Any] | np.ndarray
     if isinstance(set_id, (int, str)):
@@ -1096,7 +1116,13 @@ def cross_arf(
 
         try:
             ann_spec = src.get_annular_spectra(
-                radii, group_spec, min_counts, min_sn, over_sample, parsed_set_id[src_ind], telescope="xmm"
+                radii[src_ind],
+                group_spec=group_spec,
+                min_counts=min_counts,
+                min_sn=min_sn,
+                over_sample=over_sample,
+                set_id=parsed_set_id[src_ind],
+                telescope="xmm",
             )
         except NoProductAvailableError as err:
             # We make our own version of this error
