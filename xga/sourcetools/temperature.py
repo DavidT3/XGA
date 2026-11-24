@@ -9,6 +9,7 @@ from warnings import warn
 
 import numpy as np
 from astropy.units import Quantity
+from scipy.special import erfinv
 
 from .. import ABUND_TABLES, NUM_CORES
 from ..exceptions import NoProductAvailableError
@@ -1179,9 +1180,14 @@ def onion_deproj_temp_prof(
             #  number of radial data points a profile has
             if proj_temp.usable and len(proj_temp) > 3:
                 # Also make an Emission Measure profile, used for weighting the contributions from different
-                #  shells to annuli
+                #  shells to annuli. The emission_measure_profile method expects a Gaussian sigma multiplier rather
+                #  than a percentage confidence level. Because the central probability p = conf_level / 100 of a
+                #  normal distribution within +/- k*sigma is given by the error function erf(k / sqrt(2)) = p, we
+                #  invert this relation using the inverse error function erfinv to compute k = sqrt(2) * erfinv(p)
+                #  (e.g. conf_level=68.2 -> ~1 sigma, conf_level=90 -> ~1.645 sigma, conf_level=95.4 -> ~2 sigma).
+                em_sigma = float(np.sqrt(2) * erfinv(conf_level / 100))
                 em_prof = apec_norm_prof.emission_measure_profile(
-                    src.redshift, src.cosmo, abund_table, num_data_real, conf_level
+                    src.redshift, src.cosmo, abund_table, num_data_real, sigma=em_sigma
                 )
                 src.update_products(em_prof)
 

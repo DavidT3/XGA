@@ -1426,7 +1426,7 @@ class APECNormalisation1D(BaseProfile1D):
         em_meas_reals = norm_real * conv_factor
 
         # Calculates the standard deviation of each data point, this is how we estimate the density errors
-        em_meas_sigma = np.std(em_meas_reals, axis=0) * sigma
+        em_meas_sigma = np.nanstd(em_meas_reals, axis=0) * sigma
 
         # Set up the actual profile object and return it
         em_meas_prof = EmissionMeasure1D(
