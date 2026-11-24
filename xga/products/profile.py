@@ -2386,7 +2386,8 @@ class HydrostaticMass(BaseProfile1D):
                 f"The radius_err quantity must be in units that are equivalent to units of {radius.unit.to_string()}."
             )
 
-        # Now we make absolutely sure that the radius error(s) are in the correct units
+        # Now we make absolutely sure that the radius and radius error(s) are in the correct units
+        radius = radius.to(self.radii_unit)
         if radius_err is not None:
             radius_err = radius_err.to(self.radii_unit)
 
@@ -2490,7 +2491,7 @@ class HydrostaticMass(BaseProfile1D):
                 bounds_error=False,
             )
             # Restore the interpolated density profile realizations to an astropy quantity array
-            dens = Quantity(dens_interp(radius).T, self.density_profile.values_unit)
+            dens = Quantity(dens_interp(radius.to(self.density_profile.radii_unit)).T, self.density_profile.values_unit)
 
             dens_der_interp = interp1d(
                 self.density_profile.radii,
@@ -2501,7 +2502,8 @@ class HydrostaticMass(BaseProfile1D):
                 bounds_error=False,
             )
             dens_der = Quantity(
-                dens_der_interp(radius).T, self.density_profile.values_unit / self.density_profile.radii_unit
+                dens_der_interp(radius.to(self.density_profile.radii_unit)).T,
+                self.density_profile.values_unit / self.density_profile.radii_unit,
             ).T
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
@@ -2565,7 +2567,9 @@ class HydrostaticMass(BaseProfile1D):
                 fill_value="extrapolate",
                 bounds_error=False,
             )
-            temp = Quantity(temp_interp(radius).T, self.temperature_profile.values_unit)
+            temp = Quantity(
+                temp_interp(radius.to(self.temperature_profile.radii_unit)).T, self.temperature_profile.values_unit
+            )
 
             temp_der_interp = interp1d(
                 self.temperature_profile.radii,
@@ -2576,7 +2580,8 @@ class HydrostaticMass(BaseProfile1D):
                 bounds_error=False,
             )
             temp_der = Quantity(
-                temp_der_interp(radius).T, self.temperature_profile.values_unit / self.temperature_profile.radii_unit
+                temp_der_interp(radius.to(self.temperature_profile.radii_unit)).T,
+                self.temperature_profile.values_unit / self.temperature_profile.radii_unit,
             ).T
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
@@ -3767,6 +3772,7 @@ class SpecificEntropy(BaseProfile1D):
 
         # Prints a warning if the radius at which to calculate the entropy is outside the range of the data
         self.rad_check(radius)
+        radius = radius.to(self.radii_unit)
 
         # If a particular radius already has a result in the profiles storage structure then we'll just grab that
         #  rather than redoing a calculation unnecessarily.
@@ -3818,7 +3824,9 @@ class SpecificEntropy(BaseProfile1D):
                 bounds_error=False,
             )
             # Restore the interpolated density profile realisations to an astropy quantity array
-            dens = Quantity(dens_interp(self.radii).T, self.density_profile.values_unit)
+            dens = Quantity(
+                dens_interp(self.radii.to(self.density_profile.radii_unit)).T, self.density_profile.values_unit
+            )
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
@@ -3872,7 +3880,9 @@ class SpecificEntropy(BaseProfile1D):
                 bounds_error=False,
             )
 
-            temp = Quantity(temp_interp(self.radii).T, self.temperature_profile.values_unit)
+            temp = Quantity(
+                temp_interp(self.radii.to(self.temperature_profile.radii_unit)).T, self.temperature_profile.values_unit
+            )
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the temperature profile has more bins than the density (not going to happen often)
@@ -4504,6 +4514,7 @@ class ThermalPressure(BaseProfile1D):
 
         # Prints a warning if the radius at which to calculate the entropy is outside the range of the data
         self.rad_check(radius)
+        radius = radius.to(self.radii_unit)
 
         # If a particular radius already has a result in the profiles storage structure then we'll just grab that
         #  rather than redoing a calculation unnecessarily.
@@ -4555,7 +4566,9 @@ class ThermalPressure(BaseProfile1D):
                 bounds_error=False,
             )
             # Restore the interpolated density profile realizations to an astropy quantity array
-            dens = Quantity(dens_interp(self.radii).T, self.density_profile.values_unit)
+            dens = Quantity(
+                dens_interp(self.radii.to(self.density_profile.radii_unit)).T, self.density_profile.values_unit
+            )
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
@@ -4608,7 +4621,9 @@ class ThermalPressure(BaseProfile1D):
                 fill_value="extrapolate",
                 bounds_error=False,
             )
-            temp = Quantity(temp_interp(self.radii).T, self.temperature_profile.values_unit)
+            temp = Quantity(
+                temp_interp(self.radii.to(self.temperature_profile.radii_unit)).T, self.temperature_profile.values_unit
+            )
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the temperature profile has more bins than the density (not going to happen often)
