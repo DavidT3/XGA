@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 10:11 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/24/26, 8:30 AM. Copyright (c) The Contributors.
 """
 The xga.generate.sas.spec module implements wrapper functions for SAS tools that generate spectroscopic data
 products (i.e. spectra, background spectra, RMFs, and ARFs). As these functions wrap SAS tools specifically, they
@@ -705,7 +705,7 @@ def spectrum_set(
     """
     This function can be used to produce 'sets' of XGA Spectrum objects, generated in concentric circular annuli.
     Such spectrum sets can be used to measure projected spectroscopic quantities, or even be de-projected to attempt
-    to measure spectroscopic quantities in a three dimensional space.
+    to measure spectroscopic quantities in a three-dimensional space.
 
     :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
     :param List[Quantity]/Quantity radii: A list of non-scalar quantities containing the boundary radii of the
@@ -878,13 +878,22 @@ def spectrum_set(
 
         spec_storage_name += extra_name
 
-        exists = source.get_products("combined_annular_spectrum", extra_key=spec_storage_name, telescope="xmm")
-        if len(exists) == 0:
-            # If it doesn't exist then we do need to call evselect_spectrum
-            generate_spec = True
-        else:
-            # If it already exists though we don't need to bother
+        # We check to see whether we can retrieve the AnnularSpectra specified by the user from the existing
+        #  products stored in our source.
+        try:
+            source.get_annular_spectra(
+                radii=radii[s_ind],
+                group_spec=group_spec,
+                min_counts=min_counts,
+                min_sn=min_sn,
+                over_sample=over_sample,
+                telescope="xmm",
+            )
+            # If it already exists though we don't need to bother generating
             generate_spec = False
+        except NoProductAvailableError:
+            # If it doesn't exist then we do need to call the spectrum generation function
+            generate_spec = True
 
         if generate_spec or force_regen:
             # Here we run through all the requested annuli for the current source
