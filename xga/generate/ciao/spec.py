@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/13/26, 8:56 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/24/26, 10:31 AM. Copyright (c) The Contributors.
 """
 The xga.generate.ciao.spec module implements wrapper functions for CIAO tools that generate spectroscopic data
 products (i.e. spectra, background spectra, RMFs, and ARFs). As these functions wrap CIAO tools specifically, they
@@ -31,7 +31,7 @@ def _chandra_spec_cmds(
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     group_spec: bool = True,
-    min_counts: int = 5,
+    min_counts: int | None = 5,
     min_sn: float | None = None,
     over_sample: int | float | None = None,
     num_cores: int = NUM_CORES,
@@ -59,6 +59,10 @@ def _chandra_spec_cmds(
     :param bool disable_progress: Setting this to true will turn off the CIAO generation progress bar.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     """
+    # CIAO's specextract does not support spectral oversampling, so any passed value is immediately overwritten
+    #  to None (the argument is retained in the signature for API compatibility with the XMM spectrum functions)
+    over_sample = None
+
     # Early XGA could generate spectra within the detection regions of the source, but
     #  that has been deprecated for quite a while, as it was a bad idea. The generation
     #  of spectra within user-specified regions will be possible, but it will be
@@ -66,6 +70,36 @@ def _chandra_spec_cmds(
     #  could/almost certainly would be different for each observation
     if outer_radius == "region":
         raise ValueError("The string 'region' is no longer a valid option for the 'outer_radius' argument.")
+
+    # Making sure the grouping values are the expected numeric types
+    if min_counts is not None:
+        min_counts = int(min_counts)
+    if min_sn is not None:
+        min_sn = float(min_sn)
+
+    # Checking that the user hasn't passed multiple grouping options simultaneously, and has passed one if grouping
+    if all([o is not None for o in [min_counts, min_sn]]):
+        raise ValueError(
+            "specextract only allows one grouping option to be passed, you can't group both by"
+            " minimum counts AND by minimum signal to noise."
+        )
+    elif group_spec and all([o is None for o in [min_counts, min_sn]]):
+        raise ValueError("If you set group_spec=True, you must supply a grouping option, either min_counts or min_sn.")
+
+    # Sets up the extra part of the storage key / file name and the specextract grouping arguments
+    binspec_int: int | float | str
+    if group_spec and min_counts is not None:
+        extra_file_name = f"_mincnt{min_counts}"
+        grouptype_int = "NUM_CTS"
+        binspec_int = min_counts
+    elif group_spec and min_sn is not None:
+        extra_file_name = f"_minsn{min_sn}"
+        grouptype_int = "SNR"
+        binspec_int = min_sn
+    else:
+        extra_file_name = ""
+        grouptype_int = "NONE"
+        binspec_int = "NONE"
 
     stack = False  # This tells the ciao_call routine that this command won't be part of a stack.
     execute = True  # This should be executed immediately.
@@ -183,24 +217,9 @@ def _chandra_spec_cmds(
             # Now we've established that we have retrieved a single mask file product, we extract the path from it
             mask_file = mask_prod[0].path
 
-            # Check do we need to group the spec
-            binspec_int: int | float | str
-            if group_spec and min_counts is not None:
-                extra_file_name = f"_mincnt{min_counts}"
-                grouptype_int = "NUM_CTS"
-                binspec_int = min_counts
-            elif group_spec and min_sn is not None:
-                extra_file_name = f"_minsn{min_sn}"
-                grouptype_int = "SNR"
-                binspec_int = min_sn
-            else:
-                extra_file_name = ""
-                grouptype_int = "NONE"
-                binspec_int = "NONE"
-
             # Do we actually need to run this generation? If matching products already exist then we won't bother
             try:
-                source.get_spectra(
+                check_sp = source.get_spectra(
                     obs_id=obs_id,
                     inst=inst,
                     telescope="chandra",
@@ -209,10 +228,12 @@ def _chandra_spec_cmds(
                     group_spec=group_spec,
                     min_counts=min_counts,
                     min_sn=min_sn,
+                    over_sample=over_sample,
                 )
-                # If the expected outputs from this function do exist for the current ObsID, we'll just
-                #  move on to the next one
-                continue
+                if check_sp.usable and not force_gen:
+                    # It exists, it is usable, and we haven't been told to regenerate it regardless, so
+                    #  we don't need to do anything further
+                    continue
             except NoProductAvailableError:
                 pass
 
@@ -394,11 +415,12 @@ def specextract_spectrum(
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     group_spec: bool = True,
-    min_counts: int = 5,
+    min_counts: int | None = 5,
     min_sn: float | None = None,
     over_sample: int | None = None,
     num_cores: int = NUM_CORES,
     disable_progress: bool = False,
+    force_gen: bool = False,
 ) -> tuple[list[Any], bool, bool, int, list[Any], list[Any], list[Any], bool]:
     """
     A wrapper for all the CIAO processes necessary to generate Chandra spectra that can be analysed
@@ -424,11 +446,25 @@ def specextract_spectrum(
         To disable minimum signal-to-noise set this parameter to None.
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the CIAO generation progress bar.
+    :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     """
+    # CIAO's specextract does not support spectral oversampling, so any passed value is immediately overwritten
+    #  to None (the argument is retained in the signature for API compatibility with the XMM spectrum functions)
+    over_sample = None
+
     # All the workings of this function are in _chandra_spec_cmds so that the annular spectrum set generation function
     #  can also use them
     return _chandra_spec_cmds(
-        sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, over_sample, num_cores, disable_progress
+        sources,
+        outer_radius,
+        inner_radius,
+        group_spec,
+        min_counts,
+        min_sn,
+        over_sample,
+        num_cores,
+        disable_progress,
+        force_gen,
     )
 
 
@@ -437,7 +473,7 @@ def ciao_spectrum_set(
     sources: BaseSource | BaseSample | list[BaseSource],
     radii: list[Quantity] | Quantity,
     group_spec: bool = True,
-    min_counts: int = 5,
+    min_counts: int | None = 5,
     min_sn: float | None = None,
     over_sample: float | None = None,
     one_rmf: bool = True,
@@ -470,6 +506,10 @@ def ciao_spectrum_set(
         if your call to this function was interrupted and an incomplete AnnularSpectrum is being read in.
     :param bool disable_progress: Setting this to true will turn off the CIAO generation progress bar.
     """
+    # CIAO's specextract does not support spectral oversampling, so any passed value is immediately overwritten
+    #  to None (the argument is retained in the signature for API compatibility with the XMM spectrum functions)
+    over_sample = None
+
     # We check to see whether there is an Chandra entry in the 'telescopes' property. If sources is a Source object,
     #  then that property contains the telescopes associated with that source, and if it is a Sample object then
     #  'telescopes' contains the list of unique telescopes that are associated with at least one member source.
@@ -547,16 +587,17 @@ def ciao_spectrum_set(
     if one_rmf:
         innermost_rads = Quantity([r_set[0] for r_set in radii], radii[0].unit)
         outermost_rads = Quantity([r_set[-1] for r_set in radii], radii[0].unit)
-        _chandra_spec_cmds(
+        # Call spectrum generation
+        specextract_spectrum(
             sources,
             outermost_rads,
             innermost_rads,
-            group_spec,
-            min_counts,
-            min_sn,
-            over_sample,
-            num_cores,
-            disable_progress,
+            group_spec=group_spec,
+            min_counts=min_counts,
+            min_sn=min_sn,
+            over_sample=over_sample,
+            num_cores=num_cores,
+            disable_progress=disable_progress,
         )
 
     # I want to be able to generate all the individual annuli in parallel, but I need them to be associated with
@@ -593,34 +634,22 @@ def ciao_spectrum_set(
         # This generates a random integer ID for this set of spectra
         set_id = randint(0, int(1e8))
 
-        # I want to be sure that this configuration doesn't already exist
-        if group_spec and min_counts is not None:
-            extra_name = f"_mincnt{min_counts}"
-        elif group_spec and min_sn is not None:
-            extra_name = f"_minsn{min_sn}"
-        else:
-            extra_name = ""
-
-        # And if it was oversampled during generation then we need to include that as well
-        if over_sample is not None:
-            extra_name += f"_ovsamp{over_sample}"
-
-        # Combines the annular radii into a string
-        ann_rad_str = "_".join(source.convert_radius(radii[s_ind], "deg").value.astype(str))
-        spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
-        spec_storage_name = spec_storage_name.format(
-            ra=source.default_coord[0].value, dec=source.default_coord[1].value, ar=ann_rad_str, gr=group_spec
-        )
-
-        spec_storage_name += extra_name
-
-        exists = source.get_products("annular_spectrum", extra_key=spec_storage_name, telescope="chandra")
-        if len(exists) == 0:
-            # If it doesn't exist then we do need to call _chandra_spec_cmds
-            generate_spec = True
-        else:
-            # If it already exists though we don't need to bother
+        # We check to see whether we can retrieve the AnnularSpectra specified by the user from the existing
+        #  products stored in our source.
+        try:
+            source.get_annular_spectra(
+                radii=radii[s_ind],
+                group_spec=group_spec,
+                min_counts=min_counts,
+                min_sn=min_sn,
+                over_sample=over_sample,
+                telescope="chandra",
+            )
+            # If it already exists though we don't need to bother generating
             generate_spec = False
+        except NoProductAvailableError:
+            # If it doesn't exist then we do need to call the spectrum generation function
+            generate_spec = True
 
         if generate_spec or force_regen:
             # Here we run through all the requested annuli for the current source
@@ -636,6 +665,7 @@ def ciao_spectrum_set(
                     over_sample,
                     num_cores,
                     disable_progress,
+                    True,
                 )
 
                 # Read out some of the output into variables to be modified

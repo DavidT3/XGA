@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 10:11 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/24/26, 9:10 AM. Copyright (c) The Contributors.
 """
 The xga.generate.sas.spec module implements wrapper functions for SAS tools that generate spectroscopic data
 products (i.e. spectra, background spectra, RMFs, and ARFs). As these functions wrap SAS tools specifically, they
@@ -705,7 +705,7 @@ def spectrum_set(
     """
     This function can be used to produce 'sets' of XGA Spectrum objects, generated in concentric circular annuli.
     Such spectrum sets can be used to measure projected spectroscopic quantities, or even be de-projected to attempt
-    to measure spectroscopic quantities in a three dimensional space.
+    to measure spectroscopic quantities in a three-dimensional space.
 
     :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
     :param List[Quantity]/Quantity radii: A list of non-scalar quantities containing the boundary radii of the
@@ -857,34 +857,22 @@ def spectrum_set(
         # This generates a random integer ID for this set of spectra
         set_id = randint(0, 100_000_000)
 
-        # I want to be sure that this configuration doesn't already exist
-        if group_spec and min_counts is not None:
-            extra_name = f"_mincnt{min_counts}"
-        elif group_spec and min_sn is not None:
-            extra_name = f"_minsn{min_sn}"
-        else:
-            extra_name = ""
-
-        # And if it was oversampled during generation then we need to include that as well
-        if over_sample is not None:
-            extra_name += f"_ovsamp{over_sample}"
-
-        # Combines the annular radii into a string
-        ann_rad_str = "_".join(source.convert_radius(radii[s_ind], "deg").value.astype(str))
-        spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
-        spec_storage_name = spec_storage_name.format(
-            ra=source.default_coord[0].value, dec=source.default_coord[1].value, ar=ann_rad_str, gr=group_spec
-        )
-
-        spec_storage_name += extra_name
-
-        exists = source.get_products("combined_annular_spectrum", extra_key=spec_storage_name, telescope="xmm")
-        if len(exists) == 0:
-            # If it doesn't exist then we do need to call evselect_spectrum
-            generate_spec = True
-        else:
-            # If it already exists though we don't need to bother
+        # We check to see whether we can retrieve the AnnularSpectra specified by the user from the existing
+        #  products stored in our source.
+        try:
+            source.get_annular_spectra(
+                radii=radii[s_ind],
+                group_spec=group_spec,
+                min_counts=min_counts,
+                min_sn=min_sn,
+                over_sample=over_sample,
+                telescope="xmm",
+            )
+            # If it already exists though we don't need to bother generating
             generate_spec = False
+        except NoProductAvailableError:
+            # If it doesn't exist then we do need to call the spectrum generation function
+            generate_spec = True
 
         if generate_spec or force_regen:
             # Here we run through all the requested annuli for the current source
@@ -1050,6 +1038,26 @@ def cross_arf(
     elif not isinstance(sources, (BaseSample, list)):
         raise TypeError("Please only pass source or sample objects for the 'sources' parameter of this function")
 
+    # I just want to make sure that nobody passes anything daft for the radii
+    if isinstance(radii, Quantity) and len(sources) != 1:
+        raise TypeError(
+            "You may only pass a Quantity for the 'radii' argument if you are only analysing "
+            f"one source. You are attempting to generate cross-ARFs for {len(sources)} sources, so please pass "
+            f"a list of {len(sources)} non-scalar Quantities."
+        )
+    elif isinstance(radii, Quantity):
+        pass
+    elif isinstance(radii, (list, np.ndarray)) and len(sources) != len(radii):
+        raise ValueError(
+            "The list of Quantities passed to the 'radii' argument must be the same length as the "
+            "number of sources that you are analysing."
+        )
+
+    # If we've made it to this point then the radii type is fine, but I want to make sure that radii is a list
+    #  of quantities - as expected by the rest of the function
+    if isinstance(radii, Quantity):
+        radii = [radii]
+
     # We want set_id to be iterable as well, so we wrap it in a list if it wasn't already a list or array
     parsed_set_id: list[Any] | np.ndarray
     if isinstance(set_id, (int, str)):
@@ -1108,7 +1116,13 @@ def cross_arf(
 
         try:
             ann_spec = src.get_annular_spectra(
-                radii, group_spec, min_counts, min_sn, over_sample, parsed_set_id[src_ind], telescope="xmm"
+                radii[src_ind],
+                group_spec=group_spec,
+                min_counts=min_counts,
+                min_sn=min_sn,
+                over_sample=over_sample,
+                set_id=parsed_set_id[src_ind],
+                telescope="xmm",
             )
         except NoProductAvailableError as err:
             # We make our own version of this error
