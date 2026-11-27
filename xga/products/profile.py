@@ -2081,16 +2081,15 @@ class HydrostaticMass(BaseProfile1D):
                 "Radii at which to calculate hydrostatic mass (the 'radii', 'radii_err', and "
                 "'deg_radii' arguments) must be passed if 'temperature_model' or 'density_model' is set."
             )
-        else:
+        elif radii is None and radii_err is None and deg_radii is None:
             if len(temperature_profile) > len(density_profile):
-                # We restrict the radii to being within the bounds of the other profile if we are not interpolating
-                if not interp_data:
-                    within_bnds = np.where(
-                        (temperature_profile.radii >= density_profile.annulus_bounds.min())
-                        & (temperature_profile.radii <= density_profile.annulus_bounds.max())
-                    )[0]
-                else:
-                    within_bnds = np.arange(0, len(temperature_profile.radii))
+                # Even if interp_data is True, we restrict the automatically extracted radii to the annulus bounds
+                #  of the coarser profile so that we do not attempt to evaluate or interpolate outside the radial
+                #  coverage of either input profile (which rad_check also enforces)
+                within_bnds = np.where(
+                    (temperature_profile.radii >= density_profile.annulus_bounds.min())
+                    & (temperature_profile.radii <= density_profile.annulus_bounds.max())
+                )[0]
 
                 if len(within_bnds) != len(temperature_profile.radii):
                     warn(
@@ -2103,14 +2102,13 @@ class HydrostaticMass(BaseProfile1D):
                 radii_err = temperature_profile.radii_err[within_bnds]
                 deg_radii = temperature_profile.deg_radii[within_bnds]
             else:
-                # We restrict the radii to being within the bounds of the other profile if we are not interpolating
-                if not interp_data:
-                    within_bnds = np.where(
-                        (density_profile.radii >= temperature_profile.annulus_bounds.min())
-                        & (density_profile.radii <= temperature_profile.annulus_bounds.max())
-                    )[0]
-                else:
-                    within_bnds = np.arange(0, len(density_profile.radii))
+                # Even if interp_data is True, we restrict the automatically extracted radii to the annulus bounds
+                #  of the coarser profile so that we do not attempt to evaluate or interpolate outside the radial
+                #  coverage of either input profile (which rad_check also enforces)
+                within_bnds = np.where(
+                    (density_profile.radii >= temperature_profile.annulus_bounds.min())
+                    & (density_profile.radii <= temperature_profile.annulus_bounds.max())
+                )[0]
 
                 if len(within_bnds) != len(density_profile.radii):
                     warn(
@@ -2123,6 +2121,8 @@ class HydrostaticMass(BaseProfile1D):
                 radii = density_profile.radii[within_bnds]
                 radii_err = density_profile.radii_err[within_bnds]
                 deg_radii = density_profile.deg_radii[within_bnds]
+        elif radii is None or radii_err is None or deg_radii is None:
+            raise ValueError("If custom radii are passed, 'radii', 'radii_err', and 'deg_radii' must all be provided.")
 
         # Set the attribute which lets the hydrostatic mass calculation method know whether to interpolate any
         #  data points or not, if smooth fitted models are not going to be used
@@ -2159,13 +2159,10 @@ class HydrostaticMass(BaseProfile1D):
         else:
             radii = radii.to("kpc")
             radii_err = radii_err.to("kpc")
-        # This will be overwritten by the super() init call, but it allows rad_check to work
+        # super().__init__() cannot be called until after self.mass() has evaluated the profile values, but both
+        #  self.rad_check() and self.mass() rely on self.radii / self.radii_unit, so we set self._radii early here
+        #  (it will later be overwritten with the identical value by super().__init__()).
         self._radii = radii
-
-        # We won't REQUIRE that the profiles have data point generated at the same radii, as we're gonna
-        #  measure entropy from the models, but I do need to check that the passed radii are within the radii of the
-        #  and warn the user if they aren't
-        self.rad_check(radii)
 
         if isinstance(num_steps, int):
             temp_steps = num_steps
@@ -2269,6 +2266,12 @@ class HydrostaticMass(BaseProfile1D):
         self._temp_model = temperature_model
         self._dens_model = density_model
 
+        # Order of operations note: self.rad_check() MUST be called after self._temp_prof, self._dens_prof,
+        #  self._radii, self._temp_model, and self._dens_model have all been set, because rad_check inspects
+        #  self._temp_model to decide whether radii outside the input profiles' annulus_bounds should raise a
+        #  ValueError (when data-driven) or emit a warning (when extrapolating a fitted model).
+        self.rad_check(radii)
+
         # We set an attribute with the 'num_samples' parameter - it has been passed into the model fits already, but
         #  we also use that value for the number of data realizations if the user has opted for a data point derived
         #  hydrostatic mass profile rather than model derived.
@@ -2351,10 +2354,15 @@ class HydrostaticMass(BaseProfile1D):
         #  included (other than using the smooth temperature and density models), and we will have to stop
         #  the profile making mass predictions (in this method) for single (user input most likely) radius
         #  values for one of the modes.
-        # If we're using data points, and interpolation is TURNED OFF, then we can't in good conscience try
-        #  to predict a mass for a generic radius that most likely will not match any of the data points we have. In
-        #  that case we'll encourage them to fit a model and use that to predict the mass
-        if (radius.isscalar or len(radius) == 1) and self._temp_model is None and not self._interp_data:
+        # If either the temperature or density component is data-driven (i.e. not backed by a smooth model) and
+        #  interpolation is turned off, we cannot evaluate radial derivatives at a single arbitrary radius because
+        #  np.gradient requires a multi-point radial grid.
+        is_scalar = radius.isscalar
+        if (
+            (is_scalar or len(radius) == 1)
+            and (self._temp_model is None or self._dens_model is None)
+            and not self._interp_data
+        ):
             raise ValueError(
                 "Cannot measure a mass distribution for a custom radius when the hydrostatic mass "
                 "profile is set to use non-interpolated temperature and density data points - instead "
@@ -2362,7 +2370,7 @@ class HydrostaticMass(BaseProfile1D):
             )
         # These will be useful further down, to help properly setup the if-elif-else statements that decide how
         #  exactly the temp/dens profile data are treated
-        elif radius.isscalar or len(radius) == 1:
+        elif is_scalar or len(radius) == 1:
             one_rad = True
         else:
             one_rad = False
@@ -2502,17 +2510,17 @@ class HydrostaticMass(BaseProfile1D):
             dens = self.density_model.get_realisations(calc_rad)
             dens_der = self.density_model.derivative(calc_rad, dx, True)
 
-        # In this rare case the radii for the temperature and density profiles are identical, and so we just get
-        #  some realizations
+        # Use the data directly when the requested radii match the profile's sampling and radius uncertainties
+        #  do not need to be sampled across interpolated data.
         elif (
             not already_run
             and not one_rad
             and not sample_data_radii
-            and (len(self.density_profile) == len(self.temperature_profile))
-            and (self.density_profile.radii == self.temperature_profile.radii).all()
+            and len(radius) == len(self.density_profile)
+            and (radius == self.density_profile.radii).all()
         ):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
-            dens_der = np.gradient(dens, self.radii, axis=0)
+            dens_der = np.gradient(dens, radius, axis=0)
 
         elif not already_run and self._interp_data:
             # This uses the density profile y-axis values (and their uncertainties) to draw N realizations of the
@@ -2523,17 +2531,14 @@ class HydrostaticMass(BaseProfile1D):
                 self.density_profile, np.gradient(dens_data_real, self.density_profile.radii, axis=1)
             )
 
-        # This particular combination means that we are doing a data-point based profile, but without interpolation,
-        #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
-        #  just read out the density data points (and make N realizations of them) with no funny business required
-        elif not already_run and not self._interp_data and len(self.density_profile) == len(self.radii):
-            dens = self.density_profile.generate_data_realisations(self._num_samples).T
-            dens_der = np.gradient(dens, self.radii, axis=0)
-
-        else:
+        elif not already_run:
             d_bnds = np.vstack([self.density_profile.annulus_bounds[0:-1], self.density_profile.annulus_bounds[1:]]).T
 
-            d_inds = np.where((self.radii[..., None] >= d_bnds[:, 0]) & (self.radii[..., None] < d_bnds[:, 1]))[1]
+            d_match = (radius[..., None] >= d_bnds[:, 0]) & (radius[..., None] < d_bnds[:, 1])
+            d_match[..., -1] |= radius == d_bnds[-1, 1]
+            d_inds = np.where(d_match)[-1]
+            if len(d_inds) != radius.size:
+                raise ValueError("Some radii are outside the density profile's annular bounds.")
 
             dens_data_real = self.density_profile.generate_data_realisations(self._num_samples)
             dens = dens_data_real[:, d_inds].T
@@ -2562,16 +2567,17 @@ class HydrostaticMass(BaseProfile1D):
             temp = self.temperature_model.get_realisations(calc_rad)
             temp_der = self.temperature_model.derivative(calc_rad, dx, True)
 
-        # In this rare case temperature and density profiles are identical, and so we just get some realizations
+        # Use the data directly when the requested radii match the profile's sampling and radius uncertainties
+        #  do not need to be sampled across interpolated data.
         elif (
             not already_run
             and not one_rad
             and not sample_data_radii
-            and (len(self.density_profile) == len(self.temperature_profile))
-            and (self.density_profile.radii == self.temperature_profile.radii).all()
+            and len(radius) == len(self.temperature_profile)
+            and (radius == self.temperature_profile.radii).all()
         ):
             temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
-            temp_der = np.gradient(temp, self.radii, axis=0)
+            temp_der = np.gradient(temp, radius, axis=0)
 
         elif not already_run and self._interp_data:
             # This uses the temperature profile y-axis values (and their uncertainties) to draw N realizations of the
@@ -2582,21 +2588,20 @@ class HydrostaticMass(BaseProfile1D):
                 self.temperature_profile, np.gradient(temp_data_real, self.temperature_profile.radii, axis=1)
             )
 
-        # This particular combination means that we are doing a data-point based profile, but without interpolation,
-        #  and that the temperature profile has more bins than the density (not going to happen often)
-        elif not already_run and not self._interp_data and len(self.temperature_profile) == len(self.radii):
-            temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
-            temp_der = np.gradient(temp, self.radii, axis=0)
         # And here, the final option, we're doing a data-point based profile without interpolation, and we need
-        #  to make sure that the density values (here N_denspoints > N_temppoints) each have a corresponding
-        #  temperature value - in practise this means that each density will be paired with the temperature
-        #  realizations whose radial coverage they fall within.
-        else:
+        #  to make sure that the requested radii each have a corresponding temperature value - in practise this
+        #  means that each radius will be paired with the temperature realizations whose radial coverage it falls
+        #  within.
+        elif not already_run:
             t_bnds = np.vstack(
                 [self.temperature_profile.annulus_bounds[0:-1], self.temperature_profile.annulus_bounds[1:]]
             ).T
 
-            t_inds = np.where((self.radii[..., None] >= t_bnds[:, 0]) & (self.radii[..., None] < t_bnds[:, 1]))[1]
+            t_match = (radius[..., None] >= t_bnds[:, 0]) & (radius[..., None] < t_bnds[:, 1])
+            t_match[..., -1] |= radius == t_bnds[-1, 1]
+            t_inds = np.where(t_match)[-1]
+            if len(t_inds) != radius.size:
+                raise ValueError("Some radii are outside the temperature profile's annular bounds.")
 
             temp_data_real = self.temperature_profile.generate_data_realisations(self._num_samples)
             temp = temp_data_real[:, t_inds].T
@@ -2630,8 +2635,9 @@ class HydrostaticMass(BaseProfile1D):
             # Just converts the mass/masses to the unit we normally use for them
             mass_dist = mass_dist.to("Msun").T
 
-            # Storing the result if it is for a single radius
-            if radius.isscalar:
+            # Storing the result if a scalar radius was passed in (using 'is_scalar' captured before 'radius' was
+            #  reshaped to a 1-element 1D array when 'one_rad' is True, matching the 'stor_key' creation above).
+            if is_scalar:
                 self._masses[stor_key] = mass_dist
 
         # Whether we just calculated the hydrostatic mass, or we fetched it from storage at the beginning of this
@@ -3308,25 +3314,25 @@ class HydrostaticMass(BaseProfile1D):
                 f"the profile ({self.radii_unit.to_string()})."
             )
 
-        if (self._temp_prof.annulus_bounds is not None and (rad > self._temp_prof.annulus_bounds[-1]).any()) or (
-            self._dens_prof.annulus_bounds is not None and (rad > self._dens_prof.annulus_bounds[-1]).any()
-        ):
-            # If we're using smooth fitted models for temperature and density then this is allowable, but still
-            #  frowned upon - however if we're in a data-driven mode then no way are we going to let anyone
-            #  extrapolate. If they want that then they can fit a model to the mass profile and extrapolate that.
-            if self._temp_model is None:
-                raise ValueError(
-                    "Some radii are outside the radius range covered by the temperature or density "
-                    "profiles, and it is not possible to extrapolate when using a data-point driven "
-                    "mass profile; please fit a mass model and extrapolate that, or set up a mass profile "
-                    "that uses temperature and density model fits."
-                )
-            else:
-                warn(
-                    "Some radii are outside the radius range covered by the temperature or density profiles, as such "
-                    "you will be extrapolating based on the model fits.",
-                    stacklevel=2,
-                )
+        # Check each input profile's outer annulus boundary independently against whether that specific profile is
+        #  backed by a fitted smooth model. In data-driven or mixed modes, exceeding the radial coverage of a
+        #  profile that has no model fit is an error (as data points cannot be extrapolated), whereas exceeding
+        #  the radial coverage of a profile that *is* backed by a model is permitted with a warning.
+        temp_exceeded = self._temp_prof.annulus_bounds is not None and (rad > self._temp_prof.annulus_bounds[-1]).any()
+        dens_exceeded = self._dens_prof.annulus_bounds is not None and (rad > self._dens_prof.annulus_bounds[-1]).any()
+        if (temp_exceeded and self._temp_model is None) or (dens_exceeded and self._dens_model is None):
+            raise ValueError(
+                "Some radii are outside the radius range covered by the temperature or density "
+                "profiles, and it is not possible to extrapolate when using a data-point driven "
+                "mass profile; please fit a mass model and extrapolate that, or set up a mass profile "
+                "that uses temperature and density model fits."
+            )
+        elif temp_exceeded or dens_exceeded:
+            warn(
+                "Some radii are outside the radius range covered by the temperature or density profiles, as such "
+                "you will be extrapolating based on the model fits.",
+                stacklevel=2,
+            )
 
 
 class SpecificEntropy(BaseProfile1D):
@@ -3522,16 +3528,15 @@ class SpecificEntropy(BaseProfile1D):
                 "Radii at which to calculate entropy (the 'radii', 'radii_err', and 'deg_radii' "
                 "arguments) must be passed if 'temperature_model' or 'density_model' is set."
             )
-        else:
+        elif radii is None and radii_err is None and deg_radii is None:
             if len(temperature_profile) > len(density_profile):
-                # We restrict the radii to being within the bounds of the other profile if we are not interpolating
-                if not interp_data:
-                    within_bnds = np.where(
-                        (temperature_profile.radii >= density_profile.annulus_bounds.min())
-                        & (temperature_profile.radii <= density_profile.annulus_bounds.max())
-                    )[0]
-                else:
-                    within_bnds = np.arange(0, len(temperature_profile.radii))
+                # Even if interp_data is True, we restrict the automatically extracted radii to the annulus bounds
+                #  of the coarser profile so that we do not attempt to evaluate or interpolate outside the radial
+                #  coverage of either input profile (which rad_check also enforces)
+                within_bnds = np.where(
+                    (temperature_profile.radii >= density_profile.annulus_bounds.min())
+                    & (temperature_profile.radii <= density_profile.annulus_bounds.max())
+                )[0]
 
                 if len(within_bnds) != len(temperature_profile.radii):
                     warn(
@@ -3544,14 +3549,13 @@ class SpecificEntropy(BaseProfile1D):
                 radii_err = temperature_profile.radii_err[within_bnds]
                 deg_radii = temperature_profile.deg_radii[within_bnds]
             else:
-                # We restrict the radii to being within the bounds of the other profile if we are not interpolating
-                if not interp_data:
-                    within_bnds = np.where(
-                        (density_profile.radii >= temperature_profile.annulus_bounds.min())
-                        & (density_profile.radii <= temperature_profile.annulus_bounds.max())
-                    )[0]
-                else:
-                    within_bnds = np.arange(0, len(density_profile.radii))
+                # Even if interp_data is True, we restrict the automatically extracted radii to the annulus bounds
+                #  of the coarser profile so that we do not attempt to evaluate or interpolate outside the radial
+                #  coverage of either input profile (which rad_check also enforces)
+                within_bnds = np.where(
+                    (density_profile.radii >= temperature_profile.annulus_bounds.min())
+                    & (density_profile.radii <= temperature_profile.annulus_bounds.max())
+                )[0]
 
                 if len(within_bnds) != len(density_profile.radii):
                     warn(
@@ -3564,6 +3568,8 @@ class SpecificEntropy(BaseProfile1D):
                 radii = density_profile.radii[within_bnds]
                 radii_err = density_profile.radii_err[within_bnds]
                 deg_radii = density_profile.deg_radii[within_bnds]
+        elif radii is None or radii_err is None or deg_radii is None:
+            raise ValueError("If custom radii are passed, 'radii', 'radii_err', and 'deg_radii' must all be provided.")
 
         # Set the attribute which lets the entropy calculation method know whether to interpolate any data points
         #  or not, if smooth fitted models are not going to be used
@@ -3600,13 +3606,10 @@ class SpecificEntropy(BaseProfile1D):
         else:
             radii = radii.to("kpc")
             radii_err = radii_err.to("kpc")
-        # This will be overwritten by the super() init call, but it allows rad_check to work
+        # super().__init__() cannot be called until after self.entropy() has evaluated the profile values, but both
+        #  self.rad_check() and self.entropy() rely on self.radii / self.radii_unit, so we set self._radii early here
+        #  (it will later be overwritten with the identical value by super().__init__()).
         self._radii = radii
-
-        # We won't REQUIRE that the profiles have data point generated at the same radii, as we're gonna
-        #  measure entropy from the models, but I do need to check that the passed radii are within the radii of the
-        #  and warn the user if they aren't
-        self.rad_check(radii)
 
         if isinstance(num_steps, int):
             temp_steps = num_steps
@@ -3707,6 +3710,12 @@ class SpecificEntropy(BaseProfile1D):
         self._temp_model = temperature_model
         self._dens_model = density_model
 
+        # Order of operations note: self.rad_check() MUST be called after self._temp_prof, self._dens_prof,
+        #  self._radii, self._temp_model, and self._dens_model have all been set, because rad_check inspects
+        #  self._temp_model to decide whether radii outside the input profiles' annulus_bounds should raise a
+        #  ValueError (when data-driven) or emit a warning (when extrapolating a fitted model).
+        self.rad_check(radii)
+
         # We set an attribute with the 'num_samples' parameter - it has been passed into the model fits already but
         #  we also use that value for the number of data realisations if the user has opted for a data point derived
         #  entropy profile rather than model derived.
@@ -3779,7 +3788,7 @@ class SpecificEntropy(BaseProfile1D):
 
         # If a particular radius already has a result in the profiles storage structure then we'll just grab that
         #  rather than redoing a calculation unnecessarily.
-        if radius.isscalar and radius in self._entropies:
+        if radius.isscalar and radius in self._entropies and self._entropies[radius].ndim == 1:
             already_run = True
             ent_dist = self._entropies[radius]
         else:
@@ -3800,12 +3809,12 @@ class SpecificEntropy(BaseProfile1D):
             #  the definition of this source of the model.
             dens = self.density_model.get_realisations(radius)
 
-        # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
-        #  temperature and density profiles are identical, and so we just get some realisations
+        # Use the data directly when the requested radii match the profile's sampling.
         elif (
             not already_run
-            and (len(self.density_profile) == len(self.temperature_profile))
-            and (self.density_profile.radii == self.temperature_profile.radii).all()
+            and not radius.isscalar
+            and len(radius) == len(self.density_profile)
+            and (radius == self.density_profile.radii).all()
         ):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
 
@@ -3827,22 +3836,21 @@ class SpecificEntropy(BaseProfile1D):
                 bounds_error=False,
             )
             # Restore the interpolated density profile realisations to an astropy quantity array
-            dens = Quantity(
-                dens_interp(self.radii.to(self.density_profile.radii_unit)).T, self.density_profile.values_unit
-            )
+            dens = Quantity(dens_interp(radius.to(self.density_profile.radii_unit)).T, self.density_profile.values_unit)
 
-        # This particular combination means that we are doing a data-point based profile, but without interpolation,
-        #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
-        #  just read out the density data points (and make N realisations of them) with no funny business required
-        elif not already_run and not self._interp_data and len(self.density_profile) == len(self.radii):
-            dens = self.density_profile.generate_data_realisations(self._num_samples).T
-        else:
+        elif not already_run:
             d_bnds = np.vstack([self.density_profile.annulus_bounds[0:-1], self.density_profile.annulus_bounds[1:]]).T
 
-            d_inds = np.where((self.radii[..., None] >= d_bnds[:, 0]) & (self.radii[..., None] < d_bnds[:, 1]))[1]
+            d_match = (radius[..., None] >= d_bnds[:, 0]) & (radius[..., None] < d_bnds[:, 1])
+            d_match[..., -1] |= radius == d_bnds[-1, 1]
+            d_inds = np.where(d_match)[-1]
+            if len(d_inds) != radius.size:
+                raise ValueError("Some radii are outside the density profile's annular bounds.")
 
             dens_data_real = self.density_profile.generate_data_realisations(self._num_samples)
             dens = dens_data_real[:, d_inds].T
+            if radius.isscalar:
+                dens = dens[0]
 
         # Finally, whatever way we got the densities, we make sure they are in the right unit
         if not already_run and not dens.unit.is_equivalent("1/cm^3"):
@@ -3861,12 +3869,12 @@ class SpecificEntropy(BaseProfile1D):
             #  the definition of this source of the model.
             temp = self.temperature_model.get_realisations(radius)
 
-        # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
-        #  temperature and density profiles are identical, and so we just get some realisations
+        # Use the data directly when the requested radii match the profile's sampling.
         elif (
             not already_run
-            and (len(self.density_profile) == len(self.temperature_profile))
-            and (self.density_profile.radii == self.temperature_profile.radii).all()
+            and not radius.isscalar
+            and len(radius) == len(self.temperature_profile)
+            and (radius == self.temperature_profile.radii).all()
         ):
             temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
 
@@ -3884,26 +3892,24 @@ class SpecificEntropy(BaseProfile1D):
             )
 
             temp = Quantity(
-                temp_interp(self.radii.to(self.temperature_profile.radii_unit)).T, self.temperature_profile.values_unit
+                temp_interp(radius.to(self.temperature_profile.radii_unit)).T, self.temperature_profile.values_unit
             )
 
-        # This particular combination means that we are doing a data-point based profile, but without interpolation,
-        #  and that the temperature profile has more bins than the density (not going to happen often)
-        elif not already_run and not self._interp_data and len(self.temperature_profile) == len(self.radii):
-            temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
-        # And here, the final option, we're doing a data-point based profile without interpolation, and we need
-        #  to make sure that the density values (here N_denspoints > N_temppoints) each have a corresponding
-        #  temperature value - in practise this means that each density will be paired with the temperature
-        #  realisations whose radial coverage they fall within.
-        else:
+        elif not already_run:
             t_bnds = np.vstack(
                 [self.temperature_profile.annulus_bounds[0:-1], self.temperature_profile.annulus_bounds[1:]]
             ).T
 
-            t_inds = np.where((self.radii[..., None] >= t_bnds[:, 0]) & (self.radii[..., None] < t_bnds[:, 1]))[1]
+            t_match = (radius[..., None] >= t_bnds[:, 0]) & (radius[..., None] < t_bnds[:, 1])
+            t_match[..., -1] |= radius == t_bnds[-1, 1]
+            t_inds = np.where(t_match)[-1]
+            if len(t_inds) != radius.size:
+                raise ValueError("Some radii are outside the temperature profile's annular bounds.")
 
             temp_data_real = self.temperature_profile.generate_data_realisations(self._num_samples)
             temp = temp_data_real[:, t_inds].T
+            if radius.isscalar:
+                temp = temp[0]
 
         # We ensure the temperatures are in the right unit
         if not already_run and not temp.unit.is_equivalent("keV"):
@@ -4047,25 +4053,25 @@ class SpecificEntropy(BaseProfile1D):
                 f"the profile ({self.radii_unit.to_string()})."
             )
 
-        if (self._temp_prof.annulus_bounds is not None and (rad > self._temp_prof.annulus_bounds[-1]).any()) or (
-            self._dens_prof.annulus_bounds is not None and (rad > self._dens_prof.annulus_bounds[-1]).any()
-        ):
-            # If we're using smooth fitted models for temperature and density then this is allowable, but still
-            #  frowned upon - however if we're in a data-driven mode then no way are we going to let anyone
-            #  extrapolate. If they want that then they can fit a model to the mass profile and extrapolate that.
-            if self._temp_model is None:
-                raise ValueError(
-                    "Some radii are outside the radius range covered by the temperature or density "
-                    "profiles, and it is not possible to extrapolate when using a data-point driven "
-                    "entropy profile; please fit an entropy model and extrapolate that, or set up an "
-                    "entropy profile that uses temperature and density model fits."
-                )
-            else:
-                warn(
-                    "Some radii are outside the radius range covered by the temperature or density profiles, as such "
-                    "you will be extrapolating based on the model fits.",
-                    stacklevel=2,
-                )
+        # Check each input profile's outer annulus boundary independently against whether that specific profile is
+        #  backed by a fitted smooth model. In data-driven or mixed modes, exceeding the radial coverage of a
+        #  profile that has no model fit is an error (as data points cannot be extrapolated), whereas exceeding
+        #  the radial coverage of a profile that *is* backed by a model is permitted with a warning.
+        temp_exceeded = self._temp_prof.annulus_bounds is not None and (rad > self._temp_prof.annulus_bounds[-1]).any()
+        dens_exceeded = self._dens_prof.annulus_bounds is not None and (rad > self._dens_prof.annulus_bounds[-1]).any()
+        if (temp_exceeded and self._temp_model is None) or (dens_exceeded and self._dens_model is None):
+            raise ValueError(
+                "Some radii are outside the radius range covered by the temperature or density "
+                "profiles, and it is not possible to extrapolate when using a data-point driven "
+                "entropy profile; please fit an entropy model and extrapolate that, or set up an "
+                "entropy profile that uses temperature and density model fits."
+            )
+        elif temp_exceeded or dens_exceeded:
+            warn(
+                "Some radii are outside the radius range covered by the temperature or density profiles, as such "
+                "you will be extrapolating based on the model fits.",
+                stacklevel=2,
+            )
 
 
 class ThermalPressure(BaseProfile1D):
@@ -4262,16 +4268,15 @@ class ThermalPressure(BaseProfile1D):
                 "Radii at which to calculate thermal pressure (the 'radii', 'radii_err', and 'deg_radii' "
                 "arguments) must be passed if 'temperature_model' or 'density_model' is set."
             )
-        else:
+        elif radii is None and radii_err is None and deg_radii is None:
             if len(temperature_profile) > len(density_profile):
-                # We restrict the radii to being within the bounds of the other profile if we are not interpolating
-                if not interp_data:
-                    within_bnds = np.where(
-                        (temperature_profile.radii >= density_profile.annulus_bounds.min())
-                        & (temperature_profile.radii <= density_profile.annulus_bounds.max())
-                    )[0]
-                else:
-                    within_bnds = np.arange(0, len(temperature_profile.radii))
+                # Even if interp_data is True, we restrict the automatically extracted radii to the annulus bounds
+                #  of the coarser profile so that we do not attempt to evaluate or interpolate outside the radial
+                #  coverage of either input profile (which rad_check also enforces)
+                within_bnds = np.where(
+                    (temperature_profile.radii >= density_profile.annulus_bounds.min())
+                    & (temperature_profile.radii <= density_profile.annulus_bounds.max())
+                )[0]
 
                 if len(within_bnds) != len(temperature_profile.radii):
                     warn(
@@ -4284,14 +4289,13 @@ class ThermalPressure(BaseProfile1D):
                 radii_err = temperature_profile.radii_err[within_bnds]
                 deg_radii = temperature_profile.deg_radii[within_bnds]
             else:
-                # We restrict the radii to being within the bounds of the other profile if we are not interpolating
-                if not interp_data:
-                    within_bnds = np.where(
-                        (density_profile.radii >= temperature_profile.annulus_bounds.min())
-                        & (density_profile.radii <= temperature_profile.annulus_bounds.max())
-                    )[0]
-                else:
-                    within_bnds = np.arange(0, len(density_profile.radii))
+                # Even if interp_data is True, we restrict the automatically extracted radii to the annulus bounds
+                #  of the coarser profile so that we do not attempt to evaluate or interpolate outside the radial
+                #  coverage of either input profile (which rad_check also enforces)
+                within_bnds = np.where(
+                    (density_profile.radii >= temperature_profile.annulus_bounds.min())
+                    & (density_profile.radii <= temperature_profile.annulus_bounds.max())
+                )[0]
 
                 if len(within_bnds) != len(density_profile.radii):
                     warn(
@@ -4304,6 +4308,8 @@ class ThermalPressure(BaseProfile1D):
                 radii = density_profile.radii[within_bnds]
                 radii_err = density_profile.radii_err[within_bnds]
                 deg_radii = density_profile.deg_radii[within_bnds]
+        elif radii is None or radii_err is None or deg_radii is None:
+            raise ValueError("If custom radii are passed, 'radii', 'radii_err', and 'deg_radii' must all be provided.")
 
         # Set the attribute which lets the thermal pressure calculation method know whether to interpolate any
         #  data points or not, if smooth-fitted models are not going to be used
@@ -4340,13 +4346,10 @@ class ThermalPressure(BaseProfile1D):
         else:
             radii = radii.to("kpc")
             radii_err = radii_err.to("kpc")
-        # This will be overwritten by the super() init call, but it allows rad_check to work
+        # super().__init__() cannot be called until after self.pressure() has evaluated the profile values, but both
+        #  self.rad_check() and self.pressure() rely on self.radii / self.radii_unit, so we set self._radii early here
+        #  (it will later be overwritten with the identical value by super().__init__()).
         self._radii = radii
-
-        # We won't REQUIRE that the profiles have data point generated at the same radii, as we're gonna
-        #  measure thermal pressure from the models, but I do need to check that the passed radii are within the
-        #  radii of the and warn the user if they aren't
-        self.rad_check(radii)
 
         if isinstance(num_steps, int):
             temp_steps = num_steps
@@ -4449,6 +4452,12 @@ class ThermalPressure(BaseProfile1D):
         self._temp_model = temperature_model
         self._dens_model = density_model
 
+        # Order of operations note: self.rad_check() MUST be called after self._temp_prof, self._dens_prof,
+        #  self._radii, self._temp_model, and self._dens_model have all been set, because rad_check inspects
+        #  self._temp_model to decide whether radii outside the input profiles' annulus_bounds should raise a
+        #  ValueError (when data-driven) or emit a warning (when extrapolating a fitted model).
+        self.rad_check(radii)
+
         # We set an attribute with the 'num_samples' parameter - it has been passed into the model fits already, but
         #  we also use that value for the number of data realizations if the user has opted for a data point derived
         #  thermal pressure profile rather than model derived.
@@ -4521,7 +4530,7 @@ class ThermalPressure(BaseProfile1D):
 
         # If a particular radius already has a result in the profiles storage structure then we'll just grab that
         #  rather than redoing a calculation unnecessarily.
-        if radius.isscalar and radius in self._pressures:
+        if radius.isscalar and radius in self._pressures and self._pressures[radius].ndim == 1:
             already_run = True
             press_dist = self._pressures[radius]
         else:
@@ -4542,12 +4551,12 @@ class ThermalPressure(BaseProfile1D):
             #  the definition of this source of the model.
             dens = self.density_model.get_realisations(radius)
 
-        # In this rare case the radii for the temperature and density profiles are identical, and so we just
-        #  get some realisations.
+        # Use the data directly when the requested radii match the profile's sampling.
         elif (
             not already_run
-            and (len(self.density_profile) == len(self.temperature_profile))
-            and (self.density_profile.radii == self.temperature_profile.radii).all()
+            and not radius.isscalar
+            and len(radius) == len(self.density_profile)
+            and (radius == self.density_profile.radii).all()
         ):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
 
@@ -4569,22 +4578,21 @@ class ThermalPressure(BaseProfile1D):
                 bounds_error=False,
             )
             # Restore the interpolated density profile realizations to an astropy quantity array
-            dens = Quantity(
-                dens_interp(self.radii.to(self.density_profile.radii_unit)).T, self.density_profile.values_unit
-            )
+            dens = Quantity(dens_interp(radius.to(self.density_profile.radii_unit)).T, self.density_profile.values_unit)
 
-        # This particular combination means that we are doing a data-point based profile, but without interpolation,
-        #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
-        #  just read out the density data points (and make N realizations of them) with no funny business required
-        elif not already_run and not self._interp_data and len(self.density_profile) == len(self.radii):
-            dens = self.density_profile.generate_data_realisations(self._num_samples).T
-        else:
+        elif not already_run:
             d_bnds = np.vstack([self.density_profile.annulus_bounds[0:-1], self.density_profile.annulus_bounds[1:]]).T
 
-            d_inds = np.where((self.radii[..., None] >= d_bnds[:, 0]) & (self.radii[..., None] < d_bnds[:, 1]))[1]
+            d_match = (radius[..., None] >= d_bnds[:, 0]) & (radius[..., None] < d_bnds[:, 1])
+            d_match[..., -1] |= radius == d_bnds[-1, 1]
+            d_inds = np.where(d_match)[-1]
+            if len(d_inds) != radius.size:
+                raise ValueError("Some radii are outside the density profile's annular bounds.")
 
             dens_data_real = self.density_profile.generate_data_realisations(self._num_samples)
             dens = dens_data_real[:, d_inds].T
+            if radius.isscalar:
+                dens = dens[0]
 
         # Finally, whatever way we got the densities, we make sure they are in the right unit
         if not already_run and not dens.unit.is_equivalent("1/cm^3"):
@@ -4603,12 +4611,12 @@ class ThermalPressure(BaseProfile1D):
             #  the definition of this source of the model.
             temp = self.temperature_model.get_realisations(radius)
 
-        # In this rare case the radii for the temperature and density profiles are identical, and so we
-        #  just get some realizations
+        # Use the data directly when the requested radii match the profile's sampling.
         elif (
             not already_run
-            and (len(self.density_profile) == len(self.temperature_profile))
-            and (self.density_profile.radii == self.temperature_profile.radii).all()
+            and not radius.isscalar
+            and len(radius) == len(self.temperature_profile)
+            and (radius == self.temperature_profile.radii).all()
         ):
             temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
 
@@ -4625,26 +4633,24 @@ class ThermalPressure(BaseProfile1D):
                 bounds_error=False,
             )
             temp = Quantity(
-                temp_interp(self.radii.to(self.temperature_profile.radii_unit)).T, self.temperature_profile.values_unit
+                temp_interp(radius.to(self.temperature_profile.radii_unit)).T, self.temperature_profile.values_unit
             )
 
-        # This particular combination means that we are doing a data-point based profile, but without interpolation,
-        #  and that the temperature profile has more bins than the density (not going to happen often)
-        elif not already_run and not self._interp_data and len(self.temperature_profile) == len(self.radii):
-            temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
-        # And here, the final option, we're doing a data-point based profile without interpolation, and we need
-        #  to make sure that the density values (here N_denspoints > N_temppoints) each have a corresponding
-        #  temperature value - in practise this means that each density will be paired with the temperature
-        #  realizations whose radial coverage they fall within.
-        else:
+        elif not already_run:
             t_bnds = np.vstack(
                 [self.temperature_profile.annulus_bounds[0:-1], self.temperature_profile.annulus_bounds[1:]]
             ).T
 
-            t_inds = np.where((self.radii[..., None] >= t_bnds[:, 0]) & (self.radii[..., None] < t_bnds[:, 1]))[1]
+            t_match = (radius[..., None] >= t_bnds[:, 0]) & (radius[..., None] < t_bnds[:, 1])
+            t_match[..., -1] |= radius == t_bnds[-1, 1]
+            t_inds = np.where(t_match)[-1]
+            if len(t_inds) != radius.size:
+                raise ValueError("Some radii are outside the temperature profile's annular bounds.")
 
             temp_data_real = self.temperature_profile.generate_data_realisations(self._num_samples)
             temp = temp_data_real[:, t_inds].T
+            if radius.isscalar:
+                temp = temp[0]
 
         # We ensure the temperatures are in the right unit
         if not already_run and not temp.unit.is_equivalent("keV"):
@@ -4786,25 +4792,25 @@ class ThermalPressure(BaseProfile1D):
                 f"the profile ({self.radii_unit.to_string()})."
             )
 
-        if (self._temp_prof.annulus_bounds is not None and (rad > self._temp_prof.annulus_bounds[-1]).any()) or (
-            self._dens_prof.annulus_bounds is not None and (rad > self._dens_prof.annulus_bounds[-1]).any()
-        ):
-            # If we're using smooth fitted models for temperature and density then this is allowable, but still
-            #  frowned upon - however if we're in a data-driven mode then no way are we going to let anyone
-            #  extrapolate. If they want that then they can fit a model to the mass profile and extrapolate that.
-            if self._temp_model is None:
-                raise ValueError(
-                    "Some radii are outside the radius range covered by the temperature or density "
-                    "profiles, and it is not possible to extrapolate when using a data-point driven "
-                    "pressure profile; please fit an pressure model and extrapolate that, or set up an "
-                    "pressure profile that uses temperature and density model fits."
-                )
-            else:
-                warn(
-                    "Some radii are outside the radius range covered by the temperature or density profiles, as such "
-                    "you will be extrapolating based on the model fits.",
-                    stacklevel=2,
-                )
+        # Check each input profile's outer annulus boundary independently against whether that specific profile is
+        #  backed by a fitted smooth model. In data-driven or mixed modes, exceeding the radial coverage of a
+        #  profile that has no model fit is an error (as data points cannot be extrapolated), whereas exceeding
+        #  the radial coverage of a profile that *is* backed by a model is permitted with a warning.
+        temp_exceeded = self._temp_prof.annulus_bounds is not None and (rad > self._temp_prof.annulus_bounds[-1]).any()
+        dens_exceeded = self._dens_prof.annulus_bounds is not None and (rad > self._dens_prof.annulus_bounds[-1]).any()
+        if (temp_exceeded and self._temp_model is None) or (dens_exceeded and self._dens_model is None):
+            raise ValueError(
+                "Some radii are outside the radius range covered by the temperature or density "
+                "profiles, and it is not possible to extrapolate when using a data-point driven "
+                "pressure profile; please fit an pressure model and extrapolate that, or set up an "
+                "pressure profile that uses temperature and density model fits."
+            )
+        elif temp_exceeded or dens_exceeded:
+            warn(
+                "Some radii are outside the radius range covered by the temperature or density profiles, as such "
+                "you will be extrapolating based on the model fits.",
+                stacklevel=2,
+            )
 
 
 class Generic1D(BaseProfile1D):
