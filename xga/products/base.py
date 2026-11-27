@@ -1378,6 +1378,13 @@ class BaseProfile1D:
                 "The values_err quantity has negative values, which does not make sense for an uncertainty."
             )
 
+        # We also check that the radii (and deg_radii, if present) are in strictly ascending order, as profile
+        #  annulus boundary construction and radius range checks assume radii are ordered from innermost to outermost.
+        if (np.diff(radii) <= 0).any():
+            raise ValueError("The radii quantity must be in strictly ascending order.")
+        if deg_radii is not None and (np.diff(deg_radii) <= 0).any():
+            raise ValueError("The deg_radii quantity must be in strictly ascending order.")
+
         # Storing the key values in attributes
         self._radii = radii
         self._values = values
